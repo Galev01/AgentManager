@@ -1,17 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useBridgeWs } from "@/lib/ws-client";
+import { useBridgeEvents } from "@/lib/ws-client";
 import { LiveIndicator } from "./live-indicator";
 
-type Props = {
-  wsUrl: string;
-};
-
-export function AutoRefresh({ wsUrl }: Props) {
+export function AutoRefresh() {
   const router = useRouter();
 
-  const { status } = useBridgeWs(wsUrl, (msg) => {
+  const { status } = useBridgeEvents((msg) => {
     if (
       msg.type === "conversations_updated" ||
       msg.type === "settings_updated" ||

@@ -5,52 +5,55 @@ import type { WsMessage } from "@openclaw-manager/types";
 
 type WsStatus = "connecting" | "connected" | "disconnected";
 
-export function useBridgeWs(
-  wsUrl: string,
-  onMessage: (msg: WsMessage) => void
-) {
+/**
+ * Connects to the dashboard SSE endpoint at /api/events which proxies
+ * bridge WebSocket events server-side. The bridge token never reaches
+ * the browser — auth is via the session cookie.
+ */
+export function useBridgeEvents(onMessage: (msg: WsMessage) => void) {
   const [status, setStatus] = useState<WsStatus>("disconnected");
-  const wsRef = useRef<WebSocket | null>(null);
+  const sourceRef = useRef<EventSource | null>(null);
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback(() => {
-    if (wsRef.current) return;
+    if (sourceRef.current) return;
     setStatus("connecting");
 
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    const source = new EventSource("/api/events");
+    sourceRef.current = source;
 
-    ws.onopen = () => setStatus("connected");
+    source.onopen = () => setStatus("connected");
 
-    ws.onmessage = (event) => {
+    source.onmessage = (event) => {
       try {
         const msg: WsMessage = JSON.parse(event.data);
+        if (msg.type === "connected") {
+          setStatus("connected");
+        }
         onMessageRef.current(msg);
       } catch {
         // ignore malformed
       }
     };
 
-    ws.onclose = () => {
-      wsRef.current = null;
+    source.onerror = () => {
+      source.close();
+      sourceRef.current = null;
       setStatus("disconnected");
       // Auto-reconnect after 3s
-      setTimeout(connect, 3000);
+      reconnectTimer.current = setTimeout(connect, 3000);
     };
-
-    ws.onerror = () => {
-      ws.close();
-    };
-  }, [wsUrl]);
+  }, []);
 
   useEffect(() => {
     connect();
     return () => {
-      if (wsRef.current) {
-        wsRef.current.onclose = null; // prevent reconnect on unmount
-        wsRef.current.close();
-        wsRef.current = null;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (sourceRef.current) {
+        sourceRef.current.close();
+        sourceRef.current = null;
       }
     };
   }, [connect]);

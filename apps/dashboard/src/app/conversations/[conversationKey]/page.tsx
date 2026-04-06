@@ -5,7 +5,7 @@ import { TakeoverControls } from "@/components/takeover-controls";
 import { DegradedBanner } from "@/components/degraded-banner";
 import { ConversationTabs } from "@/components/conversation-tabs";
 import { getConversation, getMessages } from "@/lib/bridge-client";
-import { getBridgeWsUrl } from "@/lib/ws-url";
+
 import { timeAgo } from "@/lib/format";
 import Link from "next/link";
 import type { ConversationEvent } from "@openclaw-manager/types";
@@ -23,11 +23,9 @@ export default async function ConversationDetailPage({ params }: { params: Promi
     [conversation, events] = await Promise.all([getConversation(decodedKey), getMessages(decodedKey)]);
   } catch { bridgeError = true; }
 
-  const wsUrl = getBridgeWsUrl();
-
   if (!conversation && !bridgeError) {
     return (
-      <AppShell title="Conversation" wsUrl={wsUrl}>
+      <AppShell title="Conversation">
         <div className="rounded bg-dark-card p-12 text-center shadow-card-dark">
           <p className="text-text-muted">Conversation not found</p>
           <Link href="/conversations" className="mt-4 inline-block text-primary hover:underline">Back to conversations</Link>
@@ -37,7 +35,7 @@ export default async function ConversationDetailPage({ params }: { params: Promi
   }
 
   return (
-    <AppShell title={conversation?.displayName || conversation?.phone || "Conversation"} wsUrl={wsUrl}>
+    <AppShell title={conversation?.displayName || conversation?.phone || "Conversation"}>
       {bridgeError && <DegradedBanner />}
       {conversation && (
         <>
