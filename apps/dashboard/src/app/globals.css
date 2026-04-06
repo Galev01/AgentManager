@@ -1,0 +1,36 @@
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+@theme {
+  --font-sans: "Roboto", sans-serif;
+}
+
+@layer base {
+  :root {
+    --card: #fff;
+    --text-dark: #312a2a;
+    --text-gray: #737b8b;
+    --text-muted: #888888;
+    --body-bg: #f3f0f9;
+    --border: #e6e6e6;
+    --primary: #886CC0;
+    --sidebar-width: 16.5rem;
+    --header-height: 4.5rem;
+  }
+
+  .dark {
+    --card: #202020;
+    --text-dark: #ffffff;
+    --text-gray: #b3b3b3;
+    --text-muted: #828690;
+    --body-bg: #161717;
+    --border: #2B2B2B;
+  }
+
+  body {
+    font-family: "Roboto", sans-serif;
+    font-size: 0.875rem;
+    background-color: var(--body-bg);
+    color: var(--text-dark);
+  }
+}
