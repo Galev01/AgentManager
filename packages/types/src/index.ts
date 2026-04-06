@@ -48,7 +48,8 @@ export type CommandType =
   | "set_takeover"
   | "release_takeover"
   | "wake_now"
-  | "update_runtime_settings";
+  | "update_runtime_settings"
+  | "send_message";
 
 export type ManagementCommand = {
   id: string;
@@ -67,4 +68,45 @@ export type OverviewData = {
   wakingCount: number;
   lastActivityAt: number | null;
   relayTarget: string;
+};
+
+// --- V2 Types ---
+
+export type RelayRecipient = {
+  id: string;
+  phone: string;
+  label: string;
+  enabled: boolean;
+};
+
+export type RoutingRule = {
+  id: string;
+  conversationKey: string;
+  phone: string;
+  displayName: string | null;
+  relayRecipientIds: string[];
+  suppressBot: boolean;
+  note: string;
+};
+
+export type RuntimeSettingsV2 = RuntimeSettings & {
+  relayRecipients: RelayRecipient[];
+  routingRules: RoutingRule[];
+};
+
+export type WsMessageType =
+  | "conversations_updated"
+  | "event_new"
+  | "settings_updated"
+  | "connected";
+
+export type WsMessage = {
+  type: WsMessageType;
+  payload: unknown;
+};
+
+export type SendMessagePayload = {
+  conversationKey: string;
+  phone: string;
+  text: string;
 };
