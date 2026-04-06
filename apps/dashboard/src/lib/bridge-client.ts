@@ -1,0 +1,39 @@
+import type { OverviewData, ConversationRow, ConversationEvent, RuntimeSettings, ManagementCommand } from "@openclaw-manager/types";
+
+const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
+const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";
+
+async function bridgeFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const url = `${BRIDGE_URL}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${BRIDGE_TOKEN}`, ...options?.headers },
+    next: { revalidate: 0 },
+  });
+  if (!res.ok) throw new Error(`Bridge ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+export async function getOverview(): Promise<OverviewData> { return bridgeFetch<OverviewData>("/overview"); }
+export async function getConversations(): Promise<ConversationRow[]> { return bridgeFetch<ConversationRow[]>("/conversations"); }
+export async function getConversation(key: string): Promise<ConversationRow | null> {
+  try { return await bridgeFetch<ConversationRow>(`/conversations/${encodeURIComponent(key)}`); } catch { return null; }
+}
+export async function getMessages(conversationKey: string, limit = 50, before?: number): Promise<ConversationEvent[]> {
+  const params = new URLSearchParams({ conversationKey, limit: String(limit) });
+  if (before) params.set("before", String(before));
+  return bridgeFetch<ConversationEvent[]>(`/messages?${params}`);
+}
+export async function getSettings(): Promise<RuntimeSettings> { return bridgeFetch<RuntimeSettings>("/settings"); }
+export async function updateSettings(updates: Partial<RuntimeSettings>): Promise<RuntimeSettings> {
+  return bridgeFetch<RuntimeSettings>("/settings", { method: "PATCH", body: JSON.stringify(updates) });
+}
+export async function sendTakeover(key: string): Promise<ManagementCommand> {
+  return bridgeFetch<ManagementCommand>(`/conversations/${encodeURIComponent(key)}/takeover`, { method: "POST" });
+}
+export async function sendRelease(key: string): Promise<ManagementCommand> {
+  return bridgeFetch<ManagementCommand>(`/conversations/${encodeURIComponent(key)}/release`, { method: "POST" });
+}
+export async function sendWakeNow(key: string): Promise<ManagementCommand> {
+  return bridgeFetch<ManagementCommand>(`/conversations/${encodeURIComponent(key)}/wake-now`, { method: "POST" });
+}
