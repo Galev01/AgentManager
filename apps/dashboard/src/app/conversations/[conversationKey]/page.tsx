@@ -4,6 +4,7 @@ import { MessageTimeline } from "@/components/message-timeline";
 import { TakeoverControls } from "@/components/takeover-controls";
 import { DegradedBanner } from "@/components/degraded-banner";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { ConversationTabs } from "@/components/conversation-tabs";
 import { getConversation, getMessages } from "@/lib/bridge-client";
 import { timeAgo } from "@/lib/format";
 import Link from "next/link";
@@ -53,10 +54,7 @@ export default async function ConversationDetailPage({ params }: { params: Promi
             </div>
           </div>
           <div className="mb-6"><TakeoverControls conversationKey={decodedKey} status={conversation.status} /></div>
-          <div className="rounded bg-dark-card p-6 shadow-card-dark">
-            <h2 className="mb-4 text-lg font-semibold">Messages</h2>
-            <MessageTimeline events={events} />
-          </div>
+          <ConversationTabs conversationKey={decodedKey} events={events} />
         </>
       )}
     </AppShell>

@@ -37,3 +37,32 @@ export async function sendRelease(key: string): Promise<ManagementCommand> {
 export async function sendWakeNow(key: string): Promise<ManagementCommand> {
   return bridgeFetch<ManagementCommand>(`/conversations/${encodeURIComponent(key)}/wake-now`, { method: "POST" });
 }
+
+export async function getLogs(lines = 100): Promise<any[]> {
+  return bridgeFetch<any[]>("/logs/tail", {
+    method: "POST",
+    body: JSON.stringify({ lines }),
+  });
+}
+
+export async function getSessions(): Promise<any[]> {
+  return bridgeFetch<any[]>("/sessions");
+}
+
+export async function getSessionTranscript(sessionId: string): Promise<any[]> {
+  return bridgeFetch<any[]>(`/sessions/${encodeURIComponent(sessionId)}/transcript`);
+}
+
+export async function callGatewayMethod(method: string, params?: Record<string, unknown>): Promise<unknown> {
+  const [ns, action] = method.split(".");
+  if (!action) {
+    return bridgeFetch<unknown>(`/gateway/${encodeURIComponent(ns)}`, {
+      method: "POST",
+      body: JSON.stringify(params || {}),
+    });
+  }
+  return bridgeFetch<unknown>(`/gateway/${encodeURIComponent(ns)}/${encodeURIComponent(action)}`, {
+    method: "POST",
+    body: JSON.stringify(params || {}),
+  });
+}
