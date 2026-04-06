@@ -1,4 +1,13 @@
-import type { OverviewData, ConversationRow, ConversationEvent, RuntimeSettings, ManagementCommand } from "@openclaw-manager/types";
+import type {
+  OverviewData,
+  ConversationRow,
+  ConversationEvent,
+  RuntimeSettings,
+  ManagementCommand,
+  RelayRecipient,
+  RoutingRule,
+  RuntimeSettingsV2,
+} from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
 const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";
@@ -24,7 +33,7 @@ export async function getMessages(conversationKey: string, limit = 50, before?: 
   if (before) params.set("before", String(before));
   return bridgeFetch<ConversationEvent[]>(`/messages?${params}`);
 }
-export async function getSettings(): Promise<RuntimeSettings> { return bridgeFetch<RuntimeSettings>("/settings"); }
+export async function getSettings(): Promise<RuntimeSettingsV2> { return bridgeFetch<RuntimeSettingsV2>("/settings"); }
 export async function updateSettings(updates: Partial<RuntimeSettings>): Promise<RuntimeSettings> {
   return bridgeFetch<RuntimeSettings>("/settings", { method: "PATCH", body: JSON.stringify(updates) });
 }
@@ -65,4 +74,83 @@ export async function callGatewayMethod(method: string, params?: Record<string, 
     method: "POST",
     body: JSON.stringify(params || {}),
   });
+}
+
+// --- Compose ---
+export async function sendMessage(payload: {
+  conversationKey?: string;
+  phone: string;
+  text: string;
+}): Promise<{ ok: boolean; result: unknown }> {
+  return bridgeFetch("/compose", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// --- Relay Recipients ---
+export async function getRelayRecipients(): Promise<RelayRecipient[]> {
+  return bridgeFetch<RelayRecipient[]>("/relay-recipients");
+}
+
+export async function addRelayRecipient(input: {
+  phone: string;
+  label: string;
+  enabled?: boolean;
+}): Promise<RelayRecipient> {
+  return bridgeFetch<RelayRecipient>("/relay-recipients", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function removeRelayRecipient(id: string): Promise<{ ok: boolean }> {
+  return bridgeFetch(`/relay-recipients/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function toggleRelayRecipient(
+  id: string,
+  enabled: boolean
+): Promise<RelayRecipient> {
+  return bridgeFetch<RelayRecipient>(
+    `/relay-recipients/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify({ enabled }) }
+  );
+}
+
+// --- Routing Rules ---
+export async function getRoutingRules(): Promise<RoutingRule[]> {
+  return bridgeFetch<RoutingRule[]>("/routing-rules");
+}
+
+export async function createRoutingRule(
+  input: Omit<RoutingRule, "id">
+): Promise<RoutingRule> {
+  return bridgeFetch<RoutingRule>("/routing-rules", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateRoutingRule(
+  id: string,
+  input: Omit<RoutingRule, "id">
+): Promise<RoutingRule> {
+  return bridgeFetch<RoutingRule>(
+    `/routing-rules/${encodeURIComponent(id)}`,
+    { method: "PUT", body: JSON.stringify(input) }
+  );
+}
+
+export async function deleteRoutingRule(id: string): Promise<{ ok: boolean }> {
+  return bridgeFetch(`/routing-rules/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+// --- Settings V2 ---
+export async function getSettingsV2(): Promise<RuntimeSettingsV2> {
+  return bridgeFetch<RuntimeSettingsV2>("/settings");
 }
