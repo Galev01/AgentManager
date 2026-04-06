@@ -8,6 +8,7 @@ import settingsRouter from "./routes/settings.js";
 import commandsRouter from "./routes/commands.js";
 import gatewayRouter from "./routes/gateway.js";
 import logsRouter from "./routes/logs.js";
+import relayRouter from "./routes/relay.js";
 
 const app: Express = express();
 app.use(express.json());
@@ -24,6 +25,7 @@ app.use(settingsRouter);
 app.use(commandsRouter);
 app.use(gatewayRouter);
 app.use(logsRouter);
+app.use(relayRouter);
 
 app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
