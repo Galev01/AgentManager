@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ConversationRow } from "@openclaw-manager/types";
 import { StatusBadge } from "./status-badge";
 import { timeAgo } from "@/lib/format";
+import { ComposeDialog } from "./compose-dialog";
 
 function Spinner() {
   return (
@@ -53,6 +54,12 @@ function InlineToggle({ conversationKey, status }: { conversationKey: string; st
 }
 
 export function ConversationTable({ conversations }: { conversations: ConversationRow[] }) {
+  const [composingKey, setComposingKey] = useState<string | null>(null);
+
+  const composingConv = composingKey
+    ? conversations.find((c) => c.conversationKey === composingKey)
+    : null;
+
   if (conversations.length === 0) {
     return (
       <div className="rounded bg-dark-card p-12 text-center shadow-card-dark">
@@ -61,6 +68,7 @@ export function ConversationTable({ conversations }: { conversations: Conversati
     );
   }
   return (
+    <>
     <div className="overflow-hidden rounded bg-dark-card shadow-card-dark">
       <table className="w-full">
         <thead>
@@ -86,12 +94,29 @@ export function ConversationTable({ conversations }: { conversations: Conversati
               <td className="px-6 py-4 text-sm text-text-muted">{timeAgo(conv.lastRemoteAt)}</td>
               <td className="px-6 py-4 text-sm text-text-muted">{timeAgo(conv.lastAgentReplyAt)}</td>
               <td className="px-6 py-4">
-                <InlineToggle conversationKey={conv.conversationKey} status={conv.status} />
+                <div className="flex items-center gap-2">
+                  <InlineToggle conversationKey={conv.conversationKey} status={conv.status} />
+                  <button
+                    onClick={() => setComposingKey(conv.conversationKey)}
+                    className="rounded bg-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-600"
+                  >
+                    Compose
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+    {composingConv && (
+      <ComposeDialog
+        conversationKey={composingConv.conversationKey}
+        phone={composingConv.phone}
+        displayName={composingConv.displayName}
+        onClose={() => setComposingKey(null)}
+      />
+    )}
+    </>
   );
 }

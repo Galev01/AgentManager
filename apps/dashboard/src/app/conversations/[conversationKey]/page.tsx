@@ -54,7 +54,7 @@ export default async function ConversationDetailPage({ params }: { params: Promi
               <span>Last reply: {timeAgo(conversation.lastAgentReplyAt)}</span>
             </div>
           </div>
-          <div className="mb-6"><TakeoverControls conversationKey={decodedKey} status={conversation.status} /></div>
+          <div className="mb-6"><TakeoverControls conversationKey={decodedKey} status={conversation.status} phone={conversation.phone} displayName={conversation.displayName} /></div>
           <ConversationTabs conversationKey={decodedKey} events={events} />
         </>
       )}

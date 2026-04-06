@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ConversationStatus } from "@openclaw-manager/types";
+import { ComposeDialog } from "./compose-dialog";
 
 function Spinner() {
   return (
@@ -12,9 +13,20 @@ function Spinner() {
   );
 }
 
-export function TakeoverControls({ conversationKey, status }: { conversationKey: string; status: ConversationStatus }) {
+export function TakeoverControls({
+  conversationKey,
+  status,
+  phone,
+  displayName,
+}: {
+  conversationKey: string;
+  status: ConversationStatus;
+  phone?: string;
+  displayName?: string | null;
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
 
   const handleAction = async (action: "takeover" | "release" | "wake-now") => {
     setLoading(action);
@@ -25,6 +37,7 @@ export function TakeoverControls({ conversationKey, status }: { conversationKey:
   };
 
   return (
+    <>
     <div className="flex flex-wrap gap-3">
       {status !== "human" && (
         <button onClick={() => handleAction("takeover")} disabled={loading !== null}
@@ -44,6 +57,21 @@ export function TakeoverControls({ conversationKey, status }: { conversationKey:
           {loading === "wake-now" && <Spinner />} Wake Now
         </button>
       )}
+      <button
+        onClick={() => setComposing(true)}
+        className="inline-flex items-center gap-2 rounded bg-zinc-700 py-2.5 px-5 text-sm font-medium text-zinc-100 transition hover:bg-zinc-600"
+      >
+        Send Message
+      </button>
     </div>
+    {composing && (
+      <ComposeDialog
+        conversationKey={conversationKey}
+        phone={phone}
+        displayName={displayName}
+        onClose={() => setComposing(false)}
+      />
+    )}
+    </>
   );
 }
