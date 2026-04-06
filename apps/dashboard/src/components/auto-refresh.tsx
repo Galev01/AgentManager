@@ -1,13 +1,25 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useBridgeWs } from "@/lib/ws-client";
+import { LiveIndicator } from "./live-indicator";
 
-export function AutoRefresh({ intervalMs }: { intervalMs: number }) {
+type Props = {
+  wsUrl: string;
+};
+
+export function AutoRefresh({ wsUrl }: Props) {
   const router = useRouter();
-  useEffect(() => {
-    const timer = setInterval(() => router.refresh(), intervalMs);
-    return () => clearInterval(timer);
-  }, [router, intervalMs]);
-  return null;
+
+  const { status } = useBridgeWs(wsUrl, (msg) => {
+    if (
+      msg.type === "conversations_updated" ||
+      msg.type === "settings_updated" ||
+      msg.type === "event_new"
+    ) {
+      router.refresh();
+    }
+  });
+
+  return <LiveIndicator status={status} />;
 }
