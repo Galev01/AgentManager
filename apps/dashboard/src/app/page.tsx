@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { OverviewCards, OverviewMeta } from "@/components/overview-cards";
 import { DegradedBanner } from "@/components/degraded-banner";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { getOverview } from "@/lib/bridge-client";
 import type { OverviewData } from "@openclaw-manager/types";
 
@@ -13,6 +14,7 @@ export default async function OverviewPage() {
 
   return (
     <AppShell title="Overview">
+      <AutoRefresh intervalMs={30000} />
       {bridgeError && <DegradedBanner />}
       {data ? (
         <>

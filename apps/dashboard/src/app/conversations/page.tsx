@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { ConversationTable } from "@/components/conversation-table";
 import { DegradedBanner } from "@/components/degraded-banner";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { getConversations } from "@/lib/bridge-client";
 import type { ConversationRow } from "@openclaw-manager/types";
 
@@ -13,6 +14,7 @@ export default async function ConversationsPage() {
 
   return (
     <AppShell title="Conversations">
+      <AutoRefresh intervalMs={30000} />
       {bridgeError && <DegradedBanner />}
       <ConversationTable conversations={conversations} />
     </AppShell>

@@ -3,6 +3,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { MessageTimeline } from "@/components/message-timeline";
 import { TakeoverControls } from "@/components/takeover-controls";
 import { DegradedBanner } from "@/components/degraded-banner";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { getConversation, getMessages } from "@/lib/bridge-client";
 import { timeAgo } from "@/lib/format";
 import Link from "next/link";
@@ -34,6 +35,7 @@ export default async function ConversationDetailPage({ params }: { params: Promi
 
   return (
     <AppShell title={conversation?.displayName || conversation?.phone || "Conversation"}>
+      <AutoRefresh intervalMs={10000} />
       {bridgeError && <DegradedBanner />}
       {conversation && (
         <>

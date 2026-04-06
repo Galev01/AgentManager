@@ -14,7 +14,13 @@ function verify(signed: string): string | null {
   if (idx === -1) return null;
   const value = signed.slice(0, idx);
   const expected = sign(value);
-  if (signed !== expected) return null;
+  const signedBuf = Buffer.from(signed);
+  const expectedBuf = Buffer.from(expected);
+  if (signedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(signedBuf, expectedBuf)) return null;
+  // Check expiration
+  const parts = value.split(":");
+  const ts = Number(parts[1]);
+  if (!ts || Date.now() - ts > 7 * 24 * 60 * 60 * 1000) return null;
   return value;
 }
 

@@ -7,7 +7,7 @@ function requireEnv(name: string): string {
 }
 
 export const config = {
-  host: process.env.BRIDGE_HOST || "0.0.0.0",
+  host: process.env.BRIDGE_HOST || "127.0.0.1",
   port: Number(process.env.BRIDGE_PORT) || 3100,
   token: requireEnv("BRIDGE_TOKEN"),
   openclawStatePath: requireEnv("OPENCLAW_STATE_PATH"),
