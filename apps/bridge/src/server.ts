@@ -11,6 +11,7 @@ import logsRouter from "./routes/logs.js";
 import relayRouter from "./routes/relay.js";
 import routingRouter from "./routes/routing.js";
 import composeRouter from "./routes/compose.js";
+import { attachWebSocket } from "./ws.js";
 
 const app: Express = express();
 app.use(express.json());
@@ -31,8 +32,10 @@ app.use(relayRouter);
 app.use(routingRouter);
 app.use(composeRouter);
 
-app.listen(config.port, config.host, () => {
+const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
 });
 
-export { app };
+attachWebSocket(server);
+
+export { app, server };
