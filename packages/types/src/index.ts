@@ -110,3 +110,30 @@ export type SendMessagePayload = {
   phone: string;
   text: string;
 };
+
+// --- V3 Types: Agent Management ---
+
+export type Agent = {
+  name: string;
+  model?: string;
+  systemPrompt?: string;
+  tools?: string[];
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+export type AgentSession = {
+  id: string;
+  agentName?: string;
+  status: "active" | "completed" | "aborted";
+  messageCount?: number;
+  tokenUsage?: { prompt: number; completion: number; total: number };
+  createdAt?: number;
+  lastActivityAt?: number;
+};
+
+export type SessionMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp?: number;
+};
