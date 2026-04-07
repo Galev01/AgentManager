@@ -1,14 +1,15 @@
 import { Router, type Request, type Response } from "express";
-import { execFile } from "node:child_process";
+import { exec } from "node:child_process";
 import { promisify } from "node:util";
 
-const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
 const router: Router = Router();
 
 const OPENCLAW_CMD = process.env.OPENCLAW_CMD || "openclaw";
 
 async function runOpenClaw(...args: string[]): Promise<{ stdout: string; stderr: string }> {
-  return execFileAsync(OPENCLAW_CMD, args, { timeout: 30_000 });
+  const cmd = [OPENCLAW_CMD, ...args].join(" ");
+  return execAsync(cmd, { timeout: 30_000 });
 }
 
 // GET /gateway-control/status — check if gateway is running
