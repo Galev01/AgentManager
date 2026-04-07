@@ -7,6 +7,9 @@ import type {
   RelayRecipient,
   RoutingRule,
   RuntimeSettingsV2,
+  Agent,
+  AgentSession,
+  SessionMessage,
 } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -153,4 +156,76 @@ export async function deleteRoutingRule(id: string): Promise<{ ok: boolean }> {
 // --- Settings V2 ---
 export async function getSettingsV2(): Promise<RuntimeSettingsV2> {
   return bridgeFetch<RuntimeSettingsV2>("/settings");
+}
+
+// --- Agents ---
+export async function listAgents(): Promise<Agent[]> {
+  const result = await bridgeFetch<unknown>("/agents");
+  return Array.isArray(result) ? result : [];
+}
+
+export async function getAgent(name: string): Promise<Agent | null> {
+  try {
+    return await bridgeFetch<Agent>(`/agents/${encodeURIComponent(name)}`);
+  } catch { return null; }
+}
+
+export async function createAgent(input: {
+  name: string; model?: string; systemPrompt?: string; tools?: string[];
+}): Promise<Agent> {
+  return bridgeFetch<Agent>("/agents", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateAgent(name: string, updates: Partial<Agent>): Promise<Agent> {
+  return bridgeFetch<Agent>(`/agents/${encodeURIComponent(name)}`, {
+    method: "PATCH", body: JSON.stringify(updates),
+  });
+}
+
+export async function deleteAgent(name: string): Promise<{ ok: boolean }> {
+  return bridgeFetch(`/agents/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
+// --- Agent Sessions ---
+export async function listAgentSessions(filters?: {
+  agent?: string; status?: string;
+}): Promise<AgentSession[]> {
+  const params = new URLSearchParams();
+  if (filters?.agent) params.set("agent", filters.agent);
+  if (filters?.status) params.set("status", filters.status);
+  const qs = params.toString();
+  const result = await bridgeFetch<unknown>(`/agent-sessions${qs ? `?${qs}` : ""}`);
+  return Array.isArray(result) ? result : [];
+}
+
+export async function createAgentSession(agentName?: string): Promise<AgentSession> {
+  return bridgeFetch<AgentSession>("/agent-sessions", {
+    method: "POST", body: JSON.stringify({ agentName }),
+  });
+}
+
+export async function sendSessionMessage(id: string, message: string): Promise<unknown> {
+  return bridgeFetch(`/agent-sessions/${encodeURIComponent(id)}/send`, {
+    method: "POST", body: JSON.stringify({ message }),
+  });
+}
+
+export async function getSessionUsage(id: string): Promise<unknown> {
+  return bridgeFetch(`/agent-sessions/${encodeURIComponent(id)}/usage`);
+}
+
+export async function resetSession(id: string): Promise<unknown> {
+  return bridgeFetch(`/agent-sessions/${encodeURIComponent(id)}/reset`, { method: "POST" });
+}
+
+export async function abortSession(id: string): Promise<unknown> {
+  return bridgeFetch(`/agent-sessions/${encodeURIComponent(id)}/abort`, { method: "POST" });
+}
+
+export async function compactSession(id: string): Promise<unknown> {
+  return bridgeFetch(`/agent-sessions/${encodeURIComponent(id)}/compact`, { method: "POST" });
+}
+
+export async function deleteSession(id: string): Promise<{ ok: boolean }> {
+  return bridgeFetch(`/agent-sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
