@@ -137,3 +137,58 @@ export type SessionMessage = {
   content: string;
   timestamp?: number;
 };
+
+// --- Phase 2 Types: Cron & Channels ---
+
+export type CronJob = {
+  id: string;
+  name?: string;
+  schedule: string;
+  command?: string;
+  agentName?: string;
+  status?: "active" | "paused";
+  lastRunAt?: number;
+  nextRunAt?: number;
+  lastResult?: string;
+};
+
+export type Channel = {
+  name: string;
+  type: string;
+  status: "connected" | "disconnected" | "error";
+  lastActivityAt?: number;
+  accountInfo?: Record<string, unknown>;
+};
+
+// --- Phase 3 Types: Tools, Skills, Config ---
+
+export type Tool = {
+  name: string;
+  description?: string;
+  category?: string;
+  parameters?: Array<{ name: string; type: string; required?: boolean; description?: string }>;
+};
+
+export type EffectiveTool = {
+  name: string;
+  enabled?: boolean;
+  assignedTo?: string;
+};
+
+export type Skill = {
+  name: string;
+  status: "installed" | "available" | "error";
+  version?: string;
+  description?: string;
+};
+
+export type ConfigSchemaProperty = {
+  type: string;
+  description?: string;
+  default?: unknown;
+  enum?: unknown[];
+};
+
+export type ConfigSchema = {
+  properties: Record<string, ConfigSchemaProperty>;
+};
