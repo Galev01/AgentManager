@@ -17,6 +17,7 @@ import cronRouter from "./routes/cron.js";
 import channelsRouter from "./routes/channels.js";
 import toolsRouter from "./routes/tools.js";
 import gatewayConfigRouter from "./routes/gateway-config.js";
+import gatewayControlRouter from "./routes/gateway-control.js";
 import { attachWebSocket } from "./ws.js";
 
 const app: Express = express();
@@ -43,6 +44,7 @@ app.use(cronRouter);
 app.use(channelsRouter);
 app.use(toolsRouter);
 app.use(gatewayConfigRouter);
+app.use(gatewayControlRouter);
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
