@@ -13,6 +13,10 @@ import routingRouter from "./routes/routing.js";
 import composeRouter from "./routes/compose.js";
 import agentsRouter from "./routes/agents.js";
 import agentSessionsRouter from "./routes/agent-sessions.js";
+import cronRouter from "./routes/cron.js";
+import channelsRouter from "./routes/channels.js";
+import toolsRouter from "./routes/tools.js";
+import gatewayConfigRouter from "./routes/gateway-config.js";
 import { attachWebSocket } from "./ws.js";
 
 const app: Express = express();
@@ -35,6 +39,10 @@ app.use(routingRouter);
 app.use(composeRouter);
 app.use(agentsRouter);
 app.use(agentSessionsRouter);
+app.use(cronRouter);
+app.use(channelsRouter);
+app.use(toolsRouter);
+app.use(gatewayConfigRouter);
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
