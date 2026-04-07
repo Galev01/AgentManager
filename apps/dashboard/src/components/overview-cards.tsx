@@ -27,9 +27,14 @@ export function OverviewCards({ data }: { data: OverviewData }) {
   );
 }
 
-export function OverviewMeta({ data }: { data: OverviewData }) {
+export function OverviewMeta({ data, activeModel }: { data: OverviewData; activeModel?: string | null }) {
   return (
     <div className="mt-6 flex flex-wrap items-center gap-6 rounded bg-dark-card p-6 shadow-card-dark">
+      <div>
+        <span className="text-xs text-text-muted">Active Model</span>
+        <p className="text-sm font-medium text-primary">{activeModel || <span className="text-text-muted">Unknown</span>}</p>
+      </div>
+      <div className="h-8 w-px bg-dark-border" />
       <div>
         <span className="text-xs text-text-muted">Last Activity</span>
         <p className="text-sm text-text-primary">{timeAgo(data.lastActivityAt)}</p>
