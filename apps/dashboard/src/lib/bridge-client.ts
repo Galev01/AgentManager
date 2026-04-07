@@ -10,6 +10,12 @@ import type {
   Agent,
   AgentSession,
   SessionMessage,
+  CronJob,
+  Channel,
+  Tool,
+  EffectiveTool,
+  Skill,
+  ConfigSchema,
 } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -228,4 +234,75 @@ export async function compactSession(id: string): Promise<unknown> {
 
 export async function deleteSession(id: string): Promise<{ ok: boolean }> {
   return bridgeFetch(`/agent-sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// --- Cron Jobs ---
+export async function listCronJobs(): Promise<CronJob[]> {
+  const result = await bridgeFetch<unknown>("/cron");
+  return Array.isArray(result) ? result : [];
+}
+
+export async function addCronJob(input: {
+  schedule: string; command?: string; agentName?: string; name?: string;
+}): Promise<CronJob> {
+  return bridgeFetch<CronJob>("/cron", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function getCronJobStatus(id: string): Promise<unknown> {
+  return bridgeFetch(`/cron/${encodeURIComponent(id)}/status`);
+}
+
+export async function runCronJob(id: string): Promise<unknown> {
+  return bridgeFetch(`/cron/${encodeURIComponent(id)}/run`, { method: "POST" });
+}
+
+export async function removeCronJob(id: string): Promise<{ ok: boolean }> {
+  return bridgeFetch(`/cron/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// --- Channels ---
+export async function getChannels(): Promise<Channel[]> {
+  const result = await bridgeFetch<unknown>("/channels");
+  return Array.isArray(result) ? result : [];
+}
+
+export async function logoutChannel(name: string): Promise<unknown> {
+  return bridgeFetch(`/channels/${encodeURIComponent(name)}/logout`, { method: "POST" });
+}
+
+// --- Tools & Skills ---
+export async function getToolsCatalog(): Promise<Tool[]> {
+  const result = await bridgeFetch<unknown>("/tools/catalog");
+  return Array.isArray(result) ? result : [];
+}
+
+export async function getEffectiveTools(): Promise<EffectiveTool[]> {
+  const result = await bridgeFetch<unknown>("/tools/effective");
+  return Array.isArray(result) ? result : [];
+}
+
+export async function getSkills(): Promise<Skill[]> {
+  const result = await bridgeFetch<unknown>("/skills");
+  return Array.isArray(result) ? result : [];
+}
+
+export async function installSkill(name: string): Promise<unknown> {
+  return bridgeFetch("/skills/install", { method: "POST", body: JSON.stringify({ name }) });
+}
+
+// --- Gateway Config ---
+export async function getGatewayConfig(): Promise<Record<string, unknown>> {
+  return bridgeFetch<Record<string, unknown>>("/gateway-config");
+}
+
+export async function getGatewayConfigSchema(): Promise<ConfigSchema> {
+  return bridgeFetch<ConfigSchema>("/gateway-config/schema");
+}
+
+export async function setGatewayConfig(updates: Record<string, unknown>): Promise<unknown> {
+  return bridgeFetch("/gateway-config", { method: "PATCH", body: JSON.stringify(updates) });
+}
+
+export async function applyGatewayConfig(): Promise<unknown> {
+  return bridgeFetch("/gateway-config/apply", { method: "POST" });
 }
