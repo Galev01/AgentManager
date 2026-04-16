@@ -19,6 +19,15 @@ import type {
   BrainPerson,
   BrainPersonSummary,
   BrainPersonUpdate,
+  ReviewProject,
+  ReviewIdea,
+  ReviewIdeaStatus,
+  ReviewIdeaImpact,
+  ReviewIdeaEffort,
+  ReviewIdeaCategory,
+  ReviewRun,
+  ReviewReportSummary,
+  ReviewerWorkerState,
 } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -347,4 +356,103 @@ export async function createBrainPerson(input: { phone: string; name?: string })
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+// --- Codebase Reviewer ---
+
+export type ReviewsProjectsResponse = {
+  projects: ReviewProject[];
+  worker: ReviewerWorkerState;
+};
+
+export async function getReviewProjects(): Promise<ReviewsProjectsResponse> {
+  return bridgeFetch<ReviewsProjectsResponse>("/reviews/projects");
+}
+
+export async function scanReviewProjects(): Promise<{
+  added: string[];
+  missing: string[];
+  total: number;
+}> {
+  return bridgeFetch("/reviews/projects/scan", { method: "POST" });
+}
+
+export async function setReviewProjectEnabled(
+  id: string,
+  enabled: boolean
+): Promise<{ project: ReviewProject }> {
+  return bridgeFetch(`/reviews/projects/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export async function runReviewNow(
+  id: string
+): Promise<{ enqueued: boolean; reason?: string }> {
+  return bridgeFetch(`/reviews/projects/${encodeURIComponent(id)}/run`, {
+    method: "POST",
+  });
+}
+
+export async function ackReviewProject(
+  id: string
+): Promise<{ project: ReviewProject }> {
+  return bridgeFetch(`/reviews/projects/${encodeURIComponent(id)}/ack`, {
+    method: "POST",
+  });
+}
+
+export async function getReviewReports(
+  id: string
+): Promise<{ reports: ReviewReportSummary[] }> {
+  return bridgeFetch(`/reviews/projects/${encodeURIComponent(id)}/reports`);
+}
+
+export async function getReviewReport(
+  id: string,
+  date: string
+): Promise<{ markdown: string; ideas: ReviewIdea[] }> {
+  return bridgeFetch(
+    `/reviews/projects/${encodeURIComponent(id)}/reports/${encodeURIComponent(date)}`
+  );
+}
+
+export type ReviewIdeasFilters = {
+  project?: string[];
+  status?: ReviewIdeaStatus[];
+  impact?: ReviewIdeaImpact[];
+  effort?: ReviewIdeaEffort[];
+  category?: ReviewIdeaCategory[];
+};
+
+export async function getReviewIdeas(
+  filters?: ReviewIdeasFilters
+): Promise<{ ideas: ReviewIdea[] }> {
+  const params = new URLSearchParams();
+  const add = (key: string, vals: string[] | undefined) => {
+    if (!vals) return;
+    for (const v of vals) params.append(key, v);
+  };
+  add("project", filters?.project);
+  add("status", filters?.status);
+  add("impact", filters?.impact);
+  add("effort", filters?.effort);
+  add("category", filters?.category);
+  const qs = params.toString();
+  return bridgeFetch(`/reviews/ideas${qs ? `?${qs}` : ""}`);
+}
+
+export async function setReviewIdeaStatus(
+  id: string,
+  status: ReviewIdeaStatus
+): Promise<{ idea: ReviewIdea }> {
+  return bridgeFetch(`/reviews/ideas/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function getReviewRuns(limit = 50): Promise<{ runs: ReviewRun[] }> {
+  return bridgeFetch(`/reviews/runs?limit=${limit}`);
 }
