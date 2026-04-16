@@ -19,6 +19,9 @@ import toolsRouter from "./routes/tools.js";
 import gatewayConfigRouter from "./routes/gateway-config.js";
 import gatewayControlRouter from "./routes/gateway-control.js";
 import brainRouter from "./routes/brain.js";
+import reviewsRouter from "./routes/reviews.js";
+import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
+import { scanProjects } from "./services/codebase-reviewer/discovery.js";
 import { attachWebSocket } from "./ws.js";
 
 const app: Express = express();
@@ -47,11 +50,17 @@ app.use(toolsRouter);
 app.use(gatewayConfigRouter);
 app.use(gatewayControlRouter);
 app.use(brainRouter);
+app.use(reviewsRouter);
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
 });
 
 attachWebSocket(server);
+
+void (async () => {
+  try { await repairOnStartup(); } catch (e) { console.warn("reviewer repair failed:", e); }
+  try { await scanProjects(); } catch (e) { console.warn("reviewer scan failed:", e); }
+})();
 
 export { app, server };
