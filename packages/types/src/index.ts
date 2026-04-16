@@ -98,7 +98,9 @@ export type WsMessageType =
   | "conversations_updated"
   | "event_new"
   | "settings_updated"
-  | "connected";
+  | "connected"
+  | "brain_person_changed"
+  | "brain_person_removed";
 
 export type WsMessage = {
   type: WsMessageType;
@@ -191,4 +193,59 @@ export type ConfigSchemaProperty = {
 
 export type ConfigSchema = {
   properties: Record<string, ConfigSchemaProperty>;
+};
+
+// --- Brainclaw: Obsidian vault integration ---
+
+export type BrainPersonStatus = "active" | "archived" | "blocked";
+
+export type BrainPerson = {
+  phone: string;
+  jid: string | null;
+  name: string;
+  aliases: string[];
+  tags: string[];
+  relationship: string | null;
+  language: string | null;
+  status: BrainPersonStatus;
+  created: string | null;
+  lastSeen: string | null;
+  summary: string;
+  facts: string[];
+  preferences: string[];
+  openThreads: string[];
+  notes: string;
+  log: string[];
+  raw: string;
+  parseWarning: string | null;
+};
+
+export type BrainPersonSummary = {
+  phone: string;
+  name: string;
+  relationship: string | null;
+  language: string | null;
+  status: BrainPersonStatus;
+  lastSeen: string | null;
+  tags: string[];
+};
+
+export type BrainPersonUpdate = {
+  name?: string;
+  aliases?: string[];
+  tags?: string[];
+  relationship?: string | null;
+  language?: string | null;
+  status?: BrainPersonStatus;
+  summary?: string;
+  facts?: string[];
+  preferences?: string[];
+  openThreads?: string[];
+  notes?: string;
+};
+
+export type BrainPersonCreate = {
+  phone: string;
+  jid?: string | null;
+  name?: string;
 };

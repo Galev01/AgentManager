@@ -15,6 +15,7 @@ export const config = {
   gatewayUrl: process.env.OPENCLAW_GATEWAY_URL || "http://127.0.0.1:18789",
   gatewayToken: requireEnv("OPENCLAW_GATEWAY_TOKEN"),
   sessionsDir: process.env.OPENCLAW_SESSIONS_DIR || "",
+  brainVaultPath: process.env.BRAIN_VAULT_PATH || "",
   get runtimeSettingsPath() {
     return path.join(this.managementDir, "runtime-settings.json");
   },

@@ -10,6 +10,9 @@ importers:
 
   apps/bridge:
     dependencies:
+      '@openclaw-manager/brain':
+        specifier: workspace:*
+        version: link:../../packages/brain
       '@openclaw-manager/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -72,6 +75,19 @@ importers:
       tailwindcss:
         specifier: ^4.1.4
         version: 4.2.2
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/brain:
+    dependencies:
+      '@openclaw-manager/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.2
+        version: 22.19.17
       typescript:
         specifier: ^5.8.3
         version: 5.9.3

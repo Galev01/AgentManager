@@ -16,6 +16,9 @@ import type {
   EffectiveTool,
   Skill,
   ConfigSchema,
+  BrainPerson,
+  BrainPersonSummary,
+  BrainPersonUpdate,
 } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -305,4 +308,43 @@ export async function setGatewayConfig(updates: Record<string, unknown>): Promis
 
 export async function applyGatewayConfig(): Promise<unknown> {
   return bridgeFetch("/gateway-config/apply", { method: "POST" });
+}
+
+// --- Brain ---
+export async function getBrainStatus(): Promise<{ enabled: boolean }> {
+  return bridgeFetch<{ enabled: boolean }>("/brain/status");
+}
+
+export async function listBrainPeople(): Promise<BrainPersonSummary[]> {
+  const result = await bridgeFetch<unknown>("/brain/people");
+  return Array.isArray(result) ? (result as BrainPersonSummary[]) : [];
+}
+
+export async function getBrainPerson(phone: string): Promise<BrainPerson | null> {
+  try {
+    return await bridgeFetch<BrainPerson>(`/brain/people/${encodeURIComponent(phone)}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function updateBrainPerson(phone: string, update: BrainPersonUpdate): Promise<BrainPerson> {
+  return bridgeFetch<BrainPerson>(`/brain/people/${encodeURIComponent(phone)}`, {
+    method: "PATCH",
+    body: JSON.stringify(update),
+  });
+}
+
+export async function appendBrainPersonLog(phone: string, entry: string): Promise<BrainPerson> {
+  return bridgeFetch<BrainPerson>(`/brain/people/${encodeURIComponent(phone)}/log`, {
+    method: "POST",
+    body: JSON.stringify({ entry }),
+  });
+}
+
+export async function createBrainPerson(input: { phone: string; name?: string }): Promise<BrainPerson> {
+  return bridgeFetch<BrainPerson>("/brain/people", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }

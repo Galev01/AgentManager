@@ -18,6 +18,7 @@ import channelsRouter from "./routes/channels.js";
 import toolsRouter from "./routes/tools.js";
 import gatewayConfigRouter from "./routes/gateway-config.js";
 import gatewayControlRouter from "./routes/gateway-control.js";
+import brainRouter from "./routes/brain.js";
 import { attachWebSocket } from "./ws.js";
 
 const app: Express = express();
@@ -45,6 +46,7 @@ app.use(channelsRouter);
 app.use(toolsRouter);
 app.use(gatewayConfigRouter);
 app.use(gatewayControlRouter);
+app.use(brainRouter);
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);

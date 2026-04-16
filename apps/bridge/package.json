@@ -9,6 +9,7 @@
     "start": "node --env-file=.env dist/server.js"
   },
   "dependencies": {
+    "@openclaw-manager/brain": "workspace:*",
     "@openclaw-manager/types": "workspace:*",
     "express": "^5.1.0",
     "ws": "^8.20.0"
