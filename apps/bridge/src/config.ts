@@ -16,6 +16,26 @@ export const config = {
   gatewayToken: requireEnv("OPENCLAW_GATEWAY_TOKEN"),
   sessionsDir: process.env.OPENCLAW_SESSIONS_DIR || "",
   brainVaultPath: process.env.BRAIN_VAULT_PATH || "",
+  reviewerScanRoot:
+    process.env.REVIEWER_SCAN_ROOT || "C:\\Users\\GalLe\\Cursor projects",
+  reviewerStateDir:
+    process.env.REVIEWER_STATE_DIR ||
+    path.join(
+      process.env.USERPROFILE || "",
+      ".openclaw/workspace/.openclaw/extensions/codebase-reviewer"
+    ),
+  reviewerTimeoutMs: Number(process.env.REVIEWER_TIMEOUT_MS) || 600000,
+  reviewerAckCooldownMs:
+    Number(process.env.REVIEWER_ACK_COOLDOWN_MS) || 86400000,
+  get reviewerStatePath() {
+    return path.join(this.reviewerStateDir, "state.json");
+  },
+  get reviewerRunsPath() {
+    return path.join(this.reviewerStateDir, "runs.jsonl");
+  },
+  get reviewerIdeasPath() {
+    return path.join(this.reviewerStateDir, "ideas.json");
+  },
   get runtimeSettingsPath() {
     return path.join(this.managementDir, "runtime-settings.json");
   },
