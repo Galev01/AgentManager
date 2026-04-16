@@ -249,3 +249,87 @@ export type BrainPersonCreate = {
   jid?: string | null;
   name?: string;
 };
+
+// --- Codebase Reviewer ---
+
+export type ReviewProjectStatus =
+  | "idle"
+  | "queued"
+  | "running"
+  | "awaiting_ack"
+  | "skipped"
+  | "failed";
+
+export type ReviewProject = {
+  id: string;
+  name: string;
+  path: string;
+  enabled: boolean;
+  status: ReviewProjectStatus;
+  discoveredAt: string;
+  lastRunAt: string | null;
+  lastReportPath: string | null;
+  lastReportDate: string | null;
+  lastAckedAt: string | null;
+  eligibleAt: string | null;
+  lastError: string | null;
+  missing?: boolean;
+};
+
+export type ReviewerState = {
+  scanRoot: string;
+  projects: Record<string, ReviewProject>;
+  updatedAt: string;
+};
+
+export type ReviewIdeaStatus = "pending" | "accepted" | "rejected" | "deferred";
+export type ReviewIdeaImpact = "low" | "medium" | "high";
+export type ReviewIdeaEffort = "S" | "M" | "L";
+export type ReviewIdeaCategory =
+  | "new_feature"
+  | "improvement"
+  | "ui_ux"
+  | "tech_debt";
+
+export type ReviewIdea = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  reportDate: string;
+  category: ReviewIdeaCategory;
+  title: string;
+  problem: string;
+  solution: string;
+  impact: ReviewIdeaImpact;
+  effort: ReviewIdeaEffort;
+  status: ReviewIdeaStatus;
+  createdAt: string;
+  statusChangedAt: string | null;
+};
+
+export type ReviewRunPhase = "start" | "end" | "error";
+
+export type ReviewRun = {
+  runId: string;
+  projectId: string;
+  trigger: "cron" | "manual";
+  phase: ReviewRunPhase;
+  timestamp: string;
+  sessionId?: string;
+  reportPath?: string;
+  ideasCount?: number;
+  error?: string;
+  durationMs?: number;
+};
+
+export type ReviewReportSummary = {
+  reportDate: string;
+  reportPath: string;
+  ideasCount: number;
+  acked: boolean;
+};
+
+export type ReviewerWorkerState = {
+  current: string | null;
+  queue: string[];
+};
