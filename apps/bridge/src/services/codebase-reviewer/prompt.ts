@@ -2,18 +2,19 @@ export function buildReviewPrompt(opts: {
   projectName: string;
   projectPath: string;
   reportDate: string;
+  brief: string;
 }): string {
-  return `You are a senior product manager embedded in this codebase. You are also a fluent engineer who can read code, but your job here is product, not implementation.
+  return `You are a senior product manager who is also a fluent engineer. You do NOT have filesystem access in this session. Everything you need is in the **Project Brief** below.
 
 Project name: ${opts.projectName}
 Project path: ${opts.projectPath}
 Today: ${opts.reportDate}
 
-Your working directory is NOT the project. Use absolute paths when reading files, running Glob, or running Grep — every filesystem tool call must reference a path inside \`${opts.projectPath}\`. Walk the codebase from that root: README files, entry points, routes, UI components, data models, tests, and the recent git log. Form a mental model of what this product is, who uses it, and where it is weakest.
+Read the brief carefully: the file tree, the recent git log, and the selected file contents together paint the picture of what this product is, who it serves, and where it's weakest. Base your review on this brief alone — do not claim you need more access.
 
-Then produce a product review focused on **features, improvements, and UI/UX ideas** — not refactors for their own sake. Propose concrete, high-signal ideas a product manager would actually ship. Avoid vague advice. Avoid implementation patches.
+Then produce a product review focused on **features, improvements, and UI/UX ideas** — not refactors for their own sake. Propose concrete, high-signal ideas a PM would actually ship. Avoid vague advice. Avoid implementation patches.
 
-Return **only** the markdown below. No preamble, no closing remarks. Use these exact top-level headings in this order. Under each non-prose heading, add one or more \`###\` ideas with the bullet fields shown. Impact must be one of \`low\`, \`medium\`, \`high\`. Effort must be one of \`S\`, \`M\`, \`L\`.
+Return **only** the markdown below. No preamble, no closing remarks. Use these exact top-level headings in this order. Under each non-prose heading, add one or more \`###\` ideas with the bullet fields shown. Impact must be one of \`low\`, \`medium\`, \`high\`. Effort must be one of \`S\`, \`M\`, \`L\`. Start your reply with the line \`# Codebase Review\` — any other opening is wrong.
 
 # Codebase Review — ${opts.projectName} — ${opts.reportDate}
 
@@ -50,5 +51,9 @@ Return **only** the markdown below. No preamble, no closing remarks. Use these e
 
 ## Recommended Next Step
 <one short paragraph naming the single best next thing to do>
+
+---
+
+${opts.brief}
 `;
 }

@@ -3,11 +3,13 @@ import path from "node:path";
 import { callGateway } from "../gateway.js";
 import { config } from "../../config.js";
 import { buildReviewPrompt } from "./prompt.js";
+import { buildProjectBrief } from "./project-brief.js";
 
 export type RunResult = { sessionId: string; markdown: string };
 
 type CreatedSession = {
   ok?: boolean;
+  key?: string;
   sessionId?: string;
   id?: string;
   entry?: { sessionFile?: string };
@@ -71,11 +73,14 @@ export async function runReview(opts: {
 }): Promise<RunResult> {
   const created = (await callGateway("sessions.create", {})) as CreatedSession;
   const sessionId = created.sessionId || created.id;
+  const key = created.key;
   if (!sessionId) throw new Error("sessions.create did not return a session id");
+  if (!key) throw new Error("sessions.create did not return a session key");
   const sessionFile = sessionFilePath(created, sessionId);
 
-  const prompt = buildReviewPrompt(opts);
-  await callGateway("sessions.send", { session: sessionId, message: prompt });
+  const brief = await buildProjectBrief(opts.projectPath);
+  const prompt = buildReviewPrompt({ ...opts, brief });
+  await callGateway("sessions.send", { key, message: prompt });
 
   const started = Date.now();
   const terminal = new Set(["done", "completed", "finished", "stopped"]);
@@ -83,7 +88,7 @@ export async function runReview(opts: {
 
   while (true) {
     if (Date.now() - started > config.reviewerTimeoutMs) {
-      try { await callGateway("sessions.abort", { session: sessionId }); } catch {}
+      try { await callGateway("sessions.abort", { key }); } catch {}
       throw new Error(`timeout after ${config.reviewerTimeoutMs}ms`);
     }
     await new Promise((r) => setTimeout(r, 5000));
@@ -99,8 +104,9 @@ export async function runReview(opts: {
   const final = await readLastAssistantMessage(sessionFile);
   if (!final) throw new Error(`no assistant output found in session file: ${sessionFile}`);
   const trimmed = final.trim();
-  if (!trimmed.startsWith("# Codebase Review")) {
-    throw new Error("agent output did not follow the required template");
+  const idx = trimmed.indexOf("# Codebase Review");
+  if (idx < 0) {
+    throw new Error("agent output did not include a '# Codebase Review' heading");
   }
-  return { sessionId, markdown: trimmed };
+  return { sessionId, markdown: trimmed.slice(idx) };
 }
