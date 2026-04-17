@@ -1,56 +1,67 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { callGateway } from "../gateway.js";
 import { config } from "../../config.js";
 import { buildReviewPrompt } from "./prompt.js";
 
 export type RunResult = { sessionId: string; markdown: string };
 
-function pickString(obj: unknown, keys: string[]): string | undefined {
-  if (!obj || typeof obj !== "object") return undefined;
-  const rec = obj as Record<string, unknown>;
-  for (const k of keys) {
-    const v = rec[k];
-    if (typeof v === "string" && v.length > 0) return v;
+type CreatedSession = {
+  ok?: boolean;
+  sessionId?: string;
+  id?: string;
+  entry?: { sessionFile?: string };
+};
+
+type SessionsListEntry = {
+  sessionId?: string;
+  id?: string;
+  status?: string;
+  abortedLastRun?: boolean;
+};
+
+function sessionFilePath(created: CreatedSession, sessionId: string): string {
+  if (created.entry?.sessionFile) return created.entry.sessionFile;
+  if (config.sessionsDir) return path.join(config.sessionsDir, `${sessionId}.jsonl`);
+  throw new Error("cannot locate session file: SDK did not return it and OPENCLAW_SESSIONS_DIR is not set");
+}
+
+async function pollSessionStatus(sessionId: string): Promise<SessionsListEntry | undefined> {
+  const raw = (await callGateway("sessions.list", {})) as unknown;
+  const list = Array.isArray(raw)
+    ? (raw as SessionsListEntry[])
+    : ((raw as { sessions?: SessionsListEntry[] })?.sessions ?? []);
+  return list.find((s) => s?.sessionId === sessionId || s?.id === sessionId);
+}
+
+async function readLastAssistantMessage(sessionFile: string): Promise<string | undefined> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(sessionFile, "utf8");
+  } catch {
+    return undefined;
+  }
+  const lines = raw.split(/\r?\n/).filter((l) => l.trim());
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let entry: any;
+    try {
+      entry = JSON.parse(lines[i]);
+    } catch {
+      continue;
+    }
+    if (entry?.type !== "message") continue;
+    const msg = entry.message;
+    if (!msg || msg.role !== "assistant") continue;
+    const content = msg.content;
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      const parts = content
+        .filter((c) => c && c.type === "text" && typeof c.text === "string")
+        .map((c) => c.text as string);
+      if (parts.length) return parts.join("");
+    }
   }
   return undefined;
-}
-
-async function getSessionState(sessionId: string): Promise<{
-  state: string | undefined;
-  lastAssistant: string | undefined;
-}> {
-  // sessions.list returns all sessions — find ours and read its state + latest message
-  const list = await callGateway("sessions.list", {}) as unknown;
-  const sessions = Array.isArray(list) ? list : (list as { sessions?: unknown[] })?.sessions;
-  if (!Array.isArray(sessions)) return { state: undefined, lastAssistant: undefined };
-  const match = sessions.find((s: any) => s?.id === sessionId) as Record<string, unknown> | undefined;
-  if (!match) return { state: undefined, lastAssistant: undefined };
-  const state = pickString(match, ["state", "status"]);
-  const lastAssistant = pickString(match, ["lastAssistantMessage", "lastMessage", "lastOutput"]);
-  return { state, lastAssistant };
-}
-
-async function getFinalMessage(sessionId: string): Promise<string | undefined> {
-  // Try sessions.usage first (some SDK builds return full transcript here), fall back to list.
-  try {
-    const usage = await callGateway("sessions.usage", { session: sessionId }) as unknown;
-    if (usage && typeof usage === "object") {
-      const transcript = (usage as Record<string, unknown>).transcript;
-      if (Array.isArray(transcript)) {
-        for (let i = transcript.length - 1; i >= 0; i--) {
-          const msg = transcript[i] as Record<string, unknown>;
-          if (msg?.role === "assistant" && typeof msg.content === "string") {
-            return msg.content;
-          }
-        }
-      }
-      const last = pickString(usage as object, ["lastAssistantMessage", "lastMessage"]);
-      if (last) return last;
-    }
-  } catch {
-    // ignore, fall through
-  }
-  const { lastAssistant } = await getSessionState(sessionId);
-  return lastAssistant;
 }
 
 export async function runReview(opts: {
@@ -58,32 +69,35 @@ export async function runReview(opts: {
   projectPath: string;
   reportDate: string;
 }): Promise<RunResult> {
-  const created = await callGateway("sessions.create", { cwd: opts.projectPath }) as unknown;
-  const sessionId = pickString(created, ["id", "sessionId"]);
+  const created = (await callGateway("sessions.create", {})) as CreatedSession;
+  const sessionId = created.sessionId || created.id;
   if (!sessionId) throw new Error("sessions.create did not return a session id");
+  const sessionFile = sessionFilePath(created, sessionId);
 
   const prompt = buildReviewPrompt(opts);
   await callGateway("sessions.send", { session: sessionId, message: prompt });
 
   const started = Date.now();
-  const terminalStates = new Set(["done", "completed", "finished", "idle", "stopped"]);
-  const errorStates = new Set(["error", "failed", "aborted"]);
+  const terminal = new Set(["done", "completed", "finished", "stopped"]);
+  const errored = new Set(["error", "failed", "aborted"]);
 
   while (true) {
     if (Date.now() - started > config.reviewerTimeoutMs) {
       try { await callGateway("sessions.abort", { session: sessionId }); } catch {}
       throw new Error(`timeout after ${config.reviewerTimeoutMs}ms`);
     }
-    await new Promise((r) => setTimeout(r, 3000));
-    const { state } = await getSessionState(sessionId);
-    if (state && errorStates.has(state.toLowerCase())) {
-      throw new Error(`session ended in ${state} state`);
+    await new Promise((r) => setTimeout(r, 5000));
+    const s = await pollSessionStatus(sessionId);
+    if (!s) continue;
+    const state = typeof s.status === "string" ? s.status.toLowerCase() : "";
+    if (s.abortedLastRun || errored.has(state)) {
+      throw new Error(`session ended in ${state || "aborted"} state`);
     }
-    if (state && terminalStates.has(state.toLowerCase())) break;
+    if (terminal.has(state)) break;
   }
 
-  const final = await getFinalMessage(sessionId);
-  if (!final) throw new Error("no assistant output found for session");
+  const final = await readLastAssistantMessage(sessionFile);
+  if (!final) throw new Error(`no assistant output found in session file: ${sessionFile}`);
   const trimmed = final.trim();
   if (!trimmed.startsWith("# Codebase Review")) {
     throw new Error("agent output did not follow the required template");

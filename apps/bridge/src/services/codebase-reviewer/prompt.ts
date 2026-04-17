@@ -9,7 +9,7 @@ Project name: ${opts.projectName}
 Project path: ${opts.projectPath}
 Today: ${opts.reportDate}
 
-Walk the codebase. Read README files, entry points, routes, UI components, data models, tests, and the recent git log. Form a mental model of what this product is, who uses it, and where it is weakest.
+Your working directory is NOT the project. Use absolute paths when reading files, running Glob, or running Grep — every filesystem tool call must reference a path inside \`${opts.projectPath}\`. Walk the codebase from that root: README files, entry points, routes, UI components, data models, tests, and the recent git log. Form a mental model of what this product is, who uses it, and where it is weakest.
 
 Then produce a product review focused on **features, improvements, and UI/UX ideas** — not refactors for their own sake. Propose concrete, high-signal ideas a product manager would actually ship. Avoid vague advice. Avoid implementation patches.
 
