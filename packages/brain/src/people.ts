@@ -155,6 +155,9 @@ export function createBrainClient(vaultRoot: string): BrainClient {
       openThreads: [],
       notes: "",
       log: [`${nowIsoMinutes()} — stub created`],
+      cursing: false,
+      cursingRate: 70,
+      curses: [],
       raw: "",
       parseWarning: null,
     };

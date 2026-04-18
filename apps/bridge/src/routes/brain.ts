@@ -73,6 +73,11 @@ router.patch("/brain/people/:phone", async (req, res) => {
   if (Array.isArray(body.preferences)) update.preferences = body.preferences.map(String);
   if (Array.isArray(body.openThreads)) update.openThreads = body.openThreads.map(String);
   if (typeof body.notes === "string") update.notes = body.notes;
+  if (typeof body.cursing === "boolean") update.cursing = body.cursing;
+  if (typeof body.cursingRate === "number" && Number.isFinite(body.cursingRate)) {
+    update.cursingRate = body.cursingRate;
+  }
+  if (Array.isArray(body.curses)) update.curses = body.curses.map(String);
 
   try {
     const person = await getBrainClient().updatePerson(req.params.phone, update);

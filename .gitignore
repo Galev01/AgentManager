@@ -4,3 +4,6 @@ dist/
 .env
 .env.local
 *.tsbuildinfo
+.openclaw-review/
+.claude/
+.superpowers/

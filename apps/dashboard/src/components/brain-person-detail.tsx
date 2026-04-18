@@ -16,6 +16,9 @@ type EditorState = {
   preferences: EditableLines;
   openThreads: EditableLines;
   notes: string;
+  cursing: boolean;
+  cursingRate: number;
+  curses: EditableLines;
 };
 
 function toEditor(person: BrainPerson): EditorState {
@@ -29,6 +32,9 @@ function toEditor(person: BrainPerson): EditorState {
     preferences: person.preferences.join("\n"),
     openThreads: person.openThreads.join("\n"),
     notes: person.notes,
+    cursing: person.cursing === true,
+    cursingRate: typeof person.cursingRate === "number" ? person.cursingRate : 70,
+    curses: (person.curses ?? []).join("\n"),
   };
 }
 
@@ -43,6 +49,9 @@ function toUpdate(edit: EditorState): BrainPersonUpdate {
     preferences: edit.preferences.split("\n").map((s) => s.trim()).filter(Boolean),
     openThreads: edit.openThreads.split("\n").map((s) => s.trim()).filter(Boolean),
     notes: edit.notes,
+    cursing: edit.cursing,
+    cursingRate: edit.cursingRate,
+    curses: edit.curses.split("\n").map((s) => s.trim()).filter(Boolean),
   };
 }
 
@@ -257,6 +266,64 @@ export function BrainPersonDetail({ initial }: { initial: BrainPerson }) {
           className={textareaClass}
         />
       </Section>
+
+      <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-100">Curses (canned replies)</h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              When the toggle is on and the list has at least one entry, the bot replies with a random line for{" "}
+              <span className="font-mono text-zinc-300">{edit.cursingRate}%</span> of this contact's messages, skipping the AI entirely. The remaining {100 - edit.cursingRate}% fall through to the normal AI reply.
+            </p>
+          </div>
+          <label className="flex shrink-0 items-center gap-2 text-xs text-zinc-300">
+            <input
+              type="checkbox"
+              checked={edit.cursing}
+              onChange={(e) => update("cursing", e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-blue-500 focus:ring-0 focus:ring-offset-0"
+            />
+            <span>Reply with random curse</span>
+          </label>
+        </div>
+
+        <div className="mt-4 flex items-center gap-4">
+          <label className="text-xs uppercase tracking-wider text-zinc-400 shrink-0">
+            Curse rate
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={edit.cursingRate}
+            onChange={(e) => update("cursingRate", Number(e.target.value))}
+            disabled={!edit.cursing}
+            className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-zinc-700 accent-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={edit.cursingRate}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n)) update("cursingRate", Math.max(0, Math.min(100, Math.round(n))));
+            }}
+            disabled={!edit.cursing}
+            className={inputClass + " w-20 text-right font-mono disabled:opacity-50"}
+          />
+          <span className="text-xs text-zinc-400">%</span>
+        </div>
+
+        <textarea
+          value={edit.curses}
+          onChange={(e) => update("curses", e.target.value)}
+          rows={6}
+          placeholder="One per line, e.g.&#10;סתום את הפה&#10;לוזר רציני&#10;תתחדש"
+          className={textareaClass + " mt-4"}
+        />
+      </div>
 
       <Section title="Notes" hint="Free-form. NOT injected into the agent. Use for your private scratch.">
         <textarea

@@ -1,6 +1,6 @@
 import type { BrainPerson, BrainPersonStatus, BrainPersonUpdate } from "@openclaw-manager/types";
 
-const SECTION_ORDER = ["Summary", "Facts", "Preferences", "Open Threads", "Notes", "Log"] as const;
+const SECTION_ORDER = ["Summary", "Facts", "Preferences", "Open Threads", "Curses", "Notes", "Log"] as const;
 type SectionName = typeof SECTION_ORDER[number];
 
 type ParsedFrontmatter = {
@@ -118,6 +118,7 @@ function emptySections(): Sections {
     Facts: [],
     Preferences: [],
     "Open Threads": [],
+    Curses: [],
     Notes: [],
     Log: [],
   };
@@ -172,6 +173,29 @@ function asStatus(value: unknown): BrainPersonStatus {
   return value === "archived" || value === "blocked" ? value : "active";
 }
 
+function asBool(value: unknown): boolean {
+  if (value === true) return true;
+  if (value === false) return false;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    return v === "true" || v === "yes" || v === "1";
+  }
+  return false;
+}
+
+function asRate(value: unknown, fallback = 70): number {
+  let n: number;
+  if (typeof value === "number" && Number.isFinite(value)) n = value;
+  else if (typeof value === "string" && value.trim() !== "" && !Number.isNaN(Number(value))) n = Number(value);
+  else return fallback;
+  // Support both 0-1 floats and 0-100 ints; normalize to 0-100 int.
+  if (n > 0 && n <= 1) n = n * 100;
+  n = Math.round(n);
+  if (n < 0) n = 0;
+  if (n > 100) n = 100;
+  return n;
+}
+
 export function parsePerson(phone: string, raw: string): BrainPerson {
   const { fmBlock, body, warning: fmWarn } = splitFrontmatter(raw);
   const { fm, warning: parseWarn } = parseFrontmatter(fmBlock);
@@ -194,6 +218,9 @@ export function parsePerson(phone: string, raw: string): BrainPerson {
     openThreads: bulletLines(sections["Open Threads"]),
     notes: paragraphText(sections.Notes),
     log: bulletLines(sections.Log),
+    cursing: asBool(fm.cursing),
+    cursingRate: asRate(fm.cursing_rate),
+    curses: bulletLines(sections.Curses),
     raw,
     parseWarning: fmWarn || parseWarn,
   };
@@ -224,6 +251,8 @@ export function serializePerson(person: BrainPerson): string {
     relationship: person.relationship ?? null,
     language: person.language ?? null,
     status: person.status,
+    cursing: person.cursing === true,
+    cursing_rate: typeof person.cursingRate === "number" ? asRate(person.cursingRate) : 70,
   };
   const fmText = stringifyFrontmatter(fm);
   const title = `# ${person.name || person.phone}`;
@@ -239,6 +268,7 @@ export function serializePerson(person: BrainPerson): string {
     emitSection("Facts", bulletBlock(person.facts)),
     emitSection("Preferences", bulletBlock(person.preferences)),
     emitSection("Open Threads", bulletBlock(person.openThreads)),
+    emitSection("Curses", bulletBlock(person.curses)),
     emitSection("Notes", paragraphBlock(person.notes)),
     emitSection("Log", bulletBlock(person.log)),
   ];
@@ -286,5 +316,8 @@ export function applyUpdate(person: BrainPerson, update: BrainPersonUpdate): Bra
     preferences: update.preferences ?? person.preferences,
     openThreads: update.openThreads ?? person.openThreads,
     notes: update.notes ?? person.notes,
+    cursing: update.cursing === undefined ? person.cursing : update.cursing,
+    cursingRate: update.cursingRate === undefined ? person.cursingRate : asRate(update.cursingRate),
+    curses: update.curses ?? person.curses,
   };
 }
