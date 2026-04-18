@@ -3,7 +3,9 @@ import path from "node:path";
 
 // Dynamically import OpenClaw SDK's callGateway which handles device identity,
 // auth handshake, and WebSocket protocol automatically.
-const OPENCLAW_SDK_PATH = path.join(
+// `APPDATA` resolves to the system profile path when running as a Windows
+// service (LocalSystem), so allow an explicit override.
+const OPENCLAW_SDK_PATH = process.env.OPENCLAW_SDK_PATH || path.join(
   process.env.APPDATA || "",
   "npm/node_modules/openclaw/dist/call-CQ0eH9Ew.js"
 );
