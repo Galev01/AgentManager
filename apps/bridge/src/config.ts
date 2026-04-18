@@ -24,6 +24,7 @@ export const config = {
       process.env.USERPROFILE || "",
       ".openclaw/workspace/.openclaw/extensions/codebase-reviewer"
     ),
+  reviewerAgent: process.env.REVIEWER_AGENT || "reviewer",
   reviewerTimeoutMs: Number(process.env.REVIEWER_TIMEOUT_MS) || 600000,
   reviewerAckCooldownMs:
     Number(process.env.REVIEWER_ACK_COOLDOWN_MS) || 86400000,

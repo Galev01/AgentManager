@@ -71,7 +71,9 @@ export async function runReview(opts: {
   projectPath: string;
   reportDate: string;
 }): Promise<RunResult> {
-  const created = (await callGateway("sessions.create", {})) as CreatedSession;
+  const created = (await callGateway("sessions.create", {
+    agentId: config.reviewerAgent,
+  })) as CreatedSession;
   const sessionId = created.sessionId || created.id;
   const key = created.key;
   if (!sessionId) throw new Error("sessions.create did not return a session id");
