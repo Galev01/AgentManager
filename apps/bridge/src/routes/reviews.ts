@@ -3,9 +3,13 @@ import { Router, type Request, type Response } from "express";
 import {
   getProject,
   listProjects,
+  readState,
   updateProject,
 } from "../services/codebase-reviewer/state.js";
-import { scanProjects } from "../services/codebase-reviewer/discovery.js";
+import {
+  scanProjects,
+  addProjectByPath,
+} from "../services/codebase-reviewer/discovery.js";
 import {
   enqueue,
   enqueueAllEligible,
@@ -45,8 +49,8 @@ function badDate(res: Response): void {
 
 router.get("/reviews/projects", async (_req: Request, res: Response) => {
   try {
-    const projects = await listProjects();
-    res.json({ projects, worker: getWorkerState() });
+    const [projects, state] = await Promise.all([listProjects(), readState()]);
+    res.json({ projects, worker: getWorkerState(), scanRoots: state.scanRoots });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "failed" });
   }
@@ -58,6 +62,26 @@ router.post("/reviews/projects/scan", async (_req: Request, res: Response) => {
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "failed" });
+  }
+});
+
+router.post("/reviews/projects/add", async (req: Request, res: Response) => {
+  const raw = req.body?.path;
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return void res.status(400).json({ error: "path required" });
+  }
+  try {
+    const result = await addProjectByPath(raw.trim());
+    res.json(result);
+  } catch (err: any) {
+    const message = err?.message || "failed";
+    const code =
+      message === "path must be absolute" ||
+      message === "directory not found" ||
+      message.startsWith("not a recognized project")
+        ? 400
+        : 500;
+    res.status(code).json({ error: message });
   }
 });
 
