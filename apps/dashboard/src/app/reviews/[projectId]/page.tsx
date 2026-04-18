@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { ReviewReportViewer } from "@/components/review-report-viewer";
+import { RecommendedActionPanel } from "@/components/recommended-action-panel";
+import { SeverityBadge } from "@/components/severity-badge";
+import { TriageBadge } from "@/components/triage-badge";
 import {
   getReviewProjects,
   getReviewReport,
@@ -39,6 +42,9 @@ export default async function ReviewDetailPage({ params, searchParams }: Props) 
   } catch { /* empty */ }
 
   const selectedDate = date || reports[0]?.reportDate;
+  const selectedReport = selectedDate
+    ? reports.find((r) => r.reportDate === selectedDate)
+    : undefined;
   let markdown = "";
   let ideas: Awaited<ReturnType<typeof getReviewReport>>["ideas"] = [];
   if (selectedDate) {
@@ -79,6 +85,15 @@ export default async function ReviewDetailPage({ params, searchParams }: Props) 
           </div>
         </div>
 
+        {selectedReport && (
+          <RecommendedActionPanel
+            projectId={projectId}
+            reportDate={selectedReport.reportDate}
+            severity={selectedReport.severity}
+            triageState={selectedReport.triageState}
+          />
+        )}
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
           <aside className="col-span-1 space-y-1">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">History</h2>
@@ -93,9 +108,13 @@ export default async function ReviewDetailPage({ params, searchParams }: Props) 
                     : "text-zinc-400 hover:bg-zinc-800/60"
                 }`}
               >
-                <div>{r.reportDate}</div>
-                <div className="text-[10px] text-zinc-500">
-                  {r.ideasCount} ideas · {r.acked ? "acked" : "open"}
+                <div className="flex items-center justify-between gap-2">
+                  <span>{r.reportDate}</span>
+                  <SeverityBadge severity={r.severity} />
+                </div>
+                <div className="mt-1 flex items-center gap-1 text-[10px] text-zinc-500">
+                  <TriageBadge state={r.triageState} />
+                  <span>· {r.ideasCount} ideas</span>
                 </div>
               </Link>
             ))}
