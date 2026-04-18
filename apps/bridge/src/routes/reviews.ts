@@ -18,12 +18,14 @@ import {
   listIdeasForReport,
   setIdeaStatus,
 } from "../services/codebase-reviewer/ideas.js";
+import { getMeta, setTriage } from "../services/codebase-reviewer/report-meta.js";
 import type {
   ReviewIdeaStatus,
   ReviewIdeaImpact,
   ReviewIdeaEffort,
   ReviewIdeaCategory,
   ReviewReportSummary,
+  ReviewTriageState,
 } from "@openclaw-manager/types";
 import { deriveSeverity } from "../services/codebase-reviewer/severity.js";
 import path from "node:path";
@@ -129,6 +131,7 @@ router.get(
       for (const f of files) {
         const date = f.replace(/\.md$/, "");
         const ideas = await listIdeasForReport(id, date);
+        const meta = await getMeta(id, date);
         summaries.push({
           reportDate: date,
           reportPath: path.join(dir, f),
@@ -138,8 +141,8 @@ router.get(
               ? project.lastAckedAt !== null
               : true,
           severity: deriveSeverity(ideas),
-          triageState: "new",
-          triageChangedAt: null,
+          triageState: meta.triageState,
+          triageChangedAt: meta.triageChangedAt,
         });
       }
       res.json({ reports: summaries });
