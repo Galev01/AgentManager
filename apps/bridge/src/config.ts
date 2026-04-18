@@ -58,4 +58,16 @@ export const config = {
   get commandsPath() {
     return path.join(this.managementDir, "commands.jsonl");
   },
+  get youtubeDir() {
+    return path.join(this.managementDir, "youtube");
+  },
+  get youtubeJobsPath() {
+    return path.join(this.managementDir, "youtube", "jobs.jsonl");
+  },
+  get youtubeIndexPath() {
+    return path.join(this.managementDir, "youtube", "summaries-index.jsonl");
+  },
+  get youtubeSummariesDir() {
+    return path.join(this.managementDir, "youtube", "summaries");
+  },
 } as const;
