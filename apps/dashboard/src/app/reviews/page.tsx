@@ -11,11 +11,13 @@ export const dynamic = "force-dynamic";
 export default async function ReviewsPage() {
   let projects: ReviewProject[] = [];
   let worker: ReviewerWorkerState = { current: null, queue: [] };
+  let scanRoots: string[] = [];
   let error: string | null = null;
   try {
     const result = await getReviewProjects();
     projects = result.projects;
     worker = result.worker;
+    scanRoots = result.scanRoots;
   } catch (e: any) {
     error = e?.message || "failed to load";
   }
@@ -40,7 +42,7 @@ export default async function ReviewsPage() {
         ) : projects.length === 0 ? (
           <ReviewsEmptyState />
         ) : (
-          <ReviewsTable projects={projects} worker={worker} />
+          <ReviewsTable projects={projects} worker={worker} scanRoots={scanRoots} />
         )}
       </div>
     </AppShell>

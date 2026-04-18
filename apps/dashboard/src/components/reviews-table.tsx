@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import type { ReviewProject, ReviewerWorkerState } from "@openclaw-manager/types";
 import {
   ackAction,
+  addProjectAction,
   runNowAction,
   scanAction,
   toggleEnabledAction,
@@ -39,32 +40,98 @@ function StatusBadge({ status, missing }: { status: ReviewProject["status"]; mis
 export function ReviewsTable({
   projects,
   worker,
+  scanRoots,
 }: {
   projects: ReviewProject[];
   worker: ReviewerWorkerState;
+  scanRoots: string[];
 }) {
   const [pending, startTransition] = useTransition();
+  const [showAdd, setShowAdd] = useState(false);
+  const [newPath, setNewPath] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
   const sorted = [...projects].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4 text-sm text-zinc-400">
-        <div>
-          Worker:{" "}
-          {worker.current
-            ? <span className="text-emerald-300">running {worker.current}</span>
-            : <span>idle</span>}
-          {worker.queue.length > 0 && (
-            <span className="ml-2 text-zinc-500">queued: {worker.queue.join(", ")}</span>
+      <div className="space-y-2">
+        <div className="flex items-center gap-4 text-sm text-zinc-400">
+          <div>
+            Worker:{" "}
+            {worker.current
+              ? <span className="text-emerald-300">running {worker.current}</span>
+              : <span>idle</span>}
+            {worker.queue.length > 0 && (
+              <span className="ml-2 text-zinc-500">queued: {worker.queue.join(", ")}</span>
+            )}
+          </div>
+          <div className="ml-auto flex gap-2">
+            <button
+              disabled={pending}
+              onClick={() => {
+                setShowAdd((v) => !v);
+                setAddError(null);
+              }}
+              className="rounded bg-zinc-800 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+            >
+              {showAdd ? "Cancel" : "Add project"}
+            </button>
+            <button
+              disabled={pending}
+              onClick={() => startTransition(() => scanAction())}
+              className="rounded bg-zinc-800 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+            >
+              Rescan projects
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1 text-xs text-zinc-500">
+          <span>Scan roots:</span>
+          {scanRoots.length === 0 ? (
+            <span className="text-zinc-600">none configured</span>
+          ) : (
+            scanRoots.map((r) => (
+              <span
+                key={r}
+                className="rounded bg-zinc-800/80 px-2 py-0.5 font-mono text-[11px] text-zinc-400"
+              >
+                {r}
+              </span>
+            ))
           )}
         </div>
-        <button
-          disabled={pending}
-          onClick={() => startTransition(() => scanAction())}
-          className="ml-auto rounded bg-zinc-800 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-        >
-          Rescan projects
-        </button>
+        {showAdd && (
+          <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+            <input
+              type="text"
+              value={newPath}
+              onChange={(e) => setNewPath(e.target.value)}
+              placeholder="Absolute path (e.g. C:\Users\you\code\my-repo)"
+              className="flex-1 rounded bg-zinc-950 px-2 py-1 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            />
+            <button
+              disabled={pending || newPath.trim().length === 0}
+              onClick={() =>
+                startTransition(async () => {
+                  const result = await addProjectAction(newPath.trim());
+                  if (result.ok) {
+                    setNewPath("");
+                    setShowAdd(false);
+                    setAddError(null);
+                  } else {
+                    setAddError(result.error);
+                  }
+                })
+              }
+              className="rounded bg-primary/20 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/30 disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
+        )}
+        {addError && (
+          <p className="text-xs text-red-300">Couldn't add: {addError}</p>
+        )}
       </div>
       <div className="overflow-hidden rounded border border-zinc-800">
         <table className="w-full text-sm">
