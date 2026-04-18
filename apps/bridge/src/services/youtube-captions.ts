@@ -1,4 +1,11 @@
-import { YoutubeTranscript } from "youtube-transcript";
+// youtube-transcript@1.3.0 ships a CJS file as `main` but also sets
+// `"type": "module"` in its package.json, so Node resolves `main` as ESM
+// and fails to find any named exports. Import the ESM bundle directly to
+// bypass the broken `main` resolution.
+// @ts-expect-error — dist path has no bundled types; we cast via the root.
+import { YoutubeTranscript as YoutubeTranscriptRuntime } from "youtube-transcript/dist/youtube-transcript.esm.js";
+import type { YoutubeTranscript as YoutubeTranscriptType } from "youtube-transcript";
+const YoutubeTranscript: typeof YoutubeTranscriptType = YoutubeTranscriptRuntime;
 
 export type CaptionsResult = {
   title: string;

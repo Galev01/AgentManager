@@ -24,12 +24,22 @@ function verify(signed: string): string | null {
   return value;
 }
 
+function cookieSecure(): boolean {
+  // `COOKIE_SECURE` lets LAN-only HTTP deployments opt out of the Secure
+  // flag (browsers drop Secure cookies on non-TLS origins). Defaults to
+  // production behavior for backward compatibility.
+  const override = process.env.COOKIE_SECURE;
+  if (override === "true") return true;
+  if (override === "false") return false;
+  return process.env.NODE_ENV === "production";
+}
+
 export async function createSession(): Promise<void> {
   const token = sign(`admin:${Date.now()}`);
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: cookieSecure(),
     sameSite: "strict",
     path: "/",
     maxAge: 60 * 60 * 24 * 7,

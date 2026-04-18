@@ -32,7 +32,13 @@ export async function middleware(request: NextRequest) {
   }
   const session = request.cookies.get(SESSION_COOKIE)?.value;
   if (!session || !(await verify(session))) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    // Relative Location so the browser stays on the external host/port
+    // (NextResponse.redirect with request.url would leak the internal
+    // 127.0.0.1:3000 when behind a reverse proxy).
+    return new NextResponse(null, {
+      status: 307,
+      headers: { Location: "/login" },
+    });
   }
   return NextResponse.next();
 }
