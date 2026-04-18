@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   ackReviewProject,
+  addReviewProject,
   runReviewNow,
   scanReviewProjects,
   setReviewProjectEnabled,
@@ -43,4 +44,16 @@ export async function setTriageAction(
   revalidatePath("/reviews");
   revalidatePath("/reviews/inbox");
   revalidatePath(`/reviews/${projectId}`);
+}
+
+export async function addProjectAction(
+  absolutePath: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await addReviewProject(absolutePath);
+    revalidatePath("/reviews");
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "failed" };
+  }
 }
