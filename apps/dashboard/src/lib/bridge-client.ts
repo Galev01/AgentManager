@@ -28,6 +28,9 @@ import type {
   ReviewRun,
   ReviewReportSummary,
   ReviewerWorkerState,
+  ReviewTriageState,
+  ReviewReportMeta,
+  ReviewInboxItem,
 } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -455,4 +458,28 @@ export async function setReviewIdeaStatus(
 
 export async function getReviewRuns(limit = 50): Promise<{ runs: ReviewRun[] }> {
   return bridgeFetch(`/reviews/runs?limit=${limit}`);
+}
+
+export async function setReportTriage(
+  projectId: string,
+  reportDate: string,
+  triageState: ReviewTriageState,
+  triageNote?: string | null
+): Promise<{ meta: ReviewReportMeta }> {
+  return bridgeFetch(
+    `/reviews/projects/${encodeURIComponent(projectId)}/reports/${encodeURIComponent(reportDate)}/triage`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ triageState, triageNote: triageNote ?? null }),
+    }
+  );
+}
+
+export async function getReviewInbox(
+  triage?: ReviewTriageState[]
+): Promise<{ items: ReviewInboxItem[] }> {
+  const params = new URLSearchParams();
+  if (triage) for (const t of triage) params.append("triage", t);
+  const qs = params.toString();
+  return bridgeFetch(`/reviews/inbox${qs ? `?${qs}` : ""}`);
 }
