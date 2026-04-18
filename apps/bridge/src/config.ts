@@ -16,8 +16,17 @@ export const config = {
   gatewayToken: requireEnv("OPENCLAW_GATEWAY_TOKEN"),
   sessionsDir: process.env.OPENCLAW_SESSIONS_DIR || "",
   brainVaultPath: process.env.BRAIN_VAULT_PATH || "",
-  reviewerScanRoot:
-    process.env.REVIEWER_SCAN_ROOT || "C:\\Users\\GalLe\\Cursor projects",
+  reviewerScanRoots: (
+    process.env.REVIEWER_SCAN_ROOTS ||
+    process.env.REVIEWER_SCAN_ROOT ||
+    "C:\\Users\\GalLe\\Cursor projects"
+  )
+    .split(/[;]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0),
+  get reviewerScanRoot(): string {
+    return (this as any).reviewerScanRoots[0] ?? "";
+  },
   reviewerStateDir:
     process.env.REVIEWER_STATE_DIR ||
     path.join(
