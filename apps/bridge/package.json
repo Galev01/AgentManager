@@ -13,7 +13,8 @@
     "@openclaw-manager/brain": "workspace:*",
     "@openclaw-manager/types": "workspace:*",
     "express": "^5.1.0",
-    "ws": "^8.20.0"
+    "ws": "^8.20.0",
+    "youtube-transcript": "^1.3.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.2",
