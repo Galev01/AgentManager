@@ -1,11 +1,10 @@
 import fs from "node:fs/promises";
-import path from "node:path";
 import { config } from "../../config.js";
 import type { ReviewProject, ReviewerState } from "@openclaw-manager/types";
 
 function emptyState(): ReviewerState {
   return {
-    scanRoot: config.reviewerScanRoot,
+    scanRoots: [...config.reviewerScanRoots],
     projects: {},
     updatedAt: new Date().toISOString(),
   };
@@ -18,10 +17,19 @@ async function ensureDir(): Promise<void> {
 export async function readState(): Promise<ReviewerState> {
   try {
     const raw = await fs.readFile(config.reviewerStatePath, "utf8");
-    const parsed = JSON.parse(raw) as ReviewerState;
+    const parsed = JSON.parse(raw) as Partial<ReviewerState> & {
+      scanRoot?: string;
+    };
     if (!parsed.projects) parsed.projects = {};
-    if (!parsed.scanRoot) parsed.scanRoot = config.reviewerScanRoot;
-    return parsed;
+    if (!Array.isArray(parsed.scanRoots)) {
+      if (parsed.scanRoot && typeof parsed.scanRoot === "string") {
+        parsed.scanRoots = [parsed.scanRoot];
+      } else {
+        parsed.scanRoots = [...config.reviewerScanRoots];
+      }
+    }
+    delete (parsed as any).scanRoot;
+    return parsed as ReviewerState;
   } catch {
     return emptyState();
   }
