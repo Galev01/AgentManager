@@ -36,6 +36,9 @@ export const config = {
   get reviewerIdeasPath() {
     return path.join(this.reviewerStateDir, "ideas.json");
   },
+  get reviewerReportMetaPath() {
+    return path.join(this.reviewerStateDir, "report-meta.json");
+  },
   get runtimeSettingsPath() {
     return path.join(this.managementDir, "runtime-settings.json");
   },
