@@ -26,6 +26,7 @@ import type {
   ReviewIdeaCategory,
   ReviewReportSummary,
   ReviewTriageState,
+  ReviewInboxItem,
 } from "@openclaw-manager/types";
 import { deriveSeverity } from "../services/codebase-reviewer/severity.js";
 import path from "node:path";
@@ -283,6 +284,73 @@ router.get("/reviews/runs", async (req: Request, res: Response) => {
     const limit = Math.max(1, Math.min(500, Number(req.query.limit) || 50));
     const runs = await tailRuns(limit);
     res.json({ runs });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "failed" });
+  }
+});
+
+const SEVERITY_ORDER: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  info: 4,
+};
+const TRIAGE_ORDER: Record<string, number> = {
+  new: 0,
+  needs_attention: 1,
+  actionable: 2,
+  dismissed: 3,
+  resolved: 4,
+};
+
+router.get("/reviews/inbox", async (req: Request, res: Response) => {
+  try {
+    const projects = await listProjects();
+    const triageFilter = parseArrayParam<ReviewTriageState>(
+      req.query.triage,
+      new Set(["new", "needs_attention", "actionable", "dismissed", "resolved"])
+    );
+    const items: ReviewInboxItem[] = [];
+    for (const project of projects) {
+      if (project.missing) continue;
+      const dir = path.join(project.path, ".openclaw-review");
+      let files: string[] = [];
+      try {
+        files = (await fs.readdir(dir)).filter((f) =>
+          /^\d{4}-\d{2}-\d{2}\.md$/.test(f)
+        );
+      } catch {
+        continue;
+      }
+      for (const f of files) {
+        const date = f.replace(/\.md$/, "");
+        const ideas = await listIdeasForReport(project.id, date);
+        const meta = await getMeta(project.id, date);
+        if (triageFilter && !triageFilter.includes(meta.triageState)) continue;
+        items.push({
+          projectId: project.id,
+          projectName: project.name,
+          reportDate: date,
+          ideasCount: ideas.length,
+          severity: deriveSeverity(ideas),
+          triageState: meta.triageState,
+          triageChangedAt: meta.triageChangedAt,
+          acked:
+            project.lastReportDate === date
+              ? project.lastAckedAt !== null
+              : true,
+        });
+      }
+    }
+    items.sort((a, b) => {
+      const triageDiff = TRIAGE_ORDER[a.triageState] - TRIAGE_ORDER[b.triageState];
+      if (triageDiff !== 0) return triageDiff;
+      const sevDiff = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+      if (sevDiff !== 0) return sevDiff;
+      return a.reportDate < b.reportDate ? 1 : -1;
+    });
+    res.json({ items });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "failed" });
   }
