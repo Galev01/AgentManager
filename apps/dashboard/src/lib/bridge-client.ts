@@ -31,6 +31,10 @@ import type {
   ReviewTriageState,
   ReviewReportMeta,
   ReviewInboxItem,
+  YoutubeJob,
+  YoutubeSummaryListItem,
+  YoutubeSummaryMeta,
+  YoutubeSubmitResponse,
 } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -492,4 +496,44 @@ export async function getReviewInbox(
   if (triage) for (const t of triage) params.append("triage", t);
   const qs = params.toString();
   return bridgeFetch(`/reviews/inbox${qs ? `?${qs}` : ""}`);
+}
+
+// --- YouTube Summarizer ---
+
+export async function submitYoutubeJobs(urls: string[]): Promise<YoutubeSubmitResponse> {
+  return bridgeFetch<YoutubeSubmitResponse>("/youtube/jobs", {
+    method: "POST",
+    body: JSON.stringify({ urls }),
+  });
+}
+
+export async function listYoutubeJobs(): Promise<{ jobs: YoutubeJob[] }> {
+  return bridgeFetch<{ jobs: YoutubeJob[] }>("/youtube/jobs");
+}
+
+export async function listYoutubeSummaries(): Promise<{ summaries: YoutubeSummaryListItem[] }> {
+  return bridgeFetch<{ summaries: YoutubeSummaryListItem[] }>("/youtube/summaries");
+}
+
+export async function getYoutubeSummary(
+  videoId: string
+): Promise<{ meta: YoutubeSummaryMeta; markdown: string }> {
+  return bridgeFetch<{ meta: YoutubeSummaryMeta; markdown: string }>(
+    `/youtube/summaries/${encodeURIComponent(videoId)}`
+  );
+}
+
+export async function rerunYoutubeSummary(videoId: string): Promise<{ job: YoutubeJob }> {
+  return bridgeFetch<{ job: YoutubeJob }>(
+    `/youtube/summaries/${encodeURIComponent(videoId)}/rerun`,
+    { method: "POST" }
+  );
+}
+
+export async function deleteYoutubeSummary(videoId: string): Promise<void> {
+  const res = await fetch(`${BRIDGE_URL}/youtube/summaries/${encodeURIComponent(videoId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${BRIDGE_TOKEN}` },
+  });
+  if (!res.ok) throw new Error(`Bridge ${res.status}: ${await res.text()}`);
 }
