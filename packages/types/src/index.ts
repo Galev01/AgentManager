@@ -217,9 +217,10 @@ export type BrainPerson = {
   notes: string;
   log: string[];
   // Canned-reply mode: when cursing is true and curses is non-empty, the
-  // WhatsApp plugin replies with a random entry from `curses` (70% of the
-  // time) instead of invoking the LLM.
+  // WhatsApp plugin replies with a random entry from `curses` roughly
+  // `cursingRate`% of the time (default 70) instead of invoking the LLM.
   cursing: boolean;
+  cursingRate: number;   // 0-100, clamped. 0 = never, 100 = always.
   curses: string[];
   raw: string;
   parseWarning: string | null;
@@ -248,6 +249,7 @@ export type BrainPersonUpdate = {
   openThreads?: string[];
   notes?: string;
   cursing?: boolean;
+  cursingRate?: number;
   curses?: string[];
 };
 
@@ -281,10 +283,11 @@ export type ReviewProject = {
   eligibleAt: string | null;
   lastError: string | null;
   missing?: boolean;
+  adhoc?: boolean;
 };
 
 export type ReviewerState = {
-  scanRoot: string;
+  scanRoots: string[];
   projects: Record<string, ReviewProject>;
   updatedAt: string;
 };
