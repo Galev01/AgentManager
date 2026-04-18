@@ -216,6 +216,11 @@ export type BrainPerson = {
   openThreads: string[];
   notes: string;
   log: string[];
+  // Canned-reply mode: when cursing is true and curses is non-empty, the
+  // WhatsApp plugin replies with a random entry from `curses` (70% of the
+  // time) instead of invoking the LLM.
+  cursing: boolean;
+  curses: string[];
   raw: string;
   parseWarning: string | null;
 };
@@ -242,6 +247,8 @@ export type BrainPersonUpdate = {
   preferences?: string[];
   openThreads?: string[];
   notes?: string;
+  cursing?: boolean;
+  curses?: string[];
 };
 
 export type BrainPersonCreate = {
@@ -322,10 +329,41 @@ export type ReviewRun = {
   durationMs?: number;
 };
 
+export type ReviewSeverity = "critical" | "high" | "medium" | "low" | "info";
+
+export type ReviewTriageState =
+  | "new"
+  | "needs_attention"
+  | "actionable"
+  | "dismissed"
+  | "resolved";
+
+export type ReviewReportMeta = {
+  projectId: string;
+  reportDate: string;
+  triageState: ReviewTriageState;
+  triageChangedAt: string | null;
+  triageNote: string | null;
+};
+
 export type ReviewReportSummary = {
   reportDate: string;
   reportPath: string;
   ideasCount: number;
+  acked: boolean;
+  severity: ReviewSeverity;
+  triageState: ReviewTriageState;
+  triageChangedAt: string | null;
+};
+
+export type ReviewInboxItem = {
+  projectId: string;
+  projectName: string;
+  reportDate: string;
+  ideasCount: number;
+  severity: ReviewSeverity;
+  triageState: ReviewTriageState;
+  triageChangedAt: string | null;
   acked: boolean;
 };
 
