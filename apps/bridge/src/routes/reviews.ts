@@ -25,6 +25,7 @@ import type {
   ReviewIdeaCategory,
   ReviewReportSummary,
 } from "@openclaw-manager/types";
+import { deriveSeverity } from "../services/codebase-reviewer/severity.js";
 import path from "node:path";
 
 const router: Router = Router();
@@ -136,6 +137,9 @@ router.get(
             project.lastReportDate === date
               ? project.lastAckedAt !== null
               : true,
+          severity: deriveSeverity(ideas),
+          triageState: "new",
+          triageChangedAt: null,
         });
       }
       res.json({ reports: summaries });
