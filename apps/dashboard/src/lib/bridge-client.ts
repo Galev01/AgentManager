@@ -366,6 +366,7 @@ export async function createBrainPerson(input: { phone: string; name?: string })
 export type ReviewsProjectsResponse = {
   projects: ReviewProject[];
   worker: ReviewerWorkerState;
+  scanRoots: string[];
 };
 
 export async function getReviewProjects(): Promise<ReviewsProjectsResponse> {
@@ -378,6 +379,15 @@ export async function scanReviewProjects(): Promise<{
   total: number;
 }> {
   return bridgeFetch("/reviews/projects/scan", { method: "POST" });
+}
+
+export async function addReviewProject(
+  absolutePath: string
+): Promise<{ project: ReviewProject; created: boolean }> {
+  return bridgeFetch("/reviews/projects/add", {
+    method: "POST",
+    body: JSON.stringify({ path: absolutePath }),
+  });
 }
 
 export async function setReviewProjectEnabled(
