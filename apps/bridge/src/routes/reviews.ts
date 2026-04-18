@@ -177,6 +177,44 @@ router.get(
   }
 );
 
+const TRIAGE_STATES: ReviewTriageState[] = [
+  "new",
+  "needs_attention",
+  "actionable",
+  "dismissed",
+  "resolved",
+];
+
+router.patch(
+  "/reviews/projects/:id/reports/:date/triage",
+  async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const date = req.params.date as string;
+    if (!ID_RE.test(id)) return badId(res);
+    if (!DATE_RE.test(date)) return badDate(res);
+    const triageState = req.body?.triageState as ReviewTriageState | undefined;
+    if (!triageState || !TRIAGE_STATES.includes(triageState)) {
+      return void res.status(400).json({ error: "invalid triageState" });
+    }
+    const triageNote =
+      typeof req.body?.triageNote === "string" ? req.body.triageNote : null;
+    try {
+      const project = await getProject(id);
+      if (!project) return void res.status(404).json({ error: "not found" });
+      const reportPath = path.join(project.path, ".openclaw-review", `${date}.md`);
+      try {
+        await fs.access(reportPath);
+      } catch {
+        return void res.status(404).json({ error: "report not found" });
+      }
+      const meta = await setTriage(id, date, triageState, triageNote);
+      res.json({ meta });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "failed" });
+    }
+  }
+);
+
 function parseArrayParam<T extends string>(
   raw: unknown,
   allowed: Set<T>
