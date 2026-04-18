@@ -32,13 +32,15 @@ export async function middleware(request: NextRequest) {
   }
   const session = request.cookies.get(SESSION_COOKIE)?.value;
   if (!session || !(await verify(session))) {
-    // Relative Location so the browser stays on the external host/port
-    // (NextResponse.redirect with request.url would leak the internal
-    // 127.0.0.1:3000 when behind a reverse proxy).
-    return new NextResponse(null, {
-      status: 307,
-      headers: { Location: "/login" },
-    });
+    // Behind a reverse proxy, request.url reflects the internal bind addr
+    // (127.0.0.1:3000) and would leak into the redirect. Rebuild the URL
+    // from the forwarded host/proto headers nginx sends.
+    const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
+    const forwardedProto = request.headers.get("x-forwarded-proto") || request.nextUrl.protocol.replace(":", "");
+    const target = forwardedHost
+      ? new URL(`${forwardedProto}://${forwardedHost}/login`)
+      : new URL("/login", request.url);
+    return NextResponse.redirect(target);
   }
   return NextResponse.next();
 }
