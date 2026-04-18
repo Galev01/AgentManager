@@ -73,6 +73,7 @@ export function ReviewsTable({
               <th className="px-4 py-2">Project</th>
               <th className="px-4 py-2">Status</th>
               <th className="px-4 py-2">Last run</th>
+              <th className="px-4 py-2">Last error</th>
               <th className="px-4 py-2">Eligible</th>
               <th className="px-4 py-2">Enabled</th>
               <th className="px-4 py-2 text-right">Actions</th>
@@ -88,7 +89,15 @@ export function ReviewsTable({
                   <div className="text-xs text-zinc-500">{p.path}</div>
                 </td>
                 <td className="px-4 py-2"><StatusBadge status={p.status} missing={p.missing} /></td>
-                <td className="px-4 py-2 text-zinc-400">{relative(p.lastRunAt)}</td>
+                <td className="px-4 py-2 text-zinc-400">
+                  <div>{relative(p.lastRunAt)}</div>
+                  {p.lastReportDate && (
+                    <div className="text-[10px] text-zinc-500">report {p.lastReportDate}</div>
+                  )}
+                </td>
+                <td className="px-4 py-2 text-xs text-red-300/80 max-w-[260px] truncate" title={p.lastError ?? undefined}>
+                  {p.status === "failed" && p.lastError ? p.lastError : "—"}
+                </td>
                 <td className="px-4 py-2 text-zinc-400">
                   {p.eligibleAt ? relative(p.eligibleAt) : p.status === "awaiting_ack" ? "awaiting ack" : "now"}
                 </td>

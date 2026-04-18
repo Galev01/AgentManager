@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { ReviewsTable } from "@/components/reviews-table";
+import { ReviewsEmptyState } from "@/components/reviews-empty-state";
 import { getReviewProjects } from "@/lib/bridge-client";
 import type { ReviewProject, ReviewerWorkerState } from "@openclaw-manager/types";
 
@@ -36,6 +37,8 @@ export default async function ReviewsPage() {
           <div className="rounded border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
             Failed to load reviews: {error}
           </div>
+        ) : projects.length === 0 ? (
+          <ReviewsEmptyState />
         ) : (
           <ReviewsTable projects={projects} worker={worker} />
         )}
