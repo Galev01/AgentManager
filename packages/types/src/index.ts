@@ -371,3 +371,51 @@ export type ReviewerWorkerState = {
   current: string | null;
   queue: string[];
 };
+
+// --- YouTube Summarizer ---
+
+export type YoutubeJobStatus = "queued" | "processing" | "done" | "failed";
+
+export type YoutubeJob = {
+  jobId: string;
+  videoId: string;
+  url: string;
+  status: YoutubeJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  errorMessage?: string;
+};
+
+export type YoutubeSummaryMeta = {
+  videoId: string;
+  title: string;
+  channel: string;
+  url: string;
+  durationSeconds: number;
+  captionLanguage: string;
+  fetchedAt: string;
+  updatedAt: string;
+};
+
+export type YoutubeSummaryListItem = YoutubeSummaryMeta & {
+  status: YoutubeJobStatus;
+  errorMessage?: string;
+};
+
+export type YoutubeIndexEvent = {
+  videoId: string;
+  status: YoutubeJobStatus;
+  meta?: Partial<YoutubeSummaryMeta>;
+  errorMessage?: string;
+  at: string;
+};
+
+export type YoutubeRejectedUrl = {
+  url: string;
+  reason: string;
+};
+
+export type YoutubeSubmitResponse = {
+  jobs: YoutubeJob[];
+  rejected: YoutubeRejectedUrl[];
+};
