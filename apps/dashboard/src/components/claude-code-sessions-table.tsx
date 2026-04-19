@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ClaudeCodeSession } from "@openclaw-manager/types";
+import { ClaudeCodeConnectModalBody } from "./claude-code-connect-modal";
 
 export function ClaudeCodeSessionsTable({
   sessions,
@@ -137,8 +138,8 @@ function ConnectModal({ onClose }: { onClose: () => void }) {
         className="max-h-[80vh] w-[min(800px,90vw)] overflow-y-auto rounded bg-dark-card p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="mb-4 text-sm text-text-muted">Connect modal will be wired up in Task 14.</p>
-        <button onClick={onClose} className="rounded bg-dark-lighter px-4 py-2 text-sm">Close</button>
+        <ClaudeCodeConnectModalBody />
+        <button onClick={onClose} className="mt-4 rounded bg-dark-lighter px-4 py-2 text-sm">Close</button>
       </div>
     </div>
   );
