@@ -188,8 +188,6 @@ function asRate(value: unknown, fallback = 70): number {
   if (typeof value === "number" && Number.isFinite(value)) n = value;
   else if (typeof value === "string" && value.trim() !== "" && !Number.isNaN(Number(value))) n = Number(value);
   else return fallback;
-  // Support both 0-1 floats and 0-100 ints; normalize to 0-100 int.
-  if (n > 0 && n <= 1) n = n * 100;
   n = Math.round(n);
   if (n < 0) n = 0;
   if (n > 100) n = 100;
