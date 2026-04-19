@@ -21,6 +21,7 @@ import gatewayControlRouter from "./routes/gateway-control.js";
 import brainRouter from "./routes/brain.js";
 import reviewsRouter from "./routes/reviews.js";
 import youtubeRouter from "./routes/youtube.js";
+import claudeCodeRouter from "./routes/claude-code.js";
 import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
 import { scanProjects } from "./services/codebase-reviewer/discovery.js";
 import { repairOnStartup as repairYoutubeOnStartup } from "./services/youtube-worker.js";
@@ -54,6 +55,7 @@ app.use(gatewayControlRouter);
 app.use(brainRouter);
 app.use(reviewsRouter);
 app.use(youtubeRouter);
+app.use(claudeCodeRouter);
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
