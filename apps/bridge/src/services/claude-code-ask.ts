@@ -38,7 +38,7 @@ function extractReply(raw: unknown): string {
     if (any.result && typeof any.result.reply === "string") return any.result.reply;
   }
   if (typeof raw === "string") return raw;
-  return JSON.stringify(raw);
+  throw new Error(`unexpected gateway response shape: ${JSON.stringify(raw)}`);
 }
 
 export function createAskOrchestrator(deps: AskOrchestratorDeps) {
