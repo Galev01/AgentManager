@@ -7,19 +7,24 @@ import type { Agent } from "@openclaw-manager/types";
 export function AgentTable({ initial }: { initial: Agent[] }) {
   const [agents, setAgents] = useState<Agent[]>(initial);
   const [name, setName] = useState("");
+  const [workspace, setWorkspace] = useState("");
   const [model, setModel] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate() {
-    if (!name.trim()) return;
+    if (!name.trim() || !workspace.trim()) return;
     setAdding(true);
     setError(null);
     try {
       const res = await fetch("/api/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), model: model.trim() || undefined }),
+        body: JSON.stringify({
+          name: name.trim(),
+          workspace: workspace.trim(),
+          model: model.trim() || undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -28,6 +33,7 @@ export function AgentTable({ initial }: { initial: Agent[] }) {
       const newAgent: Agent = await res.json();
       setAgents((prev) => [...prev, newAgent]);
       setName("");
+      setWorkspace("");
       setModel("");
     } catch (err: any) {
       setError(err.message);
@@ -118,7 +124,10 @@ export function AgentTable({ initial }: { initial: Agent[] }) {
 
       {/* Create form */}
       <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-5">
-        <h3 className="mb-4 text-sm font-semibold text-zinc-100">Create Agent</h3>
+        <h3 className="mb-1 text-sm font-semibold text-zinc-100">Create Agent</h3>
+        <p className="mb-4 text-xs text-zinc-500">
+          Workspace is the absolute path to an OpenClaw workspace on the bridge host, e.g. <code className="font-mono text-zinc-400">C:\Users\you\.openclaw\workspace</code>.
+        </p>
         <div className="flex flex-wrap gap-3">
           <input
             type="text"
@@ -126,7 +135,15 @@ export function AgentTable({ initial }: { initial: Agent[] }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-            className="flex-1 min-w-[180px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+            className="flex-1 min-w-[160px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+          />
+          <input
+            type="text"
+            placeholder="Workspace path (required)"
+            value={workspace}
+            onChange={(e) => setWorkspace(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+            className="flex-1 min-w-[240px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
           />
           <input
             type="text"
@@ -138,7 +155,7 @@ export function AgentTable({ initial }: { initial: Agent[] }) {
           />
           <button
             onClick={handleCreate}
-            disabled={adding || !name.trim()}
+            disabled={adding || !name.trim() || !workspace.trim()}
             className="rounded bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {adding ? "Creating…" : "Create"}

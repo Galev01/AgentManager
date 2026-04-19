@@ -196,7 +196,7 @@ export async function getAgent(name: string): Promise<Agent | null> {
 }
 
 export async function createAgent(input: {
-  name: string; model?: string; systemPrompt?: string; tools?: string[];
+  name: string; workspace: string; emoji?: string; avatar?: string; model?: string;
 }): Promise<Agent> {
   return bridgeFetch<Agent>("/agents", { method: "POST", body: JSON.stringify(input) });
 }

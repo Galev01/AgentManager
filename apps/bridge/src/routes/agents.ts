@@ -14,17 +14,42 @@ router.get("/agents", async (_req: Request, res: Response) => {
 
 router.post("/agents", async (req: Request, res: Response) => {
   try {
-    const { name, model, systemPrompt, tools } = req.body;
+    const { name, workspace, emoji, avatar, model } = req.body;
     if (typeof name !== "string" || !name.trim()) {
       res.status(400).json({ error: "name is required" });
       return;
     }
-    const params: Record<string, unknown> = { name: name.trim() };
-    if (typeof model === "string") params.model = model.trim();
-    if (typeof systemPrompt === "string") params.systemPrompt = systemPrompt;
-    if (Array.isArray(tools)) params.tools = tools;
-    const result = await callGateway("agents.create", params);
-    res.status(201).json(result);
+    if (typeof workspace !== "string" || !workspace.trim()) {
+      res.status(400).json({ error: "workspace is required" });
+      return;
+    }
+    const createParams: Record<string, unknown> = {
+      name: name.trim(),
+      workspace: workspace.trim(),
+    };
+    if (typeof emoji === "string" && emoji.trim()) createParams.emoji = emoji.trim();
+    if (typeof avatar === "string" && avatar.trim()) createParams.avatar = avatar.trim();
+    const created = (await callGateway("agents.create", createParams)) as {
+      ok?: boolean;
+      agentId?: string;
+      name?: string;
+      workspace?: string;
+    };
+    if (typeof model === "string" && model.trim() && created?.agentId) {
+      try {
+        await callGateway("agents.update", {
+          agentId: created.agentId,
+          model: model.trim(),
+        });
+      } catch (updateErr: any) {
+        res.status(201).json({
+          ...created,
+          warning: `created but failed to set model: ${updateErr?.message || "update failed"}`,
+        });
+        return;
+      }
+    }
+    res.status(201).json(created);
   } catch (err: any) {
     res.status(502).json({ error: err.message || "Failed to create agent" });
   }
