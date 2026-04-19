@@ -100,7 +100,12 @@ export type WsMessageType =
   | "settings_updated"
   | "connected"
   | "brain_person_changed"
-  | "brain_person_removed";
+  | "brain_person_removed"
+  | "claude_code_session_upserted"
+  | "claude_code_session_ended"
+  | "claude_code_transcript_appended"
+  | "claude_code_pending_upserted"
+  | "claude_code_pending_resolved";
 
 export type WsMessage = {
   type: WsMessageType;
@@ -421,4 +426,78 @@ export type YoutubeRejectedUrl = {
 export type YoutubeSubmitResponse = {
   jobs: YoutubeJob[];
   rejected: YoutubeRejectedUrl[];
+};
+
+// --- Claude Code ↔ OpenClaw ---
+
+export type ClaudeCodeSessionMode = "agent" | "manual";
+export type ClaudeCodeSessionState = "active" | "ended";
+
+export type ClaudeCodeSession = {
+  id: string;
+  displayName: string;
+  ide: string;
+  workspace: string;
+  mode: ClaudeCodeSessionMode;
+  state: ClaudeCodeSessionState;
+  openclawSessionId: string;
+  createdAt: string;
+  lastActivityAt: string;
+  messageCount: number;
+};
+
+export type ClaudeCodeTranscriptEventKind =
+  | "ask"
+  | "draft"
+  | "answer"
+  | "discarded"
+  | "timeout"
+  | "mode_change"
+  | "ended";
+
+export type ClaudeCodeAnswerSource = "agent" | "operator";
+export type ClaudeCodeOperatorAction = "send-as-is" | "edit" | "replace";
+
+export type ClaudeCodeTranscriptEvent = {
+  t: string;
+  kind: ClaudeCodeTranscriptEventKind;
+  msgId?: string;
+  question?: string;
+  context?: Record<string, unknown>;
+  draft?: string;
+  answer?: string;
+  source?: ClaudeCodeAnswerSource;
+  action?: ClaudeCodeOperatorAction;
+  from?: ClaudeCodeSessionMode;
+  to?: ClaudeCodeSessionMode;
+  by?: string;
+};
+
+export type ClaudeCodePendingItem = {
+  id: string;
+  sessionId: string;
+  msgId: string;
+  question: string;
+  draft: string;
+  createdAt: string;
+};
+
+export type ClaudeCodeAskRequest = {
+  ide: string;
+  workspace: string;
+  msgId: string;
+  question: string;
+  context?: Record<string, unknown>;
+};
+
+export type ClaudeCodeAskResponse = {
+  answer: string;
+  source: ClaudeCodeAnswerSource;
+  action?: ClaudeCodeOperatorAction;
+};
+
+export type ClaudeCodeConnectConfig = {
+  antigravity: string;
+  vscode: string;
+  cli: string;
 };

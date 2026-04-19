@@ -70,4 +70,17 @@ export const config = {
   get youtubeSummariesDir() {
     return path.join(this.managementDir, "youtube", "summaries");
   },
+  claudeCodePendingTimeoutMs:
+    Number(process.env.CLAUDE_CODE_PENDING_TIMEOUT_MS) || 300000,
+  claudeCodeSharedOpenclawSessionId:
+    process.env.CLAUDE_CODE_SHARED_OPENCLAW_SESSION_ID || "oc-shared-claude-code",
+  get claudeCodeDir() {
+    return path.join(this.managementDir, "claude-code");
+  },
+  get claudeCodeSessionsPath() {
+    return path.join(this.managementDir, "claude-code", "sessions.json");
+  },
+  get claudeCodePendingPath() {
+    return path.join(this.managementDir, "claude-code", "pending.json");
+  },
 } as const;
