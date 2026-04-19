@@ -3,14 +3,17 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "OpenClaw Manager",
-  description: "WhatsApp management dashboard for OpenClaw",
+  description: "OpenClaw operator console",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body className="bg-dark text-text-primary antialiased">{children}</body>
     </html>

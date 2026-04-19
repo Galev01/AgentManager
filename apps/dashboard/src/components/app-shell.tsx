@@ -3,11 +3,18 @@ import { Header } from "./header";
 
 export function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen">
+    <div
+      className="app"
+      style={{
+        display: "grid",
+        gridTemplateColumns: "var(--sb-w) 1fr",
+        minHeight: "100vh",
+      }}
+    >
       <Sidebar />
-      <div className="ml-[var(--sidebar-width)]">
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
         <Header title={title} />
-        <main className="p-8">{children}</main>
+        <main style={{ flex: 1 }}>{children}</main>
       </div>
     </div>
   );
