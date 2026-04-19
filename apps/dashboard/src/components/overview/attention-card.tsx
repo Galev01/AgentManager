@@ -7,14 +7,35 @@ interface AttentionRow {
   who: string;
   snippet: string;
   flagged: string;
+  projectId: string;
+  reportDate: string;
 }
 
 interface AttentionCardProps {
   pendingReviewCount: number;
   recent: AttentionRow[];
+  unavailable?: boolean;
 }
 
-export function AttentionCard({ pendingReviewCount, recent }: AttentionCardProps) {
+export function AttentionCard({ pendingReviewCount, recent, unavailable }: AttentionCardProps) {
+  if (unavailable) {
+    return (
+      <div className="attn-main">
+        <div className="attn-eyebrow">
+          <span className="dot" />
+          Needs your attention
+        </div>
+        <div className="attn-big mono">
+          ?<em>review inbox unavailable</em>
+        </div>
+        <div className="attn-desc" style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="badge warn">warn</span>
+          Review inbox unavailable — showing last known state
+        </div>
+      </div>
+    );
+  }
+
   if (pendingReviewCount === 0) {
     return (
       <div className="attn-main">
@@ -59,7 +80,10 @@ export function AttentionCard({ pendingReviewCount, recent }: AttentionCardProps
                 </div>
               </div>
               <Badge kind="warn">{r.flagged}</Badge>
-              <Link href={`/reviews`} className="btn" style={{ textDecoration: "none" }}>
+              <Link
+                href={`/reviews/${r.projectId}?date=${r.reportDate}`}
+                className="btn"
+              >
                 Open →
               </Link>
             </div>

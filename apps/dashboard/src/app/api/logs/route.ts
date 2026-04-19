@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const lines = Number(searchParams.get("lines")) || 100;
 
-    const res = await fetch(`${BRIDGE_URL}/logs/tail`, {
+    const res = await fetch(`${BRIDGE_URL}/logs/tail?lines=${encodeURIComponent(String(lines))}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
