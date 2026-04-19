@@ -8,6 +8,8 @@ import { onFileChange, startWatching } from "./services/file-watcher.js";
 import { onBrainChange } from "./services/brain.js";
 import type { WsMessage } from "@openclaw-manager/types";
 
+let _broadcast: (message: WsMessage) => void = () => {};
+
 export function attachWebSocket(server: Server): void {
   const wss = new WebSocketServer({ server, path: "/ws" });
 
@@ -30,14 +32,16 @@ export function attachWebSocket(server: Server): void {
     ws.send(JSON.stringify(msg));
   });
 
-  function broadcast(message: WsMessage): void {
+  const broadcastInternal = (message: WsMessage): void => {
     const data = JSON.stringify(message);
     for (const client of wss.clients) {
       if (client.readyState === WebSocket.OPEN) {
         client.send(data);
       }
     }
-  }
+  };
+
+  _broadcast = broadcastInternal;
 
   // Watch files and broadcast changes
   startWatching();
@@ -46,12 +50,12 @@ export function attachWebSocket(server: Server): void {
     try {
       if (file === "state") {
         const conversations = await getConversations();
-        broadcast({ type: "conversations_updated", payload: conversations });
+        broadcastInternal({ type: "conversations_updated", payload: conversations });
       } else if (file === "settings") {
         const settings = await readSettings();
-        broadcast({ type: "settings_updated", payload: settings });
+        broadcastInternal({ type: "settings_updated", payload: settings });
       } else if (file === "events") {
-        broadcast({ type: "event_new", payload: { ts: Date.now() } });
+        broadcastInternal({ type: "event_new", payload: { ts: Date.now() } });
       }
     } catch {
       // swallow broadcast errors
@@ -60,8 +64,12 @@ export function attachWebSocket(server: Server): void {
 
   onBrainChange((event) => {
     const type = event.kind === "removed" ? "brain_person_removed" : "brain_person_changed";
-    broadcast({ type, payload: { phone: event.phone } });
+    broadcastInternal({ type, payload: { phone: event.phone } });
   });
 
   console.log("WebSocket server attached at /ws");
+}
+
+export function broadcast(type: string, payload: unknown): void {
+  _broadcast({ type: type as any, payload });
 }
