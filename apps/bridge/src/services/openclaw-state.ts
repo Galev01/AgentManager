@@ -27,10 +27,23 @@ function toStatus(raw: string | undefined): ConversationStatus {
   return "cold";
 }
 
+let warnedBadParse = false;
 export async function readPluginState(): Promise<PluginState> {
   try {
     const raw = await fs.readFile(config.openclawStatePath, "utf8");
-    return JSON.parse(raw);
+    try {
+      const parsed = JSON.parse(raw);
+      warnedBadParse = false;
+      return parsed;
+    } catch (err) {
+      // Parsing failure is the classic "I see 0 conversations" symptom.
+      // Log once until the file becomes readable again so it's not spammy.
+      if (!warnedBadParse) {
+        warnedBadParse = true;
+        console.warn(`openclaw-state: state file exists at ${config.openclawStatePath} but failed to parse (${(err as Error).message}). Treating as empty.`);
+      }
+      return { conversations: {} };
+    }
   } catch {
     return { conversations: {} };
   }

@@ -95,6 +95,10 @@ async function readLastAssistantMessage(sessionFile: string): Promise<string | u
 
 function buildUserMessage(captions: CaptionsResult, url: string): string {
   return [
+    SYSTEM_PROMPT,
+    "",
+    "---",
+    "",
     `Title: ${captions.title}`,
     `Channel: ${captions.channel}`,
     `Duration: ${formatDuration(captions.durationSeconds)}`,
@@ -109,9 +113,7 @@ function buildUserMessage(captions: CaptionsResult, url: string): string {
 export type SummarizeResult = { sessionId: string; markdown: string };
 
 export async function summarize(captions: CaptionsResult, url: string): Promise<SummarizeResult> {
-  const created = (await callGateway("sessions.create", {
-    systemPrompt: SYSTEM_PROMPT,
-  })) as CreatedSession;
+  const created = (await callGateway("sessions.create", {})) as CreatedSession;
   const sessionId = created.sessionId || created.id;
   const key = created.key;
   if (!sessionId) throw new Error("sessions.create did not return a session id");
