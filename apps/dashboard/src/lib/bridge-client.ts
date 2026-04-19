@@ -35,6 +35,11 @@ import type {
   YoutubeSummaryListItem,
   YoutubeSummaryMeta,
   YoutubeSubmitResponse,
+  ClaudeCodeSession,
+  ClaudeCodeTranscriptEvent,
+  ClaudeCodePendingItem,
+  ClaudeCodeConnectConfig,
+  ClaudeCodeSessionMode,
 } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -536,4 +541,43 @@ export async function deleteYoutubeSummary(videoId: string): Promise<void> {
     headers: { Authorization: `Bearer ${BRIDGE_TOKEN}` },
   });
   if (!res.ok) throw new Error(`Bridge ${res.status}: ${await res.text()}`);
+}
+
+// --- Claude Code ---
+
+export async function getClaudeCodeSessions(): Promise<ClaudeCodeSession[]> {
+  return bridgeFetch<ClaudeCodeSession[]>("/claude-code/sessions");
+}
+
+export async function getClaudeCodeTranscript(id: string): Promise<ClaudeCodeTranscriptEvent[]> {
+  return bridgeFetch<ClaudeCodeTranscriptEvent[]>(`/claude-code/transcripts/${id}`);
+}
+
+export async function getClaudeCodePending(): Promise<ClaudeCodePendingItem[]> {
+  return bridgeFetch<ClaudeCodePendingItem[]>("/claude-code/pending");
+}
+
+export async function patchClaudeCodeSession(
+  id: string,
+  updates: { mode?: ClaudeCodeSessionMode; state?: "active" | "ended"; displayName?: string }
+): Promise<ClaudeCodeSession> {
+  return bridgeFetch<ClaudeCodeSession>(`/claude-code/sessions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function resolveClaudeCodePending(
+  id: string,
+  action: "send-as-is" | "edit" | "replace" | "discard",
+  text?: string
+): Promise<{ ok: true }> {
+  return bridgeFetch<{ ok: true }>(`/claude-code/pending/${id}`, {
+    method: "POST",
+    body: JSON.stringify({ action, text }),
+  });
+}
+
+export async function getClaudeCodeConnectConfig(): Promise<ClaudeCodeConnectConfig> {
+  return bridgeFetch<ClaudeCodeConnectConfig>("/claude-code/connect-config");
 }
