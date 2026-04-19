@@ -290,6 +290,30 @@ a { color: inherit; text-decoration: none; }
   border-radius: var(--radius-lg);
 }
 
+/* ---------- Button primitive ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn:hover { background: var(--bg-hover); color: var(--text); }
+.btn svg { width: 13px; height: 13px; }
+.btn-pri {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.btn-pri:hover { background: oklch(from var(--accent) calc(l + 0.05) c h); color: white; }
+
 /* dot-lamp used on sessions page */
 .dot-lamp {
   display: inline-block;
@@ -303,10 +327,10 @@ a { color: inherit; text-decoration: none; }
 .dot-lamp.off  { background: var(--text-faint); }
 
 /* ---------- Overview layout ---------- */
-.grid { display: grid; gap: var(--row-gap); }
-.g-4 { grid-template-columns: repeat(4, 1fr); }
-.g-3 { grid-template-columns: repeat(3, 1fr); }
-.g-2 { grid-template-columns: repeat(2, 1fr); }
+.ocm-grid { display: grid; gap: var(--row-gap); }
+.ocm-g-4 { grid-template-columns: repeat(4, 1fr); }
+.ocm-g-3 { grid-template-columns: repeat(3, 1fr); }
+.ocm-g-2 { grid-template-columns: repeat(2, 1fr); }
 
 .attn {
   display: grid;

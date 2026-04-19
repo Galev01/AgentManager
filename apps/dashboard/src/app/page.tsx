@@ -21,18 +21,21 @@ export default async function OverviewPage() {
     bridgeError = true;
   }
 
-  // Pending review inbox — cap to 5
+  // Pending review inbox — cap to 5, only actionable states
   let pendingCount = 0;
+  let inboxError = false;
   const recentRows: Array<{
     id: string;
     agent: string;
     who: string;
     snippet: string;
     flagged: string;
+    projectId: string;
+    reportDate: string;
   }> = [];
 
   try {
-    const inbox = await getReviewInbox();
+    const inbox = await getReviewInbox(["new", "needs_attention", "actionable"]);
     const items = inbox.items ?? [];
     pendingCount = items.length;
     items.slice(0, 5).forEach((item) => {
@@ -42,10 +45,13 @@ export default async function OverviewPage() {
         who: `${item.ideasCount} idea${item.ideasCount !== 1 ? "s" : ""}`,
         snippet: item.projectName,
         flagged: item.severity,
+        projectId: item.projectId,
+        reportDate: item.reportDate,
       });
     });
   } catch {
-    // inbox unavailable — render zero state
+    // inbox unavailable
+    inboxError = true;
   }
 
   // System status rows
@@ -62,7 +68,8 @@ export default async function OverviewPage() {
     const primaryModel = (parsed?.agents as Record<string, unknown> | undefined)
       ?.defaults as Record<string, unknown> | undefined;
     const model = primaryModel?.model as Record<string, unknown> | undefined;
-    const modelName = model?.primary as string | undefined;
+    const rawPrimary = (model as any)?.primary;
+    const modelName = typeof rawPrimary === "string" ? rawPrimary : undefined;
     if (modelName) {
       llmDetail = modelName;
       llmStatus = "ok";
@@ -83,7 +90,7 @@ export default async function OverviewPage() {
     <AppShell title="Overview">
       {bridgeError && <DegradedBanner />}
       <div className="grid grid-cols-[2fr_1fr] gap-4 mb-4">
-        <AttentionCard pendingReviewCount={pendingCount} recent={recentRows} />
+        <AttentionCard pendingReviewCount={pendingCount} recent={recentRows} unavailable={inboxError} />
         <div className="flex flex-col gap-4">
           <SystemStatus rows={systemRows} />
           <ActivityFeed />

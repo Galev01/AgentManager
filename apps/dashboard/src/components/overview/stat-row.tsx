@@ -7,7 +7,7 @@ interface StatRowProps {
 
 export function StatRow({ data }: StatRowProps) {
   return (
-    <div className="grid g-4">
+    <div className="ocm-grid ocm-g-4">
       <StatCard
         label="Active Conversations"
         value={data.activeCount}
