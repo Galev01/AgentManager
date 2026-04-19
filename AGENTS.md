@@ -160,6 +160,8 @@ The bridge dynamically imports the globally-installed OpenClaw SDK to call gatew
 | `OPENCLAW_GATEWAY_URL` | No | `http://127.0.0.1:18789` | Gateway URL |
 | `OPENCLAW_GATEWAY_TOKEN` | Yes | — | Gateway auth token |
 | `OPENCLAW_SESSIONS_DIR` | No | — | Agent session transcripts dir |
+| `CLAUDE_CODE_PENDING_TIMEOUT_MS` | No | `300000` | Max ms to hold a manual-mode `/claude-code/ask` reply |
+| `CLAUDE_CODE_SHARED_OPENCLAW_SESSION_ID` | No | `oc-shared-claude-code` | Shared OpenClaw-side session id all Claude Code sessions use |
 
 ### Dashboard
 | Variable | Required | Default | Purpose |
@@ -203,6 +205,14 @@ Available methods forwarded to the OpenClaw SDK:
 - **Cron:** `cron.list`, `cron.add`, `cron.remove`, `cron.status`, `cron.run`
 - **System:** `logs.tail`, `models.list`, `tools.catalog`, `tools.effective`
 - **Skills:** `skills.status`, `skills.install`
+
+## Claude Code ↔ OpenClaw
+
+A collaborative dialogue channel: Claude Code (any IDE) calls the `@openclaw-manager/mcp` stdio server, which forwards to `/claude-code/ask`. The bridge routes the turn through the OpenClaw gateway, logs the exchange, and (in manual mode) holds the reply until the operator approves it from the dashboard. See `docs/superpowers/specs/2026-04-19-claude-code-openclaw-bridge-design.md` for the full design.
+
+Bridge endpoints: `/claude-code/ask`, `/claude-code/sessions`, `/claude-code/transcripts/:id`, `/claude-code/pending`, `/claude-code/pending/:id`, `/claude-code/connect-config`.
+
+MCP tools: `openclaw_say`, `openclaw_conclude`, `openclaw_session_info`.
 
 ## Adding a New Feature — Checklist
 
