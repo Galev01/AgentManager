@@ -68,43 +68,27 @@ export async function resolvePending(
   }
 }
 
-export function registerWaiter(
-  id: string,
-  resolve: (r: ClaudeCodeAskResponse) => void,
-  reject: (e: Error) => void
-): void {
-  waiters.set(id, { resolve, reject });
-}
-
-export function unregisterWaiter(id: string): void {
-  waiters.delete(id);
-}
-
 export function awaitPending(
   id: string,
   timeoutMs: number
-): {
-  promise: Promise<ClaudeCodeAskResponse>;
-  resolve: (r: ClaudeCodeAskResponse) => void;
-  reject: (e: Error) => void;
-} {
-  let resolve!: (r: ClaudeCodeAskResponse) => void;
-  let reject!: (e: Error) => void;
-  const promise = new Promise<ClaudeCodeAskResponse>((res, rej) => {
-    resolve = res;
-    reject = rej;
+): Promise<ClaudeCodeAskResponse> {
+  const promise = new Promise<ClaudeCodeAskResponse>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      waiters.delete(id);
+      reject(new Error("timeout"));
+    }, timeoutMs);
+
+    waiters.set(id, {
+      resolve: (r) => {
+        clearTimeout(timer);
+        resolve(r);
+      },
+      reject: (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    });
   });
-  const timer = setTimeout(() => {
-    waiters.delete(id);
-    reject(new Error("timeout"));
-  }, timeoutMs);
-  const wrappedResolve = (r: ClaudeCodeAskResponse) => {
-    clearTimeout(timer);
-    resolve(r);
-  };
-  const wrappedReject = (e: Error) => {
-    clearTimeout(timer);
-    reject(e);
-  };
-  return { promise, resolve: wrappedResolve, reject: wrappedReject };
+
+  return promise;
 }
