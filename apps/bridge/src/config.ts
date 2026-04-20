@@ -70,6 +70,9 @@ export const config = {
   get youtubeSummariesDir() {
     return path.join(this.managementDir, "youtube", "summaries");
   },
+  get youtubeVideosDir() {
+    return path.join(this.managementDir, "youtube", "videos");
+  },
   claudeCodePendingTimeoutMs:
     Number(process.env.CLAUDE_CODE_PENDING_TIMEOUT_MS) || 300000,
   claudeCodeOpenclawAgentId:
