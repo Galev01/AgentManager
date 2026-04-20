@@ -169,6 +169,8 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
     if (session.state === "ended") {
       await resurrectSession(deps.sessionsPath, session.id);
     }
+    // Migrate legacy sessions that still reference the old shared OpenClaw
+    // session id into a per-session id under the current agent.
     if (session.openclawSessionId === LEGACY_SHARED_OPENCLAW_SESSION_ID) {
       session = await setOpenclawSessionId(
         deps.sessionsPath,
@@ -201,9 +203,9 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
         artifact: req.artifact,
         priority: req.priority,
         refs: req.refs,
-        // pass context for legacy {file,selection,stack} mapping
+        // Pass legacy context through; envelope service maps {file,selection,stack} to typed refs.
         ...(req.context ? { context: req.context } : {}),
-      } as never,
+      },
       {
         authorContext: askAuthor,
         midThread,
@@ -225,16 +227,24 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
 
     let draft: string;
     try {
+      // Ensure the OpenClaw session exists (create-on-miss, verified by
+      // re-probing state rather than matching error substrings). Returns
+      // the baseline message count so we know when our reply lands.
       const baselineLength = await ensureSessionExists(deps.callGateway, gatewayKey);
+      // On the first turn of a new OpenClaw session, prepend persistent
+      // system instructions. Keep the transcript's "ask" event showing the
+      // original question — only the gateway sees the wrapped version.
       const messageToGateway =
         baselineLength === 0 ? wrapFirstMessage(req.question) : req.question;
 
+      // Submit the user turn. Gateway is async: returns {runId, status, messageSeq}.
       await deps.callGateway("sessions.send", {
         key: gatewayKey,
         idempotencyKey: askEnvelope.msgId,
         message: messageToGateway,
       });
 
+      // Poll sessions.get until the assistant reply appears.
       draft = await pollForReply(
         deps.callGateway,
         gatewayKey,
@@ -253,6 +263,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
         parentMsgId: askEnvelope.msgId,
         state: "review_ready",
         intent: askEnvelope.intent,
+        // If the ask was a question, the draft is (likely) a decision; otherwise we don't know.
         artifact: askEnvelope.artifact === "question" ? "decision" : "none",
       },
       {
@@ -272,11 +283,8 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
 
     const latest = (await listSessions(deps.sessionsPath)).find((s) => s.id === session.id)!;
     if (latest.mode === "agent") {
-      const answerEnvelope: CCEnvelope = {
-        ...draftEnvelope,
-        msgId: draftEnvelope.msgId, // same draft id
-        state: "done",
-      };
+      // Same id and author as the draft; only the state advances to done.
+      const answerEnvelope: CCEnvelope = { ...draftEnvelope, state: "done" };
       await append(session.id, {
         t: new Date().toISOString(),
         kind: "answer",
@@ -302,9 +310,10 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
 
     try {
       const resolved = await awaitPending(pending.id, deps.pendingTimeoutMs);
+      // Operator takes over authorship of the draft; id reused, state advances.
+      // NOTE(phase-2): "default" is a placeholder for multi-operator identity.
       const operatorEnvelope: CCEnvelope = {
         ...draftEnvelope,
-        msgId: draftEnvelope.msgId,
         author: { kind: "operator", id: "default" },
         state: "done",
       };
