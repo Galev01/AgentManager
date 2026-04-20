@@ -1,0 +1,63 @@
+[
+  {
+    "t": "2026-04-20T23:01:31.461Z",
+    "kind": "ask",
+    "msgId": "m-abcdef123456",
+    "question": "pick A or B",
+    "envelope": {
+      "msgId": "m-abcdef123456",
+      "parentMsgId": null,
+      "author": {
+        "kind": "ide",
+        "id": "cli"
+      },
+      "intent": "decide",
+      "state": "blocked",
+      "artifact": "question",
+      "priority": "normal",
+      "refs": [],
+      "message": "pick A or B"
+    }
+  },
+  {
+    "t": "2026-04-20T23:01:31.480Z",
+    "kind": "draft",
+    "msgId": "m-abcdef123456",
+    "draft": "answer body",
+    "envelope": {
+      "msgId": "m-32b0bc461b7a",
+      "parentMsgId": "m-abcdef123456",
+      "author": {
+        "kind": "agent",
+        "id": "claude-code"
+      },
+      "intent": "decide",
+      "state": "review_ready",
+      "artifact": "decision",
+      "priority": "normal",
+      "refs": [],
+      "message": "answer body"
+    }
+  },
+  {
+    "t": "2026-04-20T23:01:31.482Z",
+    "kind": "answer",
+    "msgId": "m-abcdef123456",
+    "answer": "answer body",
+    "source": "agent",
+    "envelope": {
+      "msgId": "m-32b0bc461b7a",
+      "parentMsgId": "m-abcdef123456",
+      "author": {
+        "kind": "agent",
+        "id": "claude-code"
+      },
+      "intent": "decide",
+      "state": "done",
+      "artifact": "decision",
+      "priority": "normal",
+      "refs": [],
+      "message": "answer body"
+    }
+  }
+]
