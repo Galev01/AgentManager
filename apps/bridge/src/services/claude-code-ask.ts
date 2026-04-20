@@ -64,11 +64,18 @@ function wrapFirstMessage(message: string): string {
   return `${FIRST_TURN_PREAMBLE}${message}`;
 }
 
-const DONE_SENTINEL = "[[OPENCLAW_DONE]]";
+// OpenClaw emits control-routing tags (e.g. [[OPENCLAW_DONE]] to signal task
+// completion, [[reply_to_current]] for native reply-quote on channels that
+// support it). None of these are user-facing content; strip before returning
+// to Claude Code.
+const CONTROL_TAGS = ["[[OPENCLAW_DONE]]", "[[reply_to_current]]"];
 
-function stripDoneSentinel(text: string): string {
-  // Remove the sentinel wherever it appears so Claude Code never sees it.
-  return text.split(DONE_SENTINEL).join("").replace(/\s+$/, "");
+function stripControlTags(text: string): string {
+  let result = text;
+  for (const tag of CONTROL_TAGS) {
+    result = result.split(tag).join("");
+  }
+  return result.replace(/^\s+|\s+$/g, "");
 }
 
 function buildGatewayKey(agentId: string, openclawSessionId: string): string {
@@ -133,7 +140,7 @@ async function pollForReply(
     const messages = state?.messages ?? [];
     if (messages.length >= baselineLength + 2) {
       const text = extractAssistantText(messages);
-      if (text) return stripDoneSentinel(text);
+      if (text) return stripControlTags(text);
     }
   }
   throw new Error("timeout waiting for OpenClaw reply");
