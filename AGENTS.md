@@ -206,6 +206,68 @@ Available methods forwarded to the OpenClaw SDK:
 - **System:** `logs.tail`, `models.list`, `tools.catalog`, `tools.effective`
 - **Skills:** `skills.status`, `skills.install`
 
+## YouTube v2
+
+Successor to v1 (single Markdown summaries in `summaries/<videoId>.md`). v2 keeps that legacy file as a fallback and adds a per-video artifact directory, a chat session bound to the video, a MiniSearch retrieval index over chunked transcripts, and a parts-based rebuild API. Detail page at `/youtube/[videoId]` exposes Summary / Chat / Chapters / Highlights / Raw tabs.
+
+### Per-video layout
+
+```
+videos/<videoId>/
+  metadata.json         # YoutubeVideoMetadataFile (title, channel, url, durationSeconds, ...)
+  transcript.json       # YoutubeTranscriptFile (cues + text)
+  chunks.json           # YoutubeChunksFile (chunker output, used for retrieval)
+  retrieval-index.json  # serialized MiniSearch index over chunks
+  summary.md            # v2 summary (front matter + body)
+  chapters.json         # YoutubeChaptersFile
+  highlights.json       # YoutubeHighlightsFile
+  chat-meta.json        # YoutubeChatMetaFile (per-session metadata + openclawSessionKey)
+  chat.jsonl            # append-only YoutubeChatMessageRow log (one per message turn)
+
+summaries/<videoId>.md  # legacy v1 summary, still read by listSummaries() as fallback
+```
+
+### Endpoints
+
+v1 (still in use, see `routes/youtube.ts`):
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/youtube/jobs` | Enqueue summary jobs (`{urls: string[]}`) |
+| GET | `/youtube/jobs` | Active job state |
+| GET | `/youtube/summaries` | List of all summaries (v1 + v2) |
+| GET | `/youtube/summaries/:videoId` | `{meta, markdown}` |
+| POST | `/youtube/summaries/:videoId/rerun` | Re-run summary job |
+| DELETE | `/youtube/summaries/:videoId` | Delete summary + emit event |
+
+v2 chat (`routes/youtube-chat.ts`):
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/youtube/chat/:videoId` | Enqueue a chat turn (`{message, chatSessionId?}`) → 202 |
+| GET | `/youtube/chat/:videoId?sessionId=&after=` | `{meta, messages[]}` for the session |
+
+v2 rebuild + reads (`routes/youtube-rebuild.ts`):
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/youtube/rebuild/:videoId` | Re-derive parts (`{parts: YoutubeRebuildPart[], url?}`) |
+| GET | `/youtube/chunks/:videoId` | Read chunks file |
+| GET | `/youtube/chapters/:videoId` | Read chapters file |
+| GET | `/youtube/highlights/:videoId` | Read highlights file |
+
+`YoutubeRebuildPart` ∈ `captions | chunks | summary | highlights | chapters | chat-history`. The dispatcher topologically orders the requested parts using the dependency graph in `services/youtube-rebuild.ts` (e.g. `chunks` depends on `captions`, `summary` on `chunks`); it does NOT auto-add missing upstream deps. `chat-history` invalidates the OpenClaw session key so the next chat turn re-replays summary + retrieved chunks.
+
+### Workers
+
+- **Summary worker** (`services/youtube-worker.ts`) — v1, single FIFO in-memory queue; one job processes at a time, dedupes by videoId across in-flight + persisted-non-terminal jobs. Calls `repairOnStartup` on bridge boot.
+- **Chat worker** (`services/youtube-chat-worker.ts`) — v2, FIFO queue with a per-`(videoId, chatSessionId)` lock so two turns on the same session never run concurrently. On user turn: loads chat history, retrieves top chunks via MiniSearch, stitches a replay context, calls the gateway through the per-session OpenClaw session key, and appends the assistant row to `chat.jsonl`.
+- **Rebuild dispatcher** (`services/youtube-rebuild.ts::executeRebuild`) — synchronous (per-request), iterates ordered parts, skips downstream parts when an upstream part fails, returns `{part, ok, error?}[]`.
+
+### Smoke test
+
+`scripts/smoke-youtube-v2.mjs` — single-shot end-to-end check against a running bridge. Posts a job, polls to done, exercises chunks rebuild, posts a chat turn, polls for the assistant reply. Run with `pnpm smoke:youtube` after exporting `BRIDGE_TOKEN` (and optionally `BRIDGE_URL`, `SMOKE_VIDEO_URL`).
+
 ## Claude Code ↔ OpenClaw
 
 A collaborative dialogue channel: Claude Code (any IDE) calls the `@openclaw-manager/mcp` stdio server, which forwards to `/claude-code/ask`. The bridge routes the turn through the OpenClaw gateway, logs the exchange, and (in manual mode) holds the reply until the operator approves it from the dashboard. See `docs/superpowers/specs/2026-04-19-claude-code-openclaw-bridge-design.md` for the full design.
