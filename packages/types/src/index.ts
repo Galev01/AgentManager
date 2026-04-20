@@ -501,3 +501,154 @@ export type ClaudeCodeConnectConfig = {
   vscode: string;
   cli: string;
 };
+
+// --- YouTube Summarizer v2 ---
+
+export type YoutubeTranscriptSegment = {
+  start: number;
+  duration: number;
+  end: number;
+  text: string;
+};
+
+export type YoutubeTranscriptFile = {
+  videoId: string;
+  source: "youtube-transcript";
+  language: string;
+  fetchedAt: string;
+  segments: YoutubeTranscriptSegment[];
+};
+
+export type YoutubeChunk = {
+  id: string;
+  videoId: string;
+  start: number;
+  end: number;
+  text: string;
+  segmentIndexes: number[];
+  tokenEstimate: number;
+  chapterId?: string;
+};
+
+export type YoutubeChunkerStrategy = {
+  maxChars: number;
+  overlapChars: number;
+  maxSegmentsPerChunk: number;
+};
+
+export type YoutubeChunksFile = {
+  videoId: string;
+  createdAt: string;
+  chunkerVersion: string;
+  strategy: YoutubeChunkerStrategy;
+  chunks: YoutubeChunk[];
+};
+
+export type YoutubePromptPresetId =
+  | "tldr"
+  | "key-points"
+  | "study-notes"
+  | "tutorial-steps"
+  | "critique"
+  | "action-items"
+  | "quotes";
+
+export type YoutubePromptPreset = {
+  id: YoutubePromptPresetId;
+  title: string;
+  description: string;
+  summaryInstructions: string;
+  chatInstructions: string;
+};
+
+export type YoutubeChatMessageRow = {
+  id: string;
+  videoId: string;
+  chatSessionId: string;
+  turnId: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  createdAt: string;
+  presetId?: YoutubePromptPresetId;
+  parentMessageId?: string;
+  retrievedChunkIds?: string[];
+  openclawSessionKey?: string;
+  status: "streaming" | "complete" | "error";
+  errorMessage?: string;
+};
+
+export type YoutubeChatMetaFile = {
+  videoId: string;
+  chatSessionId: string;
+  openclawSessionKey?: string;
+  lastReplayedAt?: string;
+  distilledMemory?: string;
+};
+
+export type YoutubeJobKind =
+  | "summary"
+  | "chat"
+  | "rebuild"
+  | "chapter-extract"
+  | "highlight-extract";
+
+export type YoutubeRebuildPart =
+  | "captions"
+  | "chunks"
+  | "summary"
+  | "highlights"
+  | "chat";
+
+export type YoutubeJobV2Input = {
+  presetId?: YoutubePromptPresetId;
+  message?: string;
+  chatSessionId?: string;
+  rebuildParts?: YoutubeRebuildPart[];
+};
+
+export type YoutubeJobV2Output = {
+  summaryPath?: string;
+  chatMessageId?: string;
+  chunksPath?: string;
+};
+
+export type YoutubeChapter = {
+  id: string;
+  title: string;
+  start: number;
+  end?: number;
+};
+
+export type YoutubeChaptersFile = {
+  videoId: string;
+  source: "description" | "inferred";
+  createdAt: string;
+  chapters: YoutubeChapter[];
+};
+
+export type YoutubeHighlight = {
+  id: string;
+  videoId: string;
+  quote: string;
+  start: number;
+  end?: number;
+  reason?: string;
+  createdAt: string;
+};
+
+export type YoutubeHighlightsFile = {
+  videoId: string;
+  createdAt: string;
+  highlights: YoutubeHighlight[];
+};
+
+export type YoutubeVideoMetadataFile = {
+  videoId: string;
+  title: string;
+  channel: string;
+  url: string;
+  durationSeconds: number;
+  captionLanguage: string;
+  fetchedAt: string;
+  updatedAt: string;
+};

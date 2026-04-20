@@ -7,3 +7,4 @@ dist/
 .openclaw-review/
 .claude/
 .superpowers/
+.worktrees/
