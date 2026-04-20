@@ -9,10 +9,14 @@ export type PersonChangeEvent = {
 
 type Listener = (event: PersonChangeEvent) => void;
 
+export type GlobalBrainChangeEvent = { kind: "changed" | "removed" };
+type GlobalListener = (event: GlobalBrainChangeEvent) => void;
+
 export type BrainWatcher = {
   start(): void;
   stop(): void;
   onChange(listener: Listener): () => void;
+  onGlobalChange(listener: GlobalListener): () => void;
 };
 
 function phoneFromFilename(filename: string): string | null {
@@ -24,6 +28,10 @@ export function createBrainWatcher(paths: BrainPaths): BrainWatcher {
   const listeners: Listener[] = [];
   const debounce = new Map<string, ReturnType<typeof setTimeout>>();
   let fsWatcher: fs.FSWatcher | null = null;
+
+  const globalListeners: GlobalListener[] = [];
+  let globalWatcher: fs.FSWatcher | null = null;
+  let globalDebounce: ReturnType<typeof setTimeout> | null = null;
 
   function emit(event: PersonChangeEvent): void {
     for (const l of listeners) {
@@ -39,6 +47,15 @@ export function createBrainWatcher(paths: BrainPaths): BrainWatcher {
       debounce.delete(key);
       emit({ phone, kind });
     }, 150));
+  }
+
+  function emitGlobal(event: GlobalBrainChangeEvent): void {
+    for (const l of globalListeners) { try { l(event); } catch { /* ignore */ } }
+  }
+
+  function scheduleGlobal(kind: "changed" | "removed"): void {
+    if (globalDebounce) clearTimeout(globalDebounce);
+    globalDebounce = setTimeout(() => { globalDebounce = null; emitGlobal({ kind }); }, 150);
   }
 
   function start(): void {
@@ -64,6 +81,18 @@ export function createBrainWatcher(paths: BrainPaths): BrainWatcher {
     } catch {
       fsWatcher = null;
     }
+
+    try { fs.mkdirSync(paths.brainDir, { recursive: true }); } catch { /* ignore */ }
+    try {
+      globalWatcher = fs.watch(paths.brainDir, { persistent: false }, (_event, filename) => {
+        if (!filename) return;
+        const name = typeof filename === "string" ? filename : String(filename);
+        if (name !== "WhatsApp.md") return;
+        const full = path.join(paths.brainDir, name);
+        fs.access(full, fs.constants.F_OK, (err) => { scheduleGlobal(err ? "removed" : "changed"); });
+      });
+      globalWatcher.on("error", () => { /* swallow */ });
+    } catch { globalWatcher = null; }
   }
 
   function stop(): void {
@@ -73,6 +102,9 @@ export function createBrainWatcher(paths: BrainPaths): BrainWatcher {
     }
     for (const t of debounce.values()) clearTimeout(t);
     debounce.clear();
+
+    if (globalWatcher) { try { globalWatcher.close(); } catch { /* ignore */ } globalWatcher = null; }
+    if (globalDebounce) { clearTimeout(globalDebounce); globalDebounce = null; }
   }
 
   function onChange(listener: Listener): () => void {
@@ -83,5 +115,10 @@ export function createBrainWatcher(paths: BrainPaths): BrainWatcher {
     };
   }
 
-  return { start, stop, onChange };
+  function onGlobalChange(listener: GlobalListener): () => void {
+    globalListeners.push(listener);
+    return () => { const idx = globalListeners.indexOf(listener); if (idx >= 0) globalListeners.splice(idx, 1); };
+  }
+
+  return { start, stop, onChange, onGlobalChange };
 }
