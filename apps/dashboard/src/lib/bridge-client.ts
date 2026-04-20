@@ -40,6 +40,9 @@ import type {
   ClaudeCodePendingItem,
   ClaudeCodeConnectConfig,
   ClaudeCodeSessionMode,
+  GlobalBrain,
+  GlobalBrainUpdate,
+  BrainInjectionPreview,
 } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -580,4 +583,33 @@ export async function resolveClaudeCodePending(
 
 export async function getClaudeCodeConnectConfig(): Promise<ClaudeCodeConnectConfig> {
   return bridgeFetch<ClaudeCodeConnectConfig>("/claude-code/connect-config");
+}
+
+// --- Global Brain ---
+
+export async function getGlobalBrain(): Promise<GlobalBrain> {
+  return bridgeFetch<GlobalBrain>("/brain/agent");
+}
+
+export async function updateGlobalBrain(update: GlobalBrainUpdate): Promise<GlobalBrain> {
+  return bridgeFetch<GlobalBrain>("/brain/agent", { method: "PATCH", body: JSON.stringify(update) });
+}
+
+export async function getAgentPreview(): Promise<BrainInjectionPreview> {
+  return bridgeFetch<BrainInjectionPreview>("/brain/agent/preview");
+}
+
+export async function getPersonPreview(phone: string): Promise<BrainInjectionPreview> {
+  return bridgeFetch<BrainInjectionPreview>(`/brain/people/${encodeURIComponent(phone)}/preview`);
+}
+
+export async function promoteLog(
+  phone: string,
+  index: number,
+  target: "facts" | "preferences" | "openThreads",
+): Promise<{ unchanged: boolean; person: BrainPerson }> {
+  return bridgeFetch(`/brain/people/${encodeURIComponent(phone)}/log/${index}/promote`, {
+    method: "POST",
+    body: JSON.stringify({ target }),
+  });
 }
