@@ -21,6 +21,8 @@ import gatewayControlRouter from "./routes/gateway-control.js";
 import brainRouter from "./routes/brain.js";
 import reviewsRouter from "./routes/reviews.js";
 import youtubeRouter from "./routes/youtube.js";
+import youtubeChatRouter from "./routes/youtube-chat.js";
+import youtubeRebuildRouter from "./routes/youtube-rebuild.js";
 import claudeCodeRouter from "./routes/claude-code.js";
 import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
 import { scanProjects } from "./services/codebase-reviewer/discovery.js";
@@ -55,6 +57,8 @@ app.use(gatewayControlRouter);
 app.use(brainRouter);
 app.use(reviewsRouter);
 app.use(youtubeRouter);
+app.use(youtubeChatRouter);
+app.use(youtubeRebuildRouter);
 app.use(claudeCodeRouter);
 
 const server = app.listen(config.port, config.host, () => {
@@ -67,6 +71,7 @@ void (async () => {
   try { await repairOnStartup(); } catch (e) { console.warn("reviewer repair failed:", e); }
   try { await scanProjects(); } catch (e) { console.warn("reviewer scan failed:", e); }
   try { await repairYoutubeOnStartup(); } catch (e) { console.warn("youtube repair failed:", e); }
+  // TODO: chat-worker startup repair — no hook yet
 })();
 
 export { app, server };
