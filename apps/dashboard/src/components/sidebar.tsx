@@ -21,6 +21,7 @@ const NAV: NavSection[] = [
     items: [
       { id: "overview",      label: "Overview",      href: "/",                 icon: "home"     },
       { id: "conversations", label: "Conversations", href: "/conversations",    icon: "chat"     },
+      { id: "claude_code",   label: "Claude Code",   href: "/claude-code",      icon: "code"     },
       { id: "review_inbox",  label: "Review Inbox",  href: "/reviews/inbox",    icon: "review"   },
     ],
   },

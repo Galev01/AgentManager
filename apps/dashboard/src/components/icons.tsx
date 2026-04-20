@@ -69,6 +69,7 @@ export const Icons = {
   send:     (): React.ReactElement => <Icon><path d="m3 12 18-8-6 18-3-8-9-2Z"/></Icon>,
   sparkles: (): React.ReactElement => <Icon><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></Icon>,
   external: (): React.ReactElement => <Icon><path d="M14 4h6v6M20 4 10 14M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></Icon>,
+  code:     (): React.ReactElement => <Icon><path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></Icon>,
 } as const;
 
 export type IconName = keyof typeof Icons;
