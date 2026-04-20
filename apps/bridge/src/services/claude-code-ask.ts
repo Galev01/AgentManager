@@ -78,6 +78,45 @@ function buildGatewayKey(agentId: string, openclawSessionId: string): string {
   return `agent:${agentId}:${openclawSessionId}`;
 }
 
+async function ensureSessionExists(
+  callGateway: AskOrchestratorDeps["callGateway"],
+  gatewayKey: string
+): Promise<number> {
+  // First probe — if the session exists, return its current message count as baseline.
+  try {
+    const state = (await callGateway("sessions.get", { key: gatewayKey })) as {
+      messages?: GatewayMessage[];
+    };
+    return state?.messages?.length ?? 0;
+  } catch (e) {
+    if (!/not found/i.test((e as Error).message)) throw e;
+  }
+
+  // Session doesn't exist yet. Try to create, capturing any error for diagnostic context.
+  let createError: Error | null = null;
+  try {
+    await callGateway("sessions.create", { key: gatewayKey });
+  } catch (err) {
+    createError = err as Error;
+    console.warn(
+      `[claude-code-ask] sessions.create({ key: "${gatewayKey}" }) threw: ${createError.message}`
+    );
+  }
+
+  // Trust state, not error text: re-probe. If the session now resolves, we're good.
+  try {
+    const state = (await callGateway("sessions.get", { key: gatewayKey })) as {
+      messages?: GatewayMessage[];
+    };
+    return state?.messages?.length ?? 0;
+  } catch (verifyErr) {
+    const parts = [`session not created: ${gatewayKey}`];
+    if (createError) parts.push(`create: ${createError.message}`);
+    parts.push(`get: ${(verifyErr as Error).message}`);
+    throw new Error(parts.join(" | "));
+  }
+}
+
 async function pollForReply(
   callGateway: AskOrchestratorDeps["callGateway"],
   sessionKey: string,
@@ -138,26 +177,10 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
 
     let draft: string;
     try {
-      // Snapshot current message count so we know when our reply lands.
-      // If the OpenClaw session doesn't exist yet (brand-new key or
-      // post-migration), explicitly create it — sessions.send requires
-      // an existing session and does not auto-create.
-      let baselineLength = 0;
-      try {
-        const before = (await deps.callGateway("sessions.get", {
-          key: gatewayKey,
-        })) as { messages?: GatewayMessage[] };
-        baselineLength = before?.messages?.length ?? 0;
-      } catch (e) {
-        if (!/not found/i.test((e as Error).message)) throw e;
-        // Create the session, tolerating "already exists" in case of a race.
-        try {
-          await deps.callGateway("sessions.create", { key: gatewayKey });
-        } catch (createErr) {
-          const msg = (createErr as Error).message;
-          if (!/already\s*exists|exists/i.test(msg)) throw createErr;
-        }
-      }
+      // Ensure the OpenClaw session exists (create-on-miss, verified by
+      // re-probing state rather than matching error substrings). Returns
+      // the baseline message count so we know when our reply lands.
+      const baselineLength = await ensureSessionExists(deps.callGateway, gatewayKey);
 
       // On the first turn of a new OpenClaw session, prepend persistent
       // system instructions. Keep the transcript's "ask" event showing the
