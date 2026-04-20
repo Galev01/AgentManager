@@ -1,4 +1,4 @@
-import { callGateway } from "./gateway.js";
+﻿import { callGateway } from "./gateway.js";
 import {
   appendChatRow,
   foldChatLog,
@@ -129,8 +129,41 @@ async function processChat(job: Job): Promise<void> {
     }
   }
 
-  // TODO(task-17): poll session state until terminal, tail session file,
-  // extract assistant content, append assistant row with status="complete".
-  // Task 17 extracts openclaw-session-tail.ts and finishes this function.
-  console.warn("youtube-chat-worker: processChat scaffold — completion wiring pending (Task 17)");
+
+  // Wait for the turn to complete.
+  // We don't have `created.entry.sessionFile` here (we reused an existing session),
+  // so fall back to config.sessionsDir + key pattern. If that's missing, re-create
+  // the session to get a fresh path.
+  // First: we need a sessionId for polling. For reused sessions, the key IS
+  // usable as an identifier for sessions.list lookup. Query sessions.list once to
+  // resolve key -> sessionId.
+  type SessionsListEntry = { sessionId?: string; id?: string; key?: string; status?: string; entry?: { sessionFile?: string } };
+  const listRaw = (await callGateway("sessions.list", {})) as unknown;
+  const list = Array.isArray(listRaw)
+    ? (listRaw as SessionsListEntry[])
+    : ((listRaw as { sessions?: SessionsListEntry[] })?.sessions ?? []);
+  const entry = list.find((e) => (e as any).key === sessionKey);
+  if (!entry) throw new Error("sessions.list did not include our session");
+  const sessionId = entry.sessionId || entry.id;
+  if (!sessionId) throw new Error("session has no id");
+  const { waitForSessionTerminal, sessionFilePath, readLastAssistantMessage } = await import("./openclaw-session-tail.js");
+  await waitForSessionTerminal(sessionId, 120_000);
+  const sessionFile = sessionFilePath(entry as any, sessionId);
+  const content = await readLastAssistantMessage(sessionFile);
+  if (!content) throw new Error(`no assistant output in ${sessionFile}`);
+
+  const assistantRow: YoutubeChatMessageRow = {
+    id: job.assistantRowId,
+    videoId: job.videoId,
+    chatSessionId: job.chatSessionId,
+    turnId: job.userRow.turnId,
+    role: "assistant",
+    content: content.trim(),
+    createdAt: new Date().toISOString(),
+    status: "complete",
+    openclawSessionKey: sessionKey,
+    parentMessageId: job.userRow.id,
+    retrievedChunkIds: retrieved.map((r) => r.id),
+  };
+  await appendChatRow(assistantRow);
 }

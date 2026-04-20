@@ -1,8 +1,10 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { callGateway } from "./gateway.js";
-import { config } from "../config.js";
 import type { CaptionsResult } from "./youtube-captions.js";
+import {
+  sessionFilePath,
+  readLastAssistantMessage,
+  waitForSessionTerminal,
+} from "./openclaw-session-tail.js";
 
 type CreatedSession = {
   ok?: boolean;
@@ -12,15 +14,7 @@ type CreatedSession = {
   entry?: { sessionFile?: string };
 };
 
-type SessionsListEntry = {
-  sessionId?: string;
-  id?: string;
-  status?: string;
-  abortedLastRun?: boolean;
-};
-
 const TIMEOUT_MS = 120_000;
-const POLL_INTERVAL_MS = 3_000;
 
 const SYSTEM_PROMPT = `You are a video summarizer. The user will give you the metadata and full transcript of a YouTube video. Produce a Markdown summary with this exact structure and nothing else:
 
@@ -47,50 +41,6 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
-}
-
-function sessionFilePath(created: CreatedSession, sessionId: string): string {
-  if (created.entry?.sessionFile) return created.entry.sessionFile;
-  if (config.sessionsDir) return path.join(config.sessionsDir, `${sessionId}.jsonl`);
-  throw new Error("cannot locate session file: SDK did not return it and OPENCLAW_SESSIONS_DIR is not set");
-}
-
-async function pollSessionStatus(sessionId: string): Promise<SessionsListEntry | undefined> {
-  const raw = (await callGateway("sessions.list", {})) as unknown;
-  const list = Array.isArray(raw)
-    ? (raw as SessionsListEntry[])
-    : ((raw as { sessions?: SessionsListEntry[] })?.sessions ?? []);
-  return list.find((s) => s?.sessionId === sessionId || s?.id === sessionId);
-}
-
-async function readLastAssistantMessage(sessionFile: string): Promise<string | undefined> {
-  let raw: string;
-  try {
-    raw = await fs.readFile(sessionFile, "utf8");
-  } catch {
-    return undefined;
-  }
-  const lines = raw.split(/\r?\n/).filter((l) => l.trim());
-  for (let i = lines.length - 1; i >= 0; i--) {
-    let entry: any;
-    try {
-      entry = JSON.parse(lines[i]!);
-    } catch {
-      continue;
-    }
-    if (entry?.type !== "message") continue;
-    const msg = entry.message;
-    if (!msg || msg.role !== "assistant") continue;
-    const content = msg.content;
-    if (typeof content === "string") return content;
-    if (Array.isArray(content)) {
-      const parts = content
-        .filter((c: any) => c && c.type === "text" && typeof c.text === "string")
-        .map((c: any) => c.text as string);
-      if (parts.length) return parts.join("");
-    }
-  }
-  return undefined;
 }
 
 function buildUserMessage(captions: CaptionsResult, url: string): string {
@@ -122,24 +72,9 @@ export async function summarize(captions: CaptionsResult, url: string): Promise<
 
   await callGateway("sessions.send", { key, message: buildUserMessage(captions, url) });
 
-  const started = Date.now();
-  const terminal = new Set(["done", "completed", "finished", "stopped"]);
-  const errored = new Set(["error", "failed", "aborted"]);
-
-  while (true) {
-    if (Date.now() - started > TIMEOUT_MS) {
-      try { await callGateway("sessions.abort", { key }); } catch {}
-      throw new Error(`session timeout after ${TIMEOUT_MS}ms`);
-    }
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-    const s = await pollSessionStatus(sessionId);
-    if (!s) continue;
-    const state = typeof s.status === "string" ? s.status.toLowerCase() : "";
-    if (s.abortedLastRun || errored.has(state)) {
-      throw new Error(`session ended in ${state || "aborted"} state`);
-    }
-    if (terminal.has(state)) break;
-  }
+  await waitForSessionTerminal(sessionId, TIMEOUT_MS, async () => {
+    try { await callGateway("sessions.abort", { key }); } catch {}
+  });
 
   const final = await readLastAssistantMessage(sessionFile);
   if (!final) throw new Error(`no assistant output found in session file: ${sessionFile}`);
