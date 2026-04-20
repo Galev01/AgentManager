@@ -1,6 +1,9 @@
 "use client";
 import { useState } from "react";
 import type { ClaudeCodePendingItem } from "@openclaw-manager/types";
+import { Button } from "./ui";
+
+type Mode = "idle" | "edit" | "replace";
 
 export function ClaudeCodePendingCard({
   pending,
@@ -9,7 +12,7 @@ export function ClaudeCodePendingCard({
   pending: ClaudeCodePendingItem;
   onResolved: (id: string) => void;
 }) {
-  const [mode, setMode] = useState<"idle" | "edit" | "replace">("idle");
+  const [mode, setMode] = useState<Mode>("idle");
   const [text, setText] = useState(pending.draft);
   const [submitting, setSubmitting] = useState(false);
 
@@ -25,76 +28,87 @@ export function ClaudeCodePendingCard({
   }
 
   return (
-    <div className="rounded border border-yellow-500/40 bg-yellow-500/5 p-4">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-yellow-400">
-        Pending draft — awaiting your decision
+    <div className="pending">
+      <div className="pending-eyebrow">
+        <span className="dot" />
+        Pending draft — awaiting decision
       </div>
-      <div className="mb-3">
-        <div className="mb-1 text-xs text-text-muted">Claude Code asked:</div>
-        <div className="rounded bg-dark-lighter p-2 text-xs whitespace-pre-wrap">{pending.question}</div>
+
+      <div className="pending-block">
+        <div className="pending-label">Claude Code asked</div>
+        <div className="pending-text">{pending.question}</div>
       </div>
-      <div className="mb-3">
-        <div className="mb-1 text-xs text-text-muted">OpenClaw drafted:</div>
+
+      <div className="pending-block">
+        <div className="pending-label">
+          {mode === "replace" ? "Your reply" : "OpenClaw drafted"}
+        </div>
         {mode === "idle" ? (
-          <div className="rounded bg-dark-lighter p-2 text-xs whitespace-pre-wrap">{pending.draft}</div>
+          <div className="pending-text">{pending.draft}</div>
         ) : (
           <textarea
+            className="pending-textarea"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="w-full rounded bg-dark-lighter p-2 text-xs"
             rows={6}
-            placeholder={mode === "replace" ? "Write your own reply..." : "Edit the draft..."}
+            placeholder={mode === "replace" ? "Write your own reply…" : "Edit the draft…"}
           />
         )}
       </div>
-      <div className="flex flex-wrap gap-2">
+
+      <div className="pending-actions">
         {mode === "idle" && (
           <>
-            <button
+            <Button
               disabled={submitting}
               onClick={() => resolve("send-as-is")}
-              className="rounded bg-green-500/20 px-3 py-1.5 text-xs text-green-400 hover:bg-green-500/30 disabled:opacity-50"
+              className="btn-sm"
+              style={{ color: "var(--ok)", background: "var(--ok-dim)", borderColor: "transparent" }}
             >
               Send as-is
-            </button>
-            <button
-              disabled={submitting}
-              onClick={() => setMode("edit")}
-              className="rounded bg-blue-500/20 px-3 py-1.5 text-xs text-blue-400 hover:bg-blue-500/30"
-            >
+            </Button>
+            <Button disabled={submitting} onClick={() => setMode("edit")} className="btn-sm">
               Edit
-            </button>
-            <button
+            </Button>
+            <Button
               disabled={submitting}
-              onClick={() => { setText(""); setMode("replace"); }}
-              className="rounded bg-yellow-500/20 px-3 py-1.5 text-xs text-yellow-400 hover:bg-yellow-500/30"
+              onClick={() => {
+                setText("");
+                setMode("replace");
+              }}
+              className="btn-sm"
             >
               Replace
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="danger"
               disabled={submitting}
               onClick={() => resolve("discard")}
-              className="rounded bg-red-500/20 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/30"
+              className="btn-sm"
             >
               Discard
-            </button>
+            </Button>
           </>
         )}
         {mode !== "idle" && (
           <>
-            <button
+            <Button
+              variant="primary"
               disabled={submitting || !text.trim()}
               onClick={() => resolve(mode, text)}
-              className="rounded bg-primary px-3 py-1.5 text-xs text-white disabled:opacity-50"
+              className="btn-sm"
             >
               Send {mode}
-            </button>
-            <button
-              onClick={() => { setMode("idle"); setText(pending.draft); }}
-              className="rounded bg-dark-lighter px-3 py-1.5 text-xs"
+            </Button>
+            <Button
+              onClick={() => {
+                setMode("idle");
+                setText(pending.draft);
+              }}
+              className="btn-sm"
             >
               Cancel
-            </button>
+            </Button>
           </>
         )}
       </div>

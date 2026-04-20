@@ -15,13 +15,7 @@ export default async function SessionsPage() {
 
   return (
     <AppShell title="Sessions">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-zinc-100">Sessions</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Manage agent sessions. Create new sessions, view their details, or delete them.
-          </p>
-        </div>
+      <div className="content">
         <SessionTable initial={sessions} />
       </div>
     </AppShell>

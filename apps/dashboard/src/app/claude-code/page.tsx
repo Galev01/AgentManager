@@ -13,10 +13,12 @@ export default async function ClaudeCodePage() {
   for (const p of pending) pendingBySession.set(p.sessionId, (pendingBySession.get(p.sessionId) ?? 0) + 1);
   return (
     <AppShell title="Claude Code">
-      <ClaudeCodeSessionsTable
-        sessions={sessions}
-        pendingBySession={Object.fromEntries(pendingBySession)}
-      />
+      <div className="content">
+        <ClaudeCodeSessionsTable
+          sessions={sessions}
+          pendingBySession={Object.fromEntries(pendingBySession)}
+        />
+      </div>
     </AppShell>
   );
 }

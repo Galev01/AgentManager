@@ -6,6 +6,15 @@ import type {
   ClaudeCodeTranscriptEvent,
   ClaudeCodePendingItem,
 } from "@openclaw-manager/types";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  KV,
+  PageHeader,
+  SectionTitle,
+} from "./ui";
 import { ClaudeCodePendingCard } from "./claude-code-pending-card";
 
 export function ClaudeCodeSessionDetail({
@@ -22,7 +31,6 @@ export function ClaudeCodeSessionDetail({
   const [pending, setPending] = useState(initialPending);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Live updates via existing ws
   useEffect(() => {
     const url = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/ws`;
     let ws: WebSocket | null = null;
@@ -70,100 +78,157 @@ export function ClaudeCodeSessionDetail({
     router.refresh();
   }
 
+  const sessionKV = [
+    { label: "id", value: <code>{session.id}</code> },
+    { label: "ide", value: session.ide ?? "—" },
+    { label: "workspace", value: <code style={{ wordBreak: "break-all" }}>{session.workspace}</code> },
+    { label: "openclaw", value: <code>{session.openclawSessionId}</code> },
+    { label: "created", value: new Date(session.createdAt).toLocaleString() },
+  ];
+
   return (
-    <div className="grid grid-cols-[1fr_320px] gap-6">
-      <div
-        ref={scrollRef}
-        className="h-[calc(100vh-12rem)] overflow-y-auto rounded border border-dark-border bg-dark-card p-6"
-      >
-        {events.length === 0 && (
-          <p className="text-center text-text-muted">No turns yet. Start a conversation from your IDE.</p>
-        )}
-        {events.map((e, i) => (
-          <TranscriptBubble key={i} event={e} />
-        ))}
+    <>
+      <PageHeader
+        title={session.displayName}
+        sub={
+          <>
+            Claude Code ·{" "}
+            <Badge kind={session.state === "active" ? "acc" : "mute"}>{session.state}</Badge>{" "}
+            · <span className="mono">{session.messageCount} msgs</span>
+          </>
+        }
+        actions={
+          session.state === "active" ? (
+            <Button variant="danger" onClick={endSession}>
+              End session
+            </Button>
+          ) : null
+        }
+      />
+
+      <div className="detail-grid">
+        <Card style={{ display: "flex", flexDirection: "column", minHeight: 0, maxHeight: "calc(100vh - 220px)" }}>
+          <SectionTitle right={<span className="mono">{events.length} events</span>}>
+            Transcript
+          </SectionTitle>
+          <div className="thread" ref={scrollRef} style={{ flex: 1, minHeight: 0 }}>
+            {events.length === 0 && (
+              <EmptyState
+                title="No turns yet"
+                description="Start a conversation from your IDE."
+              />
+            )}
+            {events.map((e, i) => (
+              <TranscriptBubble key={i} event={e} />
+            ))}
+          </div>
+        </Card>
+
+        <aside style={{ display: "flex", flexDirection: "column", gap: "var(--row-gap)" }}>
+          <Card>
+            <SectionTitle>Mode</SectionTitle>
+            <div style={{ padding: 14 }}>
+              <div className="mode-row">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={session.mode === "agent"}
+                  className={`sw ${session.mode === "agent" ? "on" : ""}`}
+                  onClick={toggleMode}
+                  title="Toggle agent/manual"
+                />
+                <div style={{ flex: 1 }}>
+                  <div className="mode-label">
+                    {session.mode === "agent" ? "Agent" : "Manual"}
+                  </div>
+                  <div className="mode-hint">
+                    {session.mode === "agent"
+                      ? "OpenClaw replies automatically"
+                      : "Operator moderates every reply"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {pending.length >= 2 && (
+            <SectionTitle right={<span className="mono">{pending.length}</span>}>
+              Pending approvals
+            </SectionTitle>
+          )}
+          {pending.map((p) => (
+            <ClaudeCodePendingCard
+              key={p.id}
+              pending={p}
+              onResolved={(id) => setPending((prev) => prev.filter((x) => x.id !== id))}
+            />
+          ))}
+
+          <Card>
+            <SectionTitle>Session</SectionTitle>
+            <div style={{ padding: 14 }}>
+              <KV items={sessionKV} />
+            </div>
+          </Card>
+        </aside>
       </div>
-      <aside className="flex flex-col gap-4">
-        <div className="rounded border border-dark-border bg-dark-card p-4">
-          <h3 className="mb-3 text-sm font-semibold">Mode</h3>
-          <button
-            onClick={toggleMode}
-            className={`w-full rounded px-3 py-2 text-sm ${session.mode === "agent" ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"}`}
-          >
-            {session.mode === "agent" ? "● Agent — click to take over" : "○ Manual — click to release"}
-          </button>
-        </div>
-        {pending.map((p) => (
-          <ClaudeCodePendingCard key={p.id} pending={p} onResolved={(id) => setPending((prev) => prev.filter((x) => x.id !== id))} />
-        ))}
-        <div className="rounded border border-dark-border bg-dark-card p-4 text-xs text-text-muted">
-          <div className="mb-2 font-semibold text-text-gray">Session</div>
-          <div>id: <code>{session.id}</code></div>
-          <div>ide: {session.ide}</div>
-          <div>workspace: <code className="break-all">{session.workspace}</code></div>
-          <div>created: {new Date(session.createdAt).toLocaleString()}</div>
-          <div>openclaw session: <code>{session.openclawSessionId}</code></div>
-        </div>
-        {session.state === "active" && (
-          <button
-            onClick={endSession}
-            className="rounded border border-red-500/40 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10"
-          >
-            End session
-          </button>
-        )}
-      </aside>
-    </div>
+    </>
   );
 }
 
 function TranscriptBubble({ event }: { event: ClaudeCodeTranscriptEvent }) {
   if (event.kind === "ask") {
     return (
-      <div className="mb-4 flex justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-primary/20 px-4 py-2 text-sm">
-          <div className="mb-1 text-xs text-text-muted">Claude Code</div>
-          <div className="whitespace-pre-wrap">{event.question}</div>
-          {event.context && (
-            <details className="mt-2 text-xs text-text-muted">
-              <summary className="cursor-pointer">context</summary>
-              <pre className="mt-1 overflow-x-auto">{JSON.stringify(event.context, null, 2)}</pre>
-            </details>
-          )}
-        </div>
+      <div className="msg us">
+        <div className="msg-meta">Claude Code</div>
+        <div>{event.question}</div>
+        {event.context && (
+          <details>
+            <summary>context</summary>
+            <pre>{JSON.stringify(event.context, null, 2)}</pre>
+          </details>
+        )}
       </div>
     );
   }
   if (event.kind === "answer") {
     const isOperator = event.source === "operator";
     return (
-      <div className="mb-4 flex justify-start">
-        <div
-          className={`max-w-[80%] rounded-2xl rounded-tl-sm px-4 py-2 text-sm ${isOperator ? "bg-yellow-500/15" : "bg-dark-lighter"}`}
-        >
-          <div className="mb-1 text-xs text-text-muted">
-            {isOperator ? `Operator (${event.action})` : "OpenClaw"}
-          </div>
-          <div className="whitespace-pre-wrap">{event.answer}</div>
+      <div className={`msg ${isOperator ? "op" : "them"}`}>
+        <div className="msg-meta">
+          {isOperator ? `Operator (${event.action})` : "OpenClaw"}
         </div>
+        <div>{event.answer}</div>
       </div>
     );
   }
   if (event.kind === "discarded") {
-    return <div className="mb-2 text-center text-xs text-red-400">— operator discarded reply —</div>;
+    return (
+      <div className="msg-sys err">
+        <span className="line" />— operator discarded reply —<span className="line" />
+      </div>
+    );
   }
   if (event.kind === "timeout") {
-    return <div className="mb-2 text-center text-xs text-orange-400">— operator timeout —</div>;
+    return (
+      <div className="msg-sys warn">
+        <span className="line" />— operator timeout —<span className="line" />
+      </div>
+    );
   }
   if (event.kind === "mode_change") {
     return (
-      <div className="mb-2 text-center text-xs text-text-muted">
-        — mode: {event.from} → {event.to} —
+      <div className="msg-sys">
+        <span className="line" />— mode: {event.from} → {event.to} —<span className="line" />
       </div>
     );
   }
   if (event.kind === "ended") {
-    return <div className="mb-2 text-center text-xs text-text-muted">— session ended —</div>;
+    return (
+      <div className="msg-sys">
+        <span className="line" />— session ended —<span className="line" />
+      </div>
+    );
   }
   return null;
 }

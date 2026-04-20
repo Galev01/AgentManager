@@ -3,6 +3,16 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ClaudeCodeSession } from "@openclaw-manager/types";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  PageHeader,
+  StatCard,
+  StatusLamp,
+  Table,
+  TableWrap,
+} from "./ui";
 import { ClaudeCodeConnectModalBody } from "./claude-code-connect-modal";
 
 export function ClaudeCodeSessionsTable({
@@ -26,95 +36,148 @@ export function ClaudeCodeSessionsTable({
 
   const active = sessions.filter((s) => s.state === "active");
   const ended = sessions.filter((s) => s.state === "ended");
+  const totalPending = Object.values(pendingBySession).reduce((a, b) => a + b, 0);
+  const totalMessages = sessions.reduce((a, s) => a + (s.messageCount ?? 0), 0);
+  const agentCount = active.filter((s) => s.mode === "agent").length;
+
+  const subParts = [
+    `${active.length} active`,
+    ended.length > 0 && `${ended.length} ended`,
+    totalPending > 0 && `${totalPending} pending`,
+  ].filter(Boolean);
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <p className="text-sm text-text-muted">
-          {active.length} active session{active.length === 1 ? "" : "s"}
-          {ended.length > 0 ? ` · ${ended.length} ended` : ""}
-        </p>
-        <button
-          onClick={() => setShowConnect(true)}
-          className="rounded bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
-        >
-          Connect a new IDE
-        </button>
+    <>
+      <PageHeader
+        title="Claude Code"
+        sub={subParts.join(" · ")}
+        actions={
+          <>
+            <Button onClick={() => router.refresh()}>Refresh</Button>
+            <Button variant="primary" onClick={() => setShowConnect(true)}>
+              + Connect IDE
+            </Button>
+          </>
+        }
+      />
+
+      <div className="hero-4">
+        <StatCard
+          label="Active sessions"
+          value={active.length}
+          sub={sessions.length > 0 ? `of ${sessions.length}` : undefined}
+        />
+        <StatCard
+          label="Agent mode"
+          value={agentCount}
+          sub={active.length > 0 ? `of ${active.length} active` : "—"}
+        />
+        <StatCard
+          label="Pending approvals"
+          value={totalPending}
+          sub={totalPending > 0 ? "awaiting moderation" : "none"}
+          accent={totalPending > 0 ? "var(--warn)" : undefined}
+        />
+        <StatCard
+          label="Messages total"
+          value={totalMessages.toLocaleString()}
+          sub={sessions.length > 0 ? `across ${sessions.length} sessions` : "—"}
+        />
       </div>
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-dark-border text-left text-text-muted">
-            <th className="py-2 pr-4">Name</th>
-            <th className="py-2 pr-4">Mode</th>
-            <th className="py-2 pr-4">State</th>
-            <th className="py-2 pr-4">Activity</th>
-            <th className="py-2 pr-4">Pending</th>
-            <th className="py-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sessions.map((s) => {
-            const pendingCount = pendingBySession[s.id] ?? 0;
-            return (
-              <tr key={s.id} className="border-b border-dark-border/50 hover:bg-dark-lighter/30">
-                <td className="py-3 pr-4">
-                  <Link href={`/claude-code/${s.id}`} className="text-primary hover:underline">
-                    {s.displayName}
-                  </Link>
-                </td>
-                <td className="py-3 pr-4">
-                  <button
-                    onClick={() => patch(s.id, { mode: s.mode === "agent" ? "manual" : "agent" })}
-                    className={`rounded px-3 py-1 text-xs ${s.mode === "agent" ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"}`}
-                  >
-                    {s.mode}
-                  </button>
-                </td>
-                <td className="py-3 pr-4 text-text-gray">{s.state}</td>
-                <td className="py-3 pr-4 text-text-muted">
-                  {s.messageCount} msgs · {relativeTime(s.lastActivityAt)}
-                </td>
-                <td className="py-3 pr-4">
-                  {pendingCount > 0 ? (
-                    <span className="inline-flex items-center gap-2 rounded bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
-                      <span className="h-2 w-2 rounded-full bg-red-400" />
-                      {pendingCount}
-                    </span>
-                  ) : (
-                    <span className="text-text-muted">—</span>
-                  )}
-                </td>
-                <td className="py-3">
-                  {s.state === "active" ? (
-                    <button
-                      onClick={() => patch(s.id, { state: "ended" })}
-                      className="text-xs text-text-muted hover:text-red-400"
-                    >
-                      End
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => patch(s.id, { state: "active" })}
-                      className="text-xs text-text-muted hover:text-green-400"
-                    >
-                      Resurrect
-                    </button>
-                  )}
+
+      <TableWrap>
+        <Table>
+          <thead>
+            <tr>
+              <th style={{ width: 28 }}></th>
+              <th>Session</th>
+              <th>Mode</th>
+              <th>State</th>
+              <th>Activity</th>
+              <th>Pending</th>
+              <th style={{ textAlign: "right", width: 120 }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sessions.length === 0 && (
+              <tr>
+                <td colSpan={7}>
+                  <EmptyState
+                    title="No Claude Code sessions yet"
+                    description="Connect an IDE to start a session."
+                    action={
+                      <Button variant="primary" onClick={() => setShowConnect(true)}>
+                        + Connect IDE
+                      </Button>
+                    }
+                  />
                 </td>
               </tr>
-            );
-          })}
-          {sessions.length === 0 && (
-            <tr>
-              <td colSpan={6} className="py-8 text-center text-text-muted">
-                No Claude Code sessions yet. Connect an IDE to start.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+            )}
+            {sessions.map((s) => {
+              const pendingCount = pendingBySession[s.id] ?? 0;
+              const lamp = s.state === "ended" ? "off" : pendingCount > 0 ? "warn" : "ok";
+              return (
+                <tr key={s.id}>
+                  <td>
+                    <StatusLamp status={lamp} />
+                  </td>
+                  <td>
+                    <Link href={`/claude-code/${s.id}`} className="pri">
+                      {s.displayName}
+                    </Link>
+                    <div className="row-sub">
+                      {s.ide ?? "—"} · <span className="mono">{s.id.slice(0, 8)}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <button
+                      className={`badge ${s.mode === "agent" ? "ok" : "warn"}`}
+                      onClick={() => patch(s.id, { mode: s.mode === "agent" ? "manual" : "agent" })}
+                      style={{ cursor: "pointer" }}
+                      title="Toggle mode"
+                    >
+                      {s.mode}
+                    </button>
+                  </td>
+                  <td>
+                    <Badge kind={s.state === "active" ? "acc" : "mute"}>{s.state}</Badge>
+                  </td>
+                  <td>
+                    <div className="pri mono" style={{ fontSize: 12 }}>
+                      {s.messageCount} msgs
+                    </div>
+                    <div className="row-sub">{relativeTime(s.lastActivityAt)}</div>
+                  </td>
+                  <td>
+                    {pendingCount > 0 ? (
+                      <Badge kind="warn" dot>
+                        {pendingCount}
+                      </Badge>
+                    ) : (
+                      <span style={{ color: "var(--text-faint)" }}>—</span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    {s.state === "active" ? (
+                      <Button variant="ghost" onClick={() => patch(s.id, { state: "ended" })}>
+                        End
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" onClick={() => patch(s.id, { state: "active" })}>
+                        Resurrect
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      </TableWrap>
+
       {showConnect && <ConnectModal onClose={() => setShowConnect(false)} />}
-    </div>
+    </>
   );
 }
 
@@ -130,16 +193,18 @@ function relativeTime(iso: string): string {
 }
 
 function ConnectModal({ onClose }: { onClose: () => void }) {
-  // Lazy import so the parent stays a stable "use client" boundary.
-  // Dynamic require is avoided — a simple conditional render suffices once the modal body component exists.
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div
-        className="max-h-[80vh] w-[min(800px,90vw)] overflow-y-auto rounded bg-dark-card p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <ClaudeCodeConnectModalBody />
-        <button onClick={onClose} className="mt-4 rounded bg-dark-lighter px-4 py-2 text-sm">Close</button>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-h">
+          <div className="modal-t">Connect a new IDE</div>
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+        <div className="modal-b">
+          <ClaudeCodeConnectModalBody />
+        </div>
       </div>
     </div>
   );

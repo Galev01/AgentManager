@@ -25,11 +25,13 @@ export default async function ClaudeCodeSessionPage({
   const sessionPending = pending.filter((p) => p.sessionId === id);
   return (
     <AppShell title={`Claude Code · ${session.displayName}`}>
-      <ClaudeCodeSessionDetail
-        session={session}
-        initialEvents={events}
-        initialPending={sessionPending}
-      />
+      <div className="content">
+        <ClaudeCodeSessionDetail
+          session={session}
+          initialEvents={events}
+          initialPending={sessionPending}
+        />
+      </div>
     </AppShell>
   );
 }

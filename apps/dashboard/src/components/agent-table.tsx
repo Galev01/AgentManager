@@ -3,6 +3,28 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Agent } from "@openclaw-manager/types";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  SectionTitle,
+  Table,
+  TableWrap,
+} from "./ui";
+
+const INPUT_STYLE: React.CSSProperties = {
+  background: "var(--bg-sunken)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius)",
+  padding: "7px 10px",
+  fontSize: 13,
+  color: "var(--text)",
+  fontFamily: "inherit",
+  flex: 1,
+  minWidth: 180,
+};
 
 export function AgentTable({ initial }: { initial: Agent[] }) {
   const [agents, setAgents] = useState<Agent[]>(initial);
@@ -35,8 +57,8 @@ export function AgentTable({ initial }: { initial: Agent[] }) {
       setName("");
       setWorkspace("");
       setModel("");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
     } finally {
       setAdding(false);
     }
@@ -55,113 +77,141 @@ export function AgentTable({ initial }: { initial: Agent[] }) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to delete agent");
       }
-    } catch (err: any) {
-      setError(err.message);
-      // Reload to restore state on failure
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
       const res = await fetch("/api/agents");
       if (res.ok) setAgents(await res.json());
     }
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <PageHeader
+        title="Agents"
+        sub={`${agents.length} configured`}
+      />
+
       {error && (
-        <div className="rounded border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-300">
-          {error}
-          <button
-            onClick={() => setError(null)}
-            className="ml-3 text-red-400 hover:text-red-200"
-          >
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "10px 14px",
+            borderRadius: "var(--radius)",
+            border: "1px solid oklch(0.68 0.20 25 / 0.4)",
+            background: "var(--err-dim)",
+            color: "var(--err)",
+            fontSize: 12.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span style={{ flex: 1 }}>{error}</span>
+          <Button variant="ghost" className="btn-sm" onClick={() => setError(null)}>
             Dismiss
-          </button>
+          </Button>
         </div>
       )}
 
-      {/* Agents table */}
-      <div className="overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
-        {agents.length === 0 ? (
-          <div className="px-6 py-10 text-center text-sm text-zinc-400">
-            No agents configured.
-          </div>
-        ) : (
-          <table className="w-full text-sm text-zinc-100">
-            <thead>
-              <tr className="border-b border-zinc-700 bg-zinc-900/50 text-left text-xs uppercase tracking-wider text-zinc-400">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Model</th>
-                <th className="px-4 py-3">Tools</th>
-                <th className="px-4 py-3"></th>
+      <TableWrap style={{ marginBottom: "var(--row-gap)" }}>
+        <Table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Model</th>
+              <th>Tools</th>
+              <th style={{ textAlign: "right", width: 200 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {agents.length === 0 && (
+              <tr>
+                <td colSpan={4}>
+                  <EmptyState
+                    title="No agents configured"
+                    description="Add one below to get started."
+                  />
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-700">
-              {agents.map((a) => (
-                <tr key={a.name} className="hover:bg-zinc-700/30 transition">
-                  <td className="px-4 py-3 font-medium">{a.name}</td>
-                  <td className="px-4 py-3 text-zinc-300">{a.model || "—"}</td>
-                  <td className="px-4 py-3 text-zinc-400">
-                    {a.tools && a.tools.length > 0 ? a.tools.length : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    <Link
-                      href={`/agents/${encodeURIComponent(a.name)}`}
-                      className="rounded px-3 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-900/30 hover:text-blue-300 transition"
-                    >
-                      View
+            )}
+            {agents.map((a) => (
+              <tr key={a.name}>
+                <td className="pri">{a.name}</td>
+                <td className="mono" style={{ fontSize: 12 }}>
+                  {a.model || <span style={{ color: "var(--text-faint)" }}>—</span>}
+                </td>
+                <td>
+                  {a.tools && a.tools.length > 0 ? (
+                    <Badge kind="info">{a.tools.length}</Badge>
+                  ) : (
+                    <span style={{ color: "var(--text-faint)" }}>—</span>
+                  )}
+                </td>
+                <td style={{ textAlign: "right" }}>
+                  <div style={{ display: "inline-flex", gap: 6 }}>
+                    <Link href={`/agents/${encodeURIComponent(a.name)}`}>
+                      <Button className="btn-sm">View</Button>
                     </Link>
-                    <button
+                    <Button
+                      variant="danger"
+                      className="btn-sm"
                       onClick={() => handleDelete(a.name)}
-                      className="rounded px-3 py-1 text-xs font-semibold text-red-400 hover:bg-red-900/30 hover:text-red-300 transition"
                     >
                       Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </TableWrap>
 
-      {/* Create form */}
-      <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-5">
-        <h3 className="mb-1 text-sm font-semibold text-zinc-100">Create Agent</h3>
-        <p className="mb-4 text-xs text-zinc-500">
-          Workspace is the absolute path to an OpenClaw workspace on the bridge host, e.g. <code className="font-mono text-zinc-400">C:\Users\you\.openclaw\workspace</code>.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <input
-            type="text"
-            placeholder="Name (required)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-            className="flex-1 min-w-[160px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-          />
-          <input
-            type="text"
-            placeholder="Workspace path (required)"
-            value={workspace}
-            onChange={(e) => setWorkspace(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-            className="flex-1 min-w-[240px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-          />
-          <input
-            type="text"
-            placeholder="Model (optional)"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-            className="flex-1 min-w-[160px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-          />
-          <button
-            onClick={handleCreate}
-            disabled={adding || !name.trim() || !workspace.trim()}
-            className="rounded bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {adding ? "Creating…" : "Create"}
-          </button>
+      <Card>
+        <SectionTitle>Create agent</SectionTitle>
+        <div style={{ padding: 16 }}>
+          <p style={{ margin: "0 0 14px 0", fontSize: 12, color: "var(--text-muted)" }}>
+            Workspace is the absolute path to an OpenClaw workspace on the bridge host, e.g.{" "}
+            <code style={{ fontSize: 11.5, color: "var(--text)" }}>
+              C:\Users\you\.openclaw\workspace
+            </code>
+            .
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <input
+              type="text"
+              placeholder="Name (required)"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              style={INPUT_STYLE}
+            />
+            <input
+              type="text"
+              placeholder="Workspace path (required)"
+              value={workspace}
+              onChange={(e) => setWorkspace(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              style={{ ...INPUT_STYLE, minWidth: 260 }}
+            />
+            <input
+              type="text"
+              placeholder="Model (optional)"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              style={INPUT_STYLE}
+            />
+            <Button
+              variant="primary"
+              onClick={handleCreate}
+              disabled={adding || !name.trim() || !workspace.trim()}
+            >
+              {adding ? "Creating…" : "Create"}
+            </Button>
+          </div>
         </div>
-      </div>
-    </div>
+      </Card>
+    </>
   );
 }

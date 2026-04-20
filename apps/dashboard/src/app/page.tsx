@@ -4,6 +4,7 @@ import { AttentionCard } from "@/components/overview/attention-card";
 import { SystemStatus } from "@/components/overview/system-status";
 import { ActivityFeed } from "@/components/overview/activity-feed";
 import { StatRow } from "@/components/overview/stat-row";
+import { PageHeader } from "@/components/ui";
 import { getOverview, getReviewInbox, callGatewayMethod } from "@/lib/bridge-client";
 
 import type { OverviewData } from "@openclaw-manager/types";
@@ -21,7 +22,6 @@ export default async function OverviewPage() {
     bridgeError = true;
   }
 
-  // Pending review inbox — cap to 5, only actionable states
   let pendingCount = 0;
   let inboxError = false;
   const recentRows: Array<{
@@ -50,11 +50,9 @@ export default async function OverviewPage() {
       });
     });
   } catch {
-    // inbox unavailable
     inboxError = true;
   }
 
-  // System status rows
   const gatewayStatus: LampStatus = bridgeError ? "err" : "ok";
   const bridgeStatus: LampStatus = bridgeError ? "err" : "ok";
 
@@ -63,12 +61,12 @@ export default async function OverviewPage() {
   let llmDetail = "unknown";
 
   try {
-    const config = await callGatewayMethod("config.get", {}) as Record<string, unknown>;
+    const config = (await callGatewayMethod("config.get", {})) as Record<string, unknown>;
     const parsed = config?.parsed as Record<string, unknown> | undefined;
     const primaryModel = (parsed?.agents as Record<string, unknown> | undefined)
       ?.defaults as Record<string, unknown> | undefined;
     const model = primaryModel?.model as Record<string, unknown> | undefined;
-    const rawPrimary = (model as any)?.primary;
+    const rawPrimary = (model as { primary?: unknown })?.primary;
     const modelName = typeof rawPrimary === "string" ? rawPrimary : undefined;
     if (modelName) {
       llmDetail = modelName;
@@ -86,17 +84,35 @@ export default async function OverviewPage() {
     { label: "LLM", status: llmStatus, detail: llmDetail },
   ];
 
+  const totalConversations = data?.totalConversations ?? 0;
+  const activeCount = data?.activeCount ?? 0;
+  const sub = [
+    `${totalConversations} thread${totalConversations === 1 ? "" : "s"}`,
+    `${activeCount} active`,
+    pendingCount > 0 && `${pendingCount} need review`,
+  ].filter(Boolean).join(" · ");
+
   return (
     <AppShell title="Overview">
-      {bridgeError && <DegradedBanner />}
-      <div className="grid grid-cols-[2fr_1fr] gap-4 mb-4">
-        <AttentionCard pendingReviewCount={pendingCount} recent={recentRows} unavailable={inboxError} />
-        <div className="flex flex-col gap-4">
-          <SystemStatus rows={systemRows} />
-          <ActivityFeed />
+      <div className="content">
+        {bridgeError && <DegradedBanner />}
+
+        <PageHeader title="Overview" sub={sub} />
+
+        <div className="attn">
+          <AttentionCard
+            pendingReviewCount={pendingCount}
+            recent={recentRows}
+            unavailable={inboxError}
+          />
+          <div className="attn-side">
+            <SystemStatus rows={systemRows} />
+            <ActivityFeed />
+          </div>
         </div>
+
+        {data && <StatRow data={data} />}
       </div>
-      {data && <StatRow data={data} />}
     </AppShell>
   );
 }
