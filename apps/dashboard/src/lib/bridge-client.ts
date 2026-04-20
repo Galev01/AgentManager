@@ -35,6 +35,12 @@ import type {
   YoutubeSummaryListItem,
   YoutubeSummaryMeta,
   YoutubeSubmitResponse,
+  YoutubeChatMessageRow,
+  YoutubeChatMetaFile,
+  YoutubeChunksFile,
+  YoutubeChaptersFile,
+  YoutubeHighlightsFile,
+  YoutubeRebuildPart,
   ClaudeCodeSession,
   ClaudeCodeTranscriptEvent,
   ClaudeCodePendingItem,
@@ -542,6 +548,118 @@ export async function deleteYoutubeSummary(videoId: string): Promise<void> {
   });
   if (!res.ok) throw new Error(`Bridge ${res.status}: ${await res.text()}`);
 }
+
+// --- YouTube v2: chat / rebuild / chunks / chapters / highlights ---
+
+export type YoutubeChatPostResponse = {
+  ok: boolean;
+  videoId: string;
+  chatSessionId: string;
+  queued: boolean;
+};
+
+export async function postYoutubeChat(
+  videoId: string,
+  message: string,
+  chatSessionId?: string
+): Promise<YoutubeChatPostResponse> {
+  return bridgeFetch<YoutubeChatPostResponse>(
+    `/youtube/chat/${encodeURIComponent(videoId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ message, ...(chatSessionId ? { chatSessionId } : {}) }),
+    }
+  );
+}
+
+export type YoutubeChatGetResponse = {
+  ok: boolean;
+  videoId: string;
+  chatSessionId: string;
+  meta: YoutubeChatMetaFile | null;
+  messages: YoutubeChatMessageRow[];
+};
+
+export async function getYoutubeChat(
+  videoId: string,
+  sessionId?: string,
+  after?: string
+): Promise<YoutubeChatGetResponse> {
+  const params = new URLSearchParams();
+  if (sessionId) params.set("sessionId", sessionId);
+  if (after) params.set("after", after);
+  const qs = params.toString();
+  return bridgeFetch<YoutubeChatGetResponse>(
+    `/youtube/chat/${encodeURIComponent(videoId)}${qs ? `?${qs}` : ""}`
+  );
+}
+
+export type YoutubeRebuildResult = {
+  part: YoutubeRebuildPart;
+  ok: boolean;
+  skipped?: boolean;
+  error?: string;
+};
+
+export type YoutubeRebuildResponse = {
+  ok: boolean;
+  videoId: string;
+  results: YoutubeRebuildResult[];
+};
+
+export async function postYoutubeRebuild(
+  videoId: string,
+  parts: YoutubeRebuildPart[],
+  url?: string
+): Promise<YoutubeRebuildResponse> {
+  return bridgeFetch<YoutubeRebuildResponse>(
+    `/youtube/rebuild/${encodeURIComponent(videoId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ parts, ...(url ? { url } : {}) }),
+    }
+  );
+}
+
+export type YoutubeChunksResponse = {
+  ok: boolean;
+  videoId: string;
+  chunks: YoutubeChunksFile | null;
+};
+
+export async function getYoutubeChunks(videoId: string): Promise<YoutubeChunksResponse> {
+  return bridgeFetch<YoutubeChunksResponse>(
+    `/youtube/chunks/${encodeURIComponent(videoId)}`
+  );
+}
+
+export type YoutubeChaptersResponse = {
+  ok: boolean;
+  videoId: string;
+  chapters: YoutubeChaptersFile | null;
+};
+
+export async function getYoutubeChapters(videoId: string): Promise<YoutubeChaptersResponse> {
+  return bridgeFetch<YoutubeChaptersResponse>(
+    `/youtube/chapters/${encodeURIComponent(videoId)}`
+  );
+}
+
+export type YoutubeHighlightsResponse = {
+  ok: boolean;
+  videoId: string;
+  highlights: YoutubeHighlightsFile | null;
+};
+
+export async function getYoutubeHighlights(videoId: string): Promise<YoutubeHighlightsResponse> {
+  return bridgeFetch<YoutubeHighlightsResponse>(
+    `/youtube/highlights/${encodeURIComponent(videoId)}`
+  );
+}
+
+// Note: getYoutubeVideoMeta — SKIPPED. No standalone metadata endpoint on the
+// bridge as of commit fbc26d9 (youtube-rebuild router). Use `getYoutubeSummary`
+// to retrieve `meta` alongside the markdown until a dedicated endpoint exists.
 
 // --- Claude Code ---
 
