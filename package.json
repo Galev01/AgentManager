@@ -6,6 +6,7 @@
     "dev:dashboard": "pnpm --filter dashboard dev",
     "build": "pnpm -r build",
     "build:dashboard": "pnpm --filter dashboard build",
-    "build:bridge": "pnpm --filter bridge build"
+    "build:bridge": "pnpm --filter bridge build",
+    "smoke:youtube": "node scripts/smoke-youtube-v2.mjs"
   }
 }
