@@ -1,7 +1,8 @@
 import { Router, type Router as ExpressRouter } from "express";
 import { BrainPersonNotFoundError, normalizePhone, renderInjectionPreview } from "@openclaw-manager/brain";
 import { getBrainClient, getGlobalBrainClient, isBrainEnabled } from "../services/brain.js";
-import type { BrainPersonUpdate, GlobalBrainUpdate } from "@openclaw-manager/types";
+import { getConversations } from "../services/openclaw-state.js";
+import type { BrainPersonUpdate, GlobalBrainUpdate, ConversationRow } from "@openclaw-manager/types";
 
 const router: ExpressRouter = Router();
 
@@ -18,8 +19,22 @@ router.get("/brain/status", (_req, res) => {
 router.get("/brain/people", async (_req, res) => {
   if (!ensureEnabled(res)) return;
   try {
-    const people = await getBrainClient().listPeople();
-    res.json(people);
+    const [people, convos] = await Promise.all([
+      getBrainClient().listPeople(),
+      getConversations().catch(() => [] as ConversationRow[]),
+    ]);
+    const byPhone = new Map(convos.map((c) => [c.phone, c]));
+    const enriched = people.map((p) => {
+      const c = byPhone.get(p.phone);
+      if (!c) return { ...p, unreadCount: 0, lastMessageSnippet: null, lastMessageAt: null };
+      return {
+        ...p,
+        unreadCount: computeUnread(c),
+        lastMessageSnippet: truncate(c.lastRemoteContent, 30),
+        lastMessageAt: c.lastRemoteAt,
+      };
+    });
+    res.json(enriched);
   } catch (err) {
     res.status(503).json({ error: `Failed to list people: ${String(err)}` });
   }
@@ -193,5 +208,17 @@ router.post("/brain/people/:phone/log/:index/promote", async (req, res) => {
     res.status(500).json({ error: String(err) });
   }
 });
+
+function computeUnread(c: ConversationRow): number {
+  const lastOut = Math.max(c.lastAgentReplyAt ?? 0, c.lastHumanReplyAt ?? 0);
+  const lastIn = c.lastRemoteAt ?? 0;
+  return lastIn > lastOut ? 1 : 0;
+}
+
+function truncate(s: string | null, max: number): string | null {
+  if (!s) return null;
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1).trimEnd() + "…";
+}
 
 export default router;
