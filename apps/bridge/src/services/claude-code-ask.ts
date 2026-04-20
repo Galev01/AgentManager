@@ -157,6 +157,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
     let session = await getOrCreateSession(deps.sessionsPath, {
       ide: req.ide,
       workspace: req.workspace,
+      clientId: req.clientId,
     });
     if (session.state === "ended") {
       await resurrectSession(deps.sessionsPath, session.id);

@@ -6,7 +6,12 @@ import type {
   ClaudeCodeSessionMode,
 } from "@openclaw-manager/types";
 
-type CreateArgs = { ide: string; workspace: string; openclawSessionId?: string };
+type CreateArgs = {
+  ide: string;
+  workspace: string;
+  clientId?: string;
+  openclawSessionId?: string;
+};
 
 export function deriveOpenclawSessionId(id: string): string {
   return `cc-${id}`;
@@ -16,14 +21,25 @@ function normalize(workspace: string): string {
   return workspace.trim().replace(/\\/g, "/").toLowerCase();
 }
 
-export function computeSessionId(ide: string, workspace: string): string {
-  const input = `${ide.trim().toLowerCase()}:${normalize(workspace)}`;
+export function computeSessionId(
+  ide: string,
+  workspace: string,
+  clientId?: string
+): string {
+  const input = clientId
+    ? `${ide.trim().toLowerCase()}:${normalize(workspace)}:${clientId}`
+    : `${ide.trim().toLowerCase()}:${normalize(workspace)}`;
   return crypto.createHash("sha256").update(input).digest("hex").slice(0, 12);
 }
 
-export function deriveDisplayName(ide: string, workspace: string): string {
+export function deriveDisplayName(
+  ide: string,
+  workspace: string,
+  clientId?: string
+): string {
   const base = path.basename(normalize(workspace)) || workspace;
-  return `${ide}@${base}`;
+  const suffix = clientId ? `/${clientId.replace(/^cc-/, "").slice(0, 6)}` : "";
+  return `${ide}@${base}${suffix}`;
 }
 
 async function readFile(p: string): Promise<{ sessions: ClaudeCodeSession[] }> {
@@ -51,15 +67,16 @@ export async function listSessions(p: string): Promise<ClaudeCodeSession[]> {
 
 export async function createSession(p: string, args: CreateArgs): Promise<ClaudeCodeSession> {
   const { sessions } = await readFile(p);
-  const id = computeSessionId(args.ide, args.workspace);
+  const id = computeSessionId(args.ide, args.workspace, args.clientId);
   const now = new Date().toISOString();
   const existing = sessions.find((s) => s.id === id);
   if (existing) return existing;
   const session: ClaudeCodeSession = {
     id,
-    displayName: deriveDisplayName(args.ide, args.workspace),
+    displayName: deriveDisplayName(args.ide, args.workspace, args.clientId),
     ide: args.ide,
     workspace: args.workspace,
+    clientId: args.clientId,
     mode: "agent",
     state: "active",
     openclawSessionId: args.openclawSessionId ?? deriveOpenclawSessionId(id),

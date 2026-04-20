@@ -438,6 +438,10 @@ export type ClaudeCodeSession = {
   displayName: string;
   ide: string;
   workspace: string;
+  /** Unique per MCP process; distinguishes concurrent Claude Code chats
+   * in the same IDE/workspace. Optional for sessions created before
+   * this field was introduced. */
+  clientId?: string;
   mode: ClaudeCodeSessionMode;
   state: ClaudeCodeSessionState;
   openclawSessionId: string;
@@ -485,6 +489,10 @@ export type ClaudeCodePendingItem = {
 export type ClaudeCodeAskRequest = {
   ide: string;
   workspace: string;
+  /** Unique per MCP process. Included in the hash that derives the session
+   * id, so concurrent Claude Code chats in the same IDE/workspace land on
+   * distinct bridge sessions. */
+  clientId?: string;
   msgId: string;
   question: string;
   context?: Record<string, unknown>;
