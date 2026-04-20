@@ -140,7 +140,8 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
     try {
       // Snapshot current message count so we know when our reply lands.
       // If the OpenClaw session doesn't exist yet (brand-new key or
-      // post-migration), treat baseline as 0 — sessions.send will create it.
+      // post-migration), explicitly create it — sessions.send requires
+      // an existing session and does not auto-create.
       let baselineLength = 0;
       try {
         const before = (await deps.callGateway("sessions.get", {
@@ -149,6 +150,13 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
         baselineLength = before?.messages?.length ?? 0;
       } catch (e) {
         if (!/not found/i.test((e as Error).message)) throw e;
+        // Create the session, tolerating "already exists" in case of a race.
+        try {
+          await deps.callGateway("sessions.create", { key: gatewayKey });
+        } catch (createErr) {
+          const msg = (createErr as Error).message;
+          if (!/already\s*exists|exists/i.test(msg)) throw createErr;
+        }
       }
 
       // On the first turn of a new OpenClaw session, prepend persistent
