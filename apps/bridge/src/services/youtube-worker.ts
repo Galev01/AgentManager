@@ -116,3 +116,31 @@ function mapError(err: unknown): string {
 export async function repairOnStartup(): Promise<void> {
   await storeRepairOnStartup();
 }
+
+/**
+ * Run the summary pipeline synchronously for a given video, bypassing the
+ * FIFO queue. Used by the v2 rebuild path which needs to await completion
+ * and does its own orchestration / error reporting.
+ *
+ * This duplicates the core steps of `process()` (fetch captions, summarize,
+ * write v1 markdown) but skips the job-event log — rebuild tracks its own
+ * per-part results. Errors propagate to the caller rather than being
+ * swallowed into a "failed" job status.
+ */
+export async function runSummaryNow(videoId: string, url: string): Promise<void> {
+  const captions = await fetchCaptions(videoId);
+  const summary = await summarize(captions, url);
+  const fetchedAt = new Date().toISOString();
+  const meta = {
+    videoId,
+    title: captions.title,
+    channel: captions.channel,
+    url,
+    durationSeconds: captions.durationSeconds,
+    captionLanguage: captions.language,
+    fetchedAt,
+    updatedAt: fetchedAt,
+  };
+  const fileBody = buildFrontMatter(meta) + summary.markdown + "\n";
+  await writeMarkdown(videoId, fileBody);
+}
