@@ -27,18 +27,42 @@ export type AskOrchestratorDeps = {
   sharedOpenclawSessionId: string;
   callGateway: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
   broadcast: (kind: string, payload: unknown) => void;
+  replyPollIntervalMs?: number;
+  replyTimeoutMs?: number;
 };
 
-function extractReply(raw: unknown): string {
-  if (raw && typeof raw === "object") {
-    const any = raw as any;
-    if (typeof any.reply === "string") return any.reply;
-    if (typeof any.message === "string") return any.message;
-    if (typeof any.text === "string") return any.text;
-    if (any.result && typeof any.result.reply === "string") return any.result.reply;
+type GatewayMessage = {
+  role?: string;
+  content?: Array<{ type?: string; text?: string }>;
+};
+
+function extractAssistantText(messages: GatewayMessage[]): string | null {
+  const last = messages[messages.length - 1];
+  if (!last || last.role !== "assistant") return null;
+  const textPart = last.content?.find((p) => p.type === "text" && typeof p.text === "string");
+  return textPart?.text ?? null;
+}
+
+async function pollForReply(
+  callGateway: AskOrchestratorDeps["callGateway"],
+  sessionKey: string,
+  baselineLength: number,
+  timeoutMs: number,
+  intervalMs: number
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const state = (await callGateway("sessions.get", { key: sessionKey })) as {
+      messages?: GatewayMessage[];
+    };
+    const messages = state?.messages ?? [];
+    if (messages.length >= baselineLength + 2) {
+      const text = extractAssistantText(messages);
+      if (text) return text;
+    }
   }
-  if (typeof raw === "string") return raw;
-  throw new Error(`unexpected gateway response shape: ${JSON.stringify(raw)}`);
+  throw new Error("timeout waiting for OpenClaw reply");
 }
 
 export function createAskOrchestrator(deps: AskOrchestratorDeps) {
@@ -69,12 +93,27 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
 
     let draft: string;
     try {
-      const raw = await deps.callGateway("sessions.send", {
+      // Snapshot current message count so we know when our reply lands.
+      const before = (await deps.callGateway("sessions.get", {
+        key: session.openclawSessionId,
+      })) as { messages?: GatewayMessage[] };
+      const baselineLength = before?.messages?.length ?? 0;
+
+      // Submit the user turn. Gateway is async: returns {runId, status, messageSeq}.
+      await deps.callGateway("sessions.send", {
         key: session.openclawSessionId,
         idempotencyKey: req.msgId,
         message: req.question,
       });
-      draft = extractReply(raw);
+
+      // Poll sessions.get until the assistant reply appears.
+      draft = await pollForReply(
+        deps.callGateway,
+        session.openclawSessionId,
+        baselineLength,
+        deps.replyTimeoutMs ?? 120000,
+        deps.replyPollIntervalMs ?? 500
+      );
     } catch (e) {
       throw new Error(`gateway: ${(e as Error).message}`);
     }
