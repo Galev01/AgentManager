@@ -79,6 +79,8 @@ Field details:
 
 ### Intent definitions (prompt-robust glossary)
 
+**One-sentence definition:** `intent` is the collaboration mode requested or being performed by this turn.
+
 | Intent | When to use |
 |---|---|
 | `decide` | Pick between options or render a verdict. Reply is decisive. |
@@ -90,7 +92,14 @@ Field details:
 | `handoff` | Transfer ownership or package context for another agent. Reply acknowledges receipt. |
 | `report` | Status update, result summary, or completion note. Reply acknowledges or flags. |
 
+**Common confusions (use the first, not the second):**
+- Use `report` (status or result) instead of `review` when you are delivering, not evaluating.
+- Use `plan` (concrete ordered steps) instead of `brainstorm` when you have already converged.
+- Use `decide` (pick one) instead of `brainstorm` when the ask is a verdict, even if framed open-endedly.
+
 ### State definitions
+
+**One-sentence definition:** `state` is the author's asserted lifecycle status for the thread after this turn.
 
 | State | Meaning |
 |---|---|
@@ -104,6 +113,8 @@ Field details:
 
 ### Artifact definitions
 
+**One-sentence definition:** `artifact` is the primary output shape delivered by this turn.
+
 | Artifact | When to tag |
 |---|---|
 | `none` | Conversational turn, no primary deliverable. |
@@ -114,6 +125,11 @@ Field details:
 | `review_notes` | The turn delivers critique against a prior artifact. |
 | `patch` | The turn delivers code / diff / applied changes. |
 | `summary` | The turn delivers a recap, status snapshot, or completion note. |
+
+**Common confusions (use the first, not the second):**
+- Use `decision` (a rendered verdict) instead of `summary` when the turn's primary payload is the verdict itself.
+- Use `review_notes` (critique against criteria) instead of `summary` when the turn evaluates prior work.
+- Use `question` (asks for an answer) instead of `none` when the turn's primary purpose is asking, even if written conversationally.
 
 ### Bridge-derived `author`
 
@@ -143,6 +159,21 @@ When the bridge normalizes an incoming call:
 | `refs` | `[]` |
 
 `intent_confidence` is internal only; not exposed to callers.
+
+### Fallback behavior for invalid or malformed envelope fields
+
+Prompt-produced structured fields will occasionally drift, so the bridge must normalize defensively rather than rejecting a turn wholesale.
+
+| Condition | Bridge behavior |
+|---|---|
+| `intent`, `state`, or `artifact` has an unknown enum value | Coerce to the field's default (`new` / `none` for state/artifact; weak inference for `intent`). Preserve the raw supplied value on the canonical envelope as `_raw.intent` / `_raw.state` / `_raw.artifact`. Emit an internal validation warning. |
+| `refs[]` item is malformed (unknown `kind`, missing required props) | Drop that item; keep the rest. Append the dropped entry to `_raw.refs` for later forensic review. |
+| Duplicate `msg_id` within a session | Overwrite the caller's `msg_id` with a bridge-assigned one; append `parent_msg_id` pointing to the first occurrence if present. |
+| `priority` out of enum | Coerce to `normal`. |
+| `author` supplied by caller | Logged advisory; overwritten by the transport-derived value. |
+| `message` missing or empty | Only this condition fails the turn; bridge returns HTTP 400 `{ error: "message required" }`. |
+
+Core principle: **preserve raw payload, coerce invalid fields in the canonical model, annotate validation warnings internally, do not fail the whole turn unless the core required data is unusable.**
 
 ## MCP API extension
 
@@ -215,6 +246,7 @@ Per-turn rendering:
   2. Artifact tag — outlined, with icon, visible only for high-value shapes: `question`, `decision`, `patch`, `review_notes`, `spec`. Hidden for `summary` / `none` on dense layouts.
   3. Intent chip — neutral/subtle; visually subdued.
 - **Dedupe dimming:** if a turn repeats the prior turn's `intent` AND `state`, render both chips dimmed (opacity ~0.5). A state change always renders at full emphasis and pairs with a thin accent rule above the turn bubble to draw the eye to transitions.
+- **Layout stability:** dim repeated `intent` / `state` chips rather than removing them, so scan rhythm stays steady across a long transcript. Full omission is acceptable only for `artifact: none`.
 - **Refs row** below the message body: clickable chips; first 2–3 visible plus `+N more` chevron. File refs link to file+line in the appropriate surface (editor / dashboard file viewer if present). Session refs link to the other session's detail page.
 - **Author gutter:** small avatar/glyph indicating `author.kind`:
   - `ide` (CC-originated) — IDE-origin glyph keyed on `author.id` (`antigravity` / `vscode` / `cli` / `claude-code` / `unknown`).
@@ -312,11 +344,13 @@ End-to-end smoke: one `openclaw_say` with full envelope from a real IDE round-tr
 
 ## Phase 2 preview (not in this spec)
 
-- Move protocol substrate out of `FIRST_TURN_PREAMBLE` and into gateway-side session-prompt composition.
-- Agent-to-agent routing: `main` asking `reviewer` (or any other agent) using the same envelope, with bridge-mediated dispatch and a dashboard session type that surfaces agent-to-agent traffic alongside CC↔OC.
-- Proactive OC→CC push + `openclaw_check_inbox` MCP tool.
-- Escalation rule editor: user-defined rules on the session detail page beyond the built-in `decide+blocked`.
-- Cross-agent audit view in the dashboard: one thread, multiple participant agents, shared envelope.
+Recommended ordering after phase 1 lands:
+
+1. **Gateway-side session-prompt composition.** Move the universal protocol substrate out of the `FIRST_TURN_PREAMBLE` shim into how the gateway constructs the session's system/developer prompt when it's created under an agent. Drop the fake first-turn injection.
+2. **Escalation-rule editor.** User-defined rules on the session detail page (beyond the built-in `decide+blocked`) — e.g., "escalate on `priority: urgent`", "escalate on `artifact: patch` with `author.kind: agent`".
+3. **Agent-to-agent routing.** `main` asking `reviewer` (or any other gateway agent) using the same envelope, with bridge-mediated dispatch and a dashboard session type that surfaces agent-to-agent traffic alongside CC↔OC.
+4. **Proactive OC→CC push + `openclaw_check_inbox`.** OC-initiated turns queued for CC's next MCP call.
+5. **Cross-agent audit view.** One thread, multiple participant agents, shared envelope rendered in a single unified transcript.
 
 ## Open questions to resolve during implementation
 
