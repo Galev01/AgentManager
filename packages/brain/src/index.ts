@@ -14,6 +14,20 @@ export { createBrainWatcher, type BrainWatcher, type PersonChangeEvent } from ".
 // The agent can include `[[[BRAIN: some fact]]]` anywhere in an outgoing reply.
 // The plugin strips the marker from the sent message and appends the captured
 // text to the People/<phone>.md note's ## Log section.
+export {
+  parseGlobalBrain,
+  serializeGlobalBrain,
+  applyGlobalUpdate,
+} from "./global-schema.js";
+export {
+  createGlobalBrainClient,
+  type GlobalBrainClient,
+} from "./global.js";
+export {
+  renderInjectionPreview,
+} from "./preview.js";
+export type { GlobalBrainChangeEvent } from "./watcher.js";
+
 export const BRAIN_MARKER_REGEX = /\[\[\[BRAIN:\s*([\s\S]*?)\]\]\]/g;
 
 export function extractBrainMarkers(text: string): { cleaned: string; notes: string[] } {
