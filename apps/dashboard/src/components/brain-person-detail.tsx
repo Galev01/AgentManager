@@ -6,6 +6,7 @@ import { useBridgeEvents } from "@/lib/ws-client";
 import type { BrainPerson, BrainPersonStatus, BrainPersonUpdate, ConversationEvent, GlobalBrain } from "@openclaw-manager/types";
 import { CollapsibleCard } from "./brain-collapsible-card";
 import { InjectionPreview } from "./brain-injection-preview";
+import { LogLineWithPromote } from "./brain-log-line";
 
 type EditableLines = string; // newline-separated bullets
 
@@ -429,12 +430,33 @@ export function BrainPersonDetail({ initial }: { initial: BrainPerson }) {
           </button>
         </div>
         <ul className="mt-4 space-y-1.5 text-sm text-zinc-200">
-          {logReversed.length === 0 && <li className="text-zinc-500 text-xs">No log entries yet.</li>}
-          {logReversed.map((entry, i) => (
-            <li key={i} className="font-mono text-xs text-zinc-300 leading-relaxed">
-              {entry}
-            </li>
-          ))}
+          {person.log.length === 0 && <li className="text-zinc-500 text-xs">No log entries yet.</li>}
+          {logReversed.map((entry, displayIdx) => {
+            const originalIdx = person.log.length - 1 - displayIdx;
+            return (
+              <LogLineWithPromote
+                key={`${originalIdx}:${entry}`}
+                line={entry}
+                onPromote={async (target) => {
+                  const res = await fetch(`/api/brain/people/${encodeURIComponent(person.phone)}/log/${originalIdx}/promote`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ target }),
+                  });
+                  if (!res.ok) {
+                    const err = (await res.json().catch(() => ({}))).error || "Failed";
+                    throw new Error(err);
+                  }
+                  const data = await res.json();
+                  if (data.person) {
+                    setPerson(data.person);
+                    if (!dirty) setEdit(toEditor(data.person));
+                  }
+                  return { unchanged: !!data.unchanged };
+                }}
+              />
+            );
+          })}
         </ul>
       </CollapsibleCard>
 
