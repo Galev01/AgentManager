@@ -9,7 +9,11 @@ import {
   setSessionMode,
   touchSession,
   resurrectSession,
+  setOpenclawSessionId,
+  deriveOpenclawSessionId,
 } from "./claude-code-sessions.js";
+
+const LEGACY_SHARED_OPENCLAW_SESSION_ID = "oc-shared-claude-code";
 import {
   appendTranscript,
   transcriptPathFor,
@@ -103,12 +107,21 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
   }
 
   async function ask(req: ClaudeCodeAskRequest): Promise<ClaudeCodeAskResponse> {
-    const session = await getOrCreateSession(deps.sessionsPath, {
+    let session = await getOrCreateSession(deps.sessionsPath, {
       ide: req.ide,
       workspace: req.workspace,
     });
     if (session.state === "ended") {
       await resurrectSession(deps.sessionsPath, session.id);
+    }
+    // Migrate legacy sessions that still reference the old shared OpenClaw
+    // session id into a per-session id under the current agent.
+    if (session.openclawSessionId === LEGACY_SHARED_OPENCLAW_SESSION_ID) {
+      session = await setOpenclawSessionId(
+        deps.sessionsPath,
+        session.id,
+        deriveOpenclawSessionId(session.id)
+      );
     }
     deps.broadcast("claude_code_session_upserted", { id: session.id });
 
@@ -126,10 +139,17 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
     let draft: string;
     try {
       // Snapshot current message count so we know when our reply lands.
-      const before = (await deps.callGateway("sessions.get", {
-        key: gatewayKey,
-      })) as { messages?: GatewayMessage[] };
-      const baselineLength = before?.messages?.length ?? 0;
+      // If the OpenClaw session doesn't exist yet (brand-new key or
+      // post-migration), treat baseline as 0 — sessions.send will create it.
+      let baselineLength = 0;
+      try {
+        const before = (await deps.callGateway("sessions.get", {
+          key: gatewayKey,
+        })) as { messages?: GatewayMessage[] };
+        baselineLength = before?.messages?.length ?? 0;
+      } catch (e) {
+        if (!/not found/i.test((e as Error).message)) throw e;
+      }
 
       // On the first turn of a new OpenClaw session, prepend persistent
       // system instructions. Keep the transcript's "ask" event showing the

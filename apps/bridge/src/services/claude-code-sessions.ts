@@ -112,3 +112,7 @@ export async function touchSession(p: string, id: string) {
     messageCount: s.messageCount + 1,
   }));
 }
+
+export async function setOpenclawSessionId(p: string, id: string, openclawSessionId: string) {
+  return updateSession(p, id, (s) => ({ ...s, openclawSessionId }));
+}
