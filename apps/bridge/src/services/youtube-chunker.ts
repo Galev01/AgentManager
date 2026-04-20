@@ -67,8 +67,14 @@ export function chunkTranscript(
         overlap += segs[indexes[j]!]!.text.length;
         j--;
       }
-      const rewind = indexes.length - 1 - j;
-      if (rewind > 0) i -= rewind;
+      // j+1 is the first segment index to reuse in the next chunk (the overlap window)
+      // Clamp so we always advance: next chunk start must be > indexes[0]
+      const overlapStart = indexes[j + 1];
+      const minNext = indexes[0]! + 1;
+      if (overlapStart !== undefined && overlapStart > minNext) {
+        i = overlapStart;
+      }
+      // If overlapStart <= minNext, keep i as-is (already past all consumed segments)
     }
   }
 
