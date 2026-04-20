@@ -70,7 +70,8 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
     let draft: string;
     try {
       const raw = await deps.callGateway("chat.send", {
-        session_id: session.openclawSessionId,
+        sessionKey: session.openclawSessionId,
+        idempotencyKey: req.msgId,
         message: req.question,
       });
       draft = extractReply(raw);
