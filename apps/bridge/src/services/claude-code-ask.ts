@@ -17,11 +17,18 @@ const LEGACY_SHARED_OPENCLAW_SESSION_ID = "oc-shared-claude-code";
 import {
   appendTranscript,
   transcriptPathFor,
+  readTranscript,
 } from "./claude-code-transcript.js";
 import {
   createPending,
   awaitPending,
 } from "./claude-code-pending.js";
+import {
+  normalizeEnvelope,
+  systemEnvelope,
+  type AuthorContext,
+} from "./envelope.js";
+import type { CCEnvelope } from "@openclaw-manager/types";
 
 export type AskOrchestratorDeps = {
   sessionsPath: string;
@@ -162,8 +169,6 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
     if (session.state === "ended") {
       await resurrectSession(deps.sessionsPath, session.id);
     }
-    // Migrate legacy sessions that still reference the old shared OpenClaw
-    // session id into a per-session id under the current agent.
     if (session.openclawSessionId === LEGACY_SHARED_OPENCLAW_SESSION_ID) {
       session = await setOpenclawSessionId(
         deps.sessionsPath,
@@ -173,38 +178,63 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
     }
     deps.broadcast("claude_code_session_upserted", { id: session.id });
 
-    const now = new Date().toISOString();
+    // Load existing msgIds to detect duplicates.
+    const transcriptPath = transcriptPathFor(deps.transcriptsDir, session.id);
+    const prior = await readTranscript(transcriptPath);
+    const existingMsgIds = new Set<string>();
+    for (const ev of prior) if (ev.msgId) existingMsgIds.add(ev.msgId);
+
+    // Normalize the asking turn's envelope. Author = ide-kind (the IDE the
+    // MCP call came from). Root turn iff session has no prior asks.
+    const midThread = prior.some((e) => e.kind === "ask");
+    const askAuthor: AuthorContext = {
+      kind: "ide",
+      id: req.ide && req.ide.length > 0 ? req.ide : "unknown",
+    };
+    const askEnvelope = normalizeEnvelope(
+      {
+        message: req.question,
+        msgId: req.msgId,
+        parentMsgId: req.parentMsgId,
+        intent: req.intent,
+        state: req.state,
+        artifact: req.artifact,
+        priority: req.priority,
+        refs: req.refs,
+        // pass context for legacy {file,selection,stack} mapping
+        ...(req.context ? { context: req.context } : {}),
+      } as never,
+      {
+        authorContext: askAuthor,
+        midThread,
+        existingMsgIds,
+        parentMsgIdFallback: null,
+      }
+    );
+
     await append(session.id, {
-      t: now,
+      t: new Date().toISOString(),
       kind: "ask",
-      msgId: req.msgId,
+      msgId: askEnvelope.msgId,
       question: req.question,
       context: req.context,
+      envelope: askEnvelope,
     });
 
     const gatewayKey = buildGatewayKey(deps.openclawAgentId, session.openclawSessionId);
 
     let draft: string;
     try {
-      // Ensure the OpenClaw session exists (create-on-miss, verified by
-      // re-probing state rather than matching error substrings). Returns
-      // the baseline message count so we know when our reply lands.
       const baselineLength = await ensureSessionExists(deps.callGateway, gatewayKey);
-
-      // On the first turn of a new OpenClaw session, prepend persistent
-      // system instructions. Keep the transcript's "ask" event showing the
-      // original question — only the gateway sees the wrapped version.
       const messageToGateway =
         baselineLength === 0 ? wrapFirstMessage(req.question) : req.question;
 
-      // Submit the user turn. Gateway is async: returns {runId, status, messageSeq}.
       await deps.callGateway("sessions.send", {
         key: gatewayKey,
-        idempotencyKey: req.msgId,
+        idempotencyKey: askEnvelope.msgId,
         message: messageToGateway,
       });
 
-      // Poll sessions.get until the assistant reply appears.
       draft = await pollForReply(
         deps.callGateway,
         gatewayKey,
@@ -216,63 +246,108 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
       throw new Error(`gateway: ${(e as Error).message}`);
     }
 
+    // Construct the draft's envelope. Author = gateway agent composing the reply.
+    const draftEnvelope: CCEnvelope = normalizeEnvelope(
+      {
+        message: draft,
+        parentMsgId: askEnvelope.msgId,
+        state: "review_ready",
+        intent: askEnvelope.intent,
+        artifact: askEnvelope.artifact === "question" ? "decision" : "none",
+      },
+      {
+        authorContext: { kind: "agent", id: deps.openclawAgentId },
+        midThread: true,
+        parentMsgIdFallback: askEnvelope.msgId,
+      }
+    );
+
     await append(session.id, {
       t: new Date().toISOString(),
       kind: "draft",
-      msgId: req.msgId,
+      msgId: askEnvelope.msgId,
       draft,
+      envelope: draftEnvelope,
     });
 
     const latest = (await listSessions(deps.sessionsPath)).find((s) => s.id === session.id)!;
     if (latest.mode === "agent") {
+      const answerEnvelope: CCEnvelope = {
+        ...draftEnvelope,
+        msgId: draftEnvelope.msgId, // same draft id
+        state: "done",
+      };
       await append(session.id, {
         t: new Date().toISOString(),
         kind: "answer",
-        msgId: req.msgId,
+        msgId: askEnvelope.msgId,
         answer: draft,
         source: "agent",
+        envelope: answerEnvelope,
       });
       await touchSession(deps.sessionsPath, session.id);
-      return { answer: draft, source: "agent" };
+      return { answer: draft, source: "agent", envelope: answerEnvelope };
     }
 
-    // Manual mode — create pending and hold
+    // Manual mode — create pending with both envelopes and hold.
     const pending = await createPending(deps.pendingPath, {
       sessionId: session.id,
-      msgId: req.msgId,
+      msgId: askEnvelope.msgId,
       question: req.question,
       draft,
+      envelope: askEnvelope,
+      draftEnvelope,
     });
     deps.broadcast("claude_code_pending_upserted", pending);
 
     try {
       const resolved = await awaitPending(pending.id, deps.pendingTimeoutMs);
+      const operatorEnvelope: CCEnvelope = {
+        ...draftEnvelope,
+        msgId: draftEnvelope.msgId,
+        author: { kind: "operator", id: "default" },
+        state: "done",
+      };
       await append(session.id, {
         t: new Date().toISOString(),
         kind: "answer",
-        msgId: req.msgId,
+        msgId: askEnvelope.msgId,
         answer: resolved.answer,
         source: resolved.source,
         action: resolved.action,
+        envelope: operatorEnvelope,
       });
       await touchSession(deps.sessionsPath, session.id);
       deps.broadcast("claude_code_pending_resolved", { id: pending.id });
-      return resolved;
+      return { ...resolved, envelope: operatorEnvelope };
     } catch (err) {
       const message = (err as Error).message;
       if (/discarded/i.test(message)) {
+        const discardedEnvelope = systemEnvelope(
+          "operator discarded reply",
+          "blocked",
+          "bridge",
+          askEnvelope.msgId
+        );
         await append(session.id, {
           t: new Date().toISOString(),
           kind: "discarded",
-          msgId: req.msgId,
+          msgId: askEnvelope.msgId,
+          envelope: discardedEnvelope,
         });
-        // Flip session to manual (idempotent if already)
         await setSessionMode(deps.sessionsPath, session.id, "manual");
       } else if (/timeout/i.test(message)) {
+        const timeoutEnvelope = systemEnvelope(
+          "pending draft expired",
+          "timeout",
+          "bridge",
+          askEnvelope.msgId
+        );
         await append(session.id, {
           t: new Date().toISOString(),
           kind: "timeout",
-          msgId: req.msgId,
+          msgId: askEnvelope.msgId,
+          envelope: timeoutEnvelope,
         });
       }
       deps.broadcast("claude_code_pending_resolved", { id: pending.id });
