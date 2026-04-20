@@ -24,17 +24,21 @@ Turn `/brain/people/:phone` into a consolidated operational dossier, add a first
 |---|---|---|
 | Per-person notes | `People/<phone>.md` (existing) | Obsidian vault markdown |
 | Global brain content | `Brain/WhatsApp.md` (new) | Obsidian vault markdown |
-| Kill switch + silent mode + pending drafts + future-version flag | `<config-dir>/brain-ops.json` (new) | JSON |
-| Do-not-say blocked log | `<config-dir>/brain-blocked.log` (new) | append-only JSONL |
+| Kill switch + silent mode + pending drafts + future-version flag | `${MANAGEMENT_DIR}/brain/ops.json` (new) | JSON |
+| Do-not-say blocked log | `${MANAGEMENT_DIR}/brain/blocked.log` (new) | append-only JSONL |
 | Last-message snippet + unread count | derived from existing conversation store | read-through API |
+
+Config wiring: extend `apps/bridge/src/config.ts` with `config.brainDir = path.join(managementDir, "brain")`, `config.brainOpsPath = path.join(brainDir, "ops.json")`, `config.brainBlockedLogPath = path.join(brainDir, "blocked.log")` — mirrors the existing `youtubeDir` / `claudeCodeDir` convention. Directory is created on first write.
 
 ### Precedence (safety rails)
 
-1. **Kill switch ON** — drafts allowed, send blocked globally.
-2. **Per-person silent mode ON** — drafts allowed, send blocked for that phone.
-3. **Do-not-say match** — draft suppressed, block event + log entry emitted.
+Evaluated at the send boundary, in order. First match wins, and the event emitted reflects the winning rule:
 
-Checks happen at the send step, not the generate step. In-flight drafts at the moment a switch flips complete their draft; the send boundary is where suppression is enforced.
+1. **Kill switch ON** — draft parked in `pendingDrafts[phone]` with `source: "kill"`. Event: `brain_kill_switch_suppressed`. Silent-mode state is not checked.
+2. **Per-person silent mode ON** — draft parked in `pendingDrafts[phone]` with `source: "silent"`. Event: `brain_agent_draft`.
+3. **Do-not-say match** — draft is **not** added to `pendingDrafts`. Event: `brain_do_not_say_blocked` + append to `brain/blocked.log`.
+
+In-flight drafts at the moment a switch flips complete their draft; the send boundary is where suppression is enforced. A draft is never emitted as both `brain_kill_switch_suppressed` and `brain_agent_draft`.
 
 ### Package layout
 
@@ -80,7 +84,7 @@ One paragraph. Hebrew-first, terse, no emojis, never corporate voice.
 
 Parser is a line-by-line section splitter mirroring `packages/brain/src/people.ts`. Section order is canonical on write; read tolerates any order. Missing sections → empty arrays / empty strings, not errors; the note is rewritten into canonical form on the next save.
 
-### `brain-ops.json` (new)
+### `ops.json` (new, under `${MANAGEMENT_DIR}/brain/`)
 
 ```json
 {
@@ -102,7 +106,9 @@ Parser is a line-by-line section splitter mirroring `packages/brain/src/people.t
   "pendingDrafts": {
     "972501234567": [
       {
-        "messageId": "wa-inbound-abc",
+        "draftId": "drf_01HX3Z7A9K0QWERTY",
+        "inboundMessageId": "wa-inbound-abc",
+        "conversationKey": "972501234567@s.whatsapp.net",
         "draft": "שלום! אחזור אליך…",
         "generatedAt": "2026-04-21T12:05:00Z",
         "source": "silent"
@@ -115,15 +121,18 @@ Parser is a line-by-line section splitter mirroring `packages/brain/src/people.t
 - `version = 1` at v1. Missing file → all defaults, empty `pendingDrafts`.
 - Atomic write: temp-file + rename.
 - `pendingDrafts[phone]` capped at 50 entries (FIFO drop).
-- `source` is `"silent" | "kill"` — lets the UI tell why a draft exists.
+- `draftId` is a stable server-minted identifier (e.g. `drf_` + monotonic-ish id / ULID). Approval routes key on `draftId`, not on `inboundMessageId`, because inbound IDs can be absent, duplicated across providers, or non-unique for bursts. `inboundMessageId` is kept for audit + UI context.
+- `conversationKey` captures the send target at generate time (the same key used by `/conversations/:conversationKey` + the outbound messaging path). Approving a draft sends via that key; no phone re-normalization at send time.
+- `source` is `"silent" | "kill"` — lets the UI tell why a draft exists. Do-not-say blocks are **not** added to `pendingDrafts` in v1; they appear only in `brain/blocked.log` + `brain_do_not_say_blocked` event + dashboard banner.
+- **Inbound while a draft is already pending** for the same phone: a new draft is **generated and appended** as its own entry. No replacement, no suppression of generation; FIFO cap trims the oldest if the 50-per-phone ceiling is reached.
 
-### `brain-blocked.log` (new, append-only JSONL)
+### `blocked.log` (new, under `${MANAGEMENT_DIR}/brain/`, append-only JSONL)
 
 ```json
-{"ts":"2026-04-21T12:05:00Z","phone":"972501234567","messageId":"wa-inbound-abc","draft":"…lowest price…","phrase":"lowest price"}
+{"ts":"2026-04-21T12:05:00Z","phone":"972501234567","conversationKey":"972501234567@s.whatsapp.net","inboundMessageId":"wa-inbound-abc","draft":"…lowest price…","phrase":"lowest price"}
 ```
 
-One line per block. Never trimmed in v1; Gal can rotate manually. Dashboard reads the tail (last 100 lines) for `DoNotSayBlockedList`.
+One `BlockedEntry` per line. Never trimmed in v1; Gal can rotate manually. Dashboard reads the tail (last 100 lines) for `DoNotSayBlockedList`.
 
 ### Type additions (`@openclaw-manager/types`)
 
@@ -139,25 +148,43 @@ export interface GlobalBrain {
 }
 export type GlobalBrainUpdate = Partial<Omit<GlobalBrain, "parseWarning">>;
 
+export interface PendingDraft {
+  draftId: string;
+  inboundMessageId: string | null;
+  conversationKey: string;
+  draft: string;
+  generatedAt: string;
+  source: "silent" | "kill";
+}
+
 export interface BrainOpsConfig {
   version: 1;
   killSwitch: { enabled: boolean; reason: string | null; updatedAt: string | null };
   silentMode: { byPhone: Record<string, { enabled: boolean; reason?: string; updatedAt: string }> };
-  pendingDrafts: Record<string, Array<{ messageId: string; draft: string; generatedAt: string; source: "silent" | "kill" }>>;
+  pendingDrafts: Record<string, PendingDraft[]>;
   futureVersion?: true;
+}
+
+export interface BlockedEntry {
+  ts: string;
+  phone: string;
+  conversationKey: string;
+  inboundMessageId: string | null;
+  draft: string;
+  phrase: string;
 }
 
 export interface BrainInjectionPreview {
   system: string;
   breakdown: Array<{
-    source: "global" | "person" | "curses" | "ops";
+    source: "global" | "person" | "curses";
     label: string;
     text: string;
   }>;
 }
 ```
 
-Extend `BrainPersonSummary` with `unreadCount?: number`, `lastMessageSnippet?: string | null`, `lastMessageAt?: string | null`, `silentMode?: boolean` (derived from `brain-ops.json` at response-assembly time).
+Extend `BrainPersonSummary` with `unreadCount?: number`, `lastMessageSnippet?: string | null`, `lastMessageAt?: string | null`, `silentMode?: boolean` (derived from `brain/ops.json` at response-assembly time).
 
 Extend `BridgeEvent` with `brain_agent_changed`, `brain_ops_changed`, `brain_do_not_say_blocked`, `brain_agent_draft`, `brain_kill_switch_suppressed`.
 
@@ -168,18 +195,20 @@ Extend `BridgeEvent` with `brain_agent_changed`, `brain_ops_changed`, `brain_do_
 | GET | `/brain/agent` | Load `GlobalBrain` |
 | PATCH | `/brain/agent` | Partial update, rewrites `Brain/WhatsApp.md` |
 | GET | `/brain/agent/preview` | Global-only `BrainInjectionPreview` |
-| GET | `/brain/agent/blocked` | Tail of blocked log (last 100) |
+| GET | `/brain/agent/blocked` | `{ items: BlockedEntry[] }` (newest first, last 100) |
 | GET | `/brain/people/:phone/preview` | Merged `BrainInjectionPreview` |
 | POST | `/brain/people/:phone/log/:index/promote` | Body: `{ target: "facts" \| "preferences" \| "openThreads" }` |
 | GET | `/brain/ops` | Full `BrainOpsConfig` |
 | PUT | `/brain/ops/kill` | Body: `{ enabled: boolean, reason?: string }` |
 | PUT | `/brain/ops/silent/:phone` | Body: `{ enabled: boolean, reason?: string }` |
-| GET | `/brain/ops/pending` | All `pendingDrafts` (WS reconnect hydration) |
-| POST | `/brain/ops/pending/:phone/:messageId/send` | Promote draft → actually send |
-| POST | `/brain/ops/pending/:phone/:messageId/discard` | Drop draft |
-| PATCH | `/brain/ops/pending/:phone/:messageId` | Body: `{ draft: string }` — edit before send |
+| GET | `/brain/ops/pending` | `{ items: PendingDraft[] }` flat list across phones (WS reconnect hydration) |
+| POST | `/brain/ops/pending/:draftId/send` | Promote draft → send via its stored `conversationKey`; remove from `pendingDrafts` |
+| POST | `/brain/ops/pending/:draftId/discard` | Drop draft |
+| PATCH | `/brain/ops/pending/:draftId` | Body: `{ draft: string }` — edit draft text in place (no send) |
 
-All endpoints emit `brain_ops_changed` on mutation; `/brain/agent` mutations also emit `brain_agent_changed`.
+**Event semantics.** Every mutation of `ops.json` — `PUT /brain/ops/kill`, `PUT /brain/ops/silent/:phone`, draft send / discard / edit — emits a single `brain_ops_changed` event. `/brain/agent` mutations also emit `brain_agent_changed`. The generate-time events `brain_agent_draft` (on a draft being added) and `brain_kill_switch_suppressed` / `brain_do_not_say_blocked` (on suppression) are independent of `brain_ops_changed` and fire even when the ops file is not being mutated by the dashboard. No finer-grained per-action events in v1.
+
+**Send source-of-truth.** Approving a pending draft calls the existing outbound messaging path with `(conversationKey, draft)` stored on the `PendingDraft`. No re-lookup of the person note; no channel guessing. If the outbound path fails the draft stays in `pendingDrafts` and the error is returned to the caller (UI shows banner). If it succeeds the draft is removed atomically.
 
 ## UI
 
@@ -230,7 +259,7 @@ Copy, not move. Log line stays as audit trail. If target already contains the ex
 
 ### H) Per-person injection preview
 
-Render order: `global:persona` → `global:hardRules` → `global:globalFacts` → `global:toneStyle` → `global:doNotSay` → `global:defaultGoals` → `person:summary` → `person:facts` → `person:preferences` → `person:openThreads` → `curses:rate` (if cursing on). No live re-render — manual refresh button to avoid chatty polling. The `"ops"` breakdown source is reserved for future operational overlays; in v1 no chunk is emitted with `source: "ops"` (kill switch and silent mode are send-time controls, not prompt content).
+Render order: `global:persona` → `global:hardRules` → `global:globalFacts` → `global:toneStyle` → `global:doNotSay` → `global:defaultGoals` → `person:summary` → `person:facts` → `person:preferences` → `person:openThreads` → `curses:rate` (if cursing on). No live re-render — manual refresh button to avoid chatty polling. Kill switch and silent mode are send-time controls, not prompt content, and do not appear in the breakdown; the `BrainInjectionPreview.breakdown.source` union is therefore `"global" | "person" | "curses"` in v1 (no `"ops"`).
 
 ### J) Global injection preview
 
@@ -238,11 +267,11 @@ Same renderer as H, with only the `global:*` chunks.
 
 ### C) Per-person silent mode
 
-Toggle persists to `brain-ops.json.silentMode.byPhone[phone]`. When on, outgoing sends for that phone are suppressed; drafts stored in `pendingDrafts[phone]` and emitted via `brain_agent_draft`. Approval UI: `PendingDraftsPanel` inline on conversation + dossier banner. v1 actions: **Send**, **Discard**, **Edit** (textarea in-place then Send). No batch approvals.
+Toggle persists to `ops.json.silentMode.byPhone[phone]`. When on, outgoing sends for that phone are suppressed; drafts stored in `pendingDrafts[phone]` and emitted via `brain_agent_draft`. Approval UI: `PendingDraftsPanel` inline on conversation + dossier banner. v1 actions: **Send**, **Discard**, **Edit** (textarea in-place; Edit is a local mutation via `PATCH /brain/ops/pending/:draftId`, does not send). Approval routes are keyed on `draftId`. No batch approvals.
 
 ### I) Global kill switch
 
-Banner app-wide when on. Primary control on `/brain/agent` header. Outgoing sends suppressed; drafts go into `pendingDrafts[phone]` with `source: "kill"`. Event `brain_kill_switch_suppressed` fires per suppressed send.
+Banner app-wide when on. Primary control on `/brain/agent` header. Outgoing sends suppressed; drafts go into `pendingDrafts[phone]` with `source: "kill"`. Event `brain_kill_switch_suppressed` fires per suppressed send. Kill takes precedence over silent: when kill is ON the event is `brain_kill_switch_suppressed` regardless of per-phone silent state.
 
 ### L) Do-not-say post-filter
 
@@ -252,13 +281,13 @@ Banner app-wide when on. Primary control on `/brain/agent` header. Outgoing send
 - First match wins; returns `{ ok: false, phrase }`. No match → `{ ok: true }`.
 - Empty phrase list or empty/whitespace text → `{ ok: true }` with no work.
 
-On block: suppress send, emit `brain_do_not_say_blocked`, append to `brain-blocked.log` (fsync not required; append + flush). In-memory ring buffer (100 entries) for fast dashboard reads.
+On block: suppress send, emit `brain_do_not_say_blocked`, append `BlockedEntry` to `brain/blocked.log` (fsync not required; append + flush). In-memory ring buffer (100 entries) for fast dashboard reads. Blocked drafts are **not** added to `pendingDrafts` — v1 treats a do-not-say block as a hard rejection; Gal inspects the blocked log and, if needed, rewords and re-triggers manually.
 
 ## Error handling + edge cases
 
 - **Vault missing** (`isBrainEnabled()` false): `/brain/agent` and `/brain/people/*` render a dedicated empty state naming the `BRAIN_VAULT_PATH` env var. `/brain/ops/*` and `/brain/agent/blocked` remain available.
 - **Malformed `Brain/WhatsApp.md`**: parser returns best-effort `GlobalBrain` + `parseWarning`. UI banner mirrors existing person-note parseWarning. Save rewrites canonical form.
-- **Malformed `brain-ops.json`**: unparseable/corrupt → back up to `brain-ops.json.broken-<ts>` + start from defaults. Valid JSON with unknown future `version` → fail-closed: load defaults, set `killSwitch.enabled = true`, set `futureVersion: true`, emit a dashboard banner "Ops file schema is from a newer version; kill switch forced on." Do **not** auto-downgrade semantics.
+- **Malformed `brain/ops.json`**: unparseable/corrupt → back up to `brain/ops.json.broken-<ts>` + start from defaults. Valid JSON with unknown future `version` → fail-closed: load defaults, set `killSwitch.enabled = true`, set `futureVersion: true`, emit a dashboard banner "Ops file schema is from a newer version; kill switch forced on." Do **not** auto-downgrade semantics.
 - **Ops write fails**: 500 with error string; UI banner; in-memory state preserved.
 - **Promote on stale index**: 409 with refresh-and-retry hint.
 - **Concurrent dashboard edits**: existing "note changed on disk" banner pattern in `brain-person-detail.tsx`, extended to the new sections.
@@ -299,6 +328,5 @@ On block: suppress send, emit `brain_do_not_say_blocked`, append to `brain-block
 
 ## Open items for the implementation plan
 
-- Decide canonical paths for `brain-ops.json` and `brain-blocked.log` under the existing `<config-dir>` convention used by the agents config.
-- Confirm the exact outgoing-send boundary in `apps/bridge` where kill / silent / do-not-say checks are inserted.
-- Decide whether `pendingDrafts` editing uses an in-place textarea (cheap) or a modal (rejected as heavier). Spec assumes in-place textarea.
+- Confirm the exact outgoing-send boundary in `apps/bridge` where kill / silent / do-not-say checks are inserted (likely whatever function currently posts an outbound WhatsApp message — plan step 1 locates it).
+- `draftId` minter: ULID vs nanoid vs `crypto.randomUUID()` + `drf_` prefix — spec assumes ULID for monotonic-ish order; fine to swap at implementation time.
