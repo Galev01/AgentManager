@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   ClaudeCodeSession,
@@ -17,14 +17,68 @@ import {
 } from "./ui";
 import { ClaudeCodePendingCard } from "./claude-code-pending-card";
 
+type Intel = {
+  openclawModel: string | null;
+  openclawTokens: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheCreate: number;
+  };
+};
+
+function truncate(s: string, n: number): string {
+  const trimmed = s.replace(/\s+/g, " ").trim();
+  if (trimmed.length <= n) return trimmed;
+  return `${trimmed.slice(0, n - 1)}…`;
+}
+
+function deriveTitle(events: ClaudeCodeTranscriptEvent[], fallback: string): string {
+  const firstAsk = events.find((e) => e.kind === "ask" && typeof e.question === "string");
+  if (firstAsk?.question) return truncate(firstAsk.question, 80);
+  return fallback;
+}
+
+function deriveSummary(events: ClaudeCodeTranscriptEvent[]): string {
+  const asks = events.filter((e) => e.kind === "ask").length;
+  const answers = events.filter((e) => e.kind === "answer").length;
+  const firstAsk = events.find((e) => e.kind === "ask" && typeof e.question === "string");
+  const lastAnswer = [...events].reverse().find(
+    (e) => e.kind === "answer" && typeof e.answer === "string",
+  );
+
+  const parts: string[] = [];
+  if (firstAsk?.question) {
+    parts.push(`Started: "${truncate(firstAsk.question, 100)}"`);
+  }
+  parts.push(`${asks} turn${asks === 1 ? "" : "s"} · ${answers} repl${answers === 1 ? "y" : "ies"}`);
+  if (lastAnswer?.answer) {
+    parts.push(`Latest reply: "${truncate(lastAnswer.answer, 100)}"`);
+  }
+  return parts.join(". ");
+}
+
+function formatTokens(n: number): string {
+  if (n === 0) return "—";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return n.toLocaleString();
+}
+
+// Claude Code runs on this assistant's model. MCP doesn't report it to the bridge,
+// so we surface the current assistant model (known from the Claude Code runtime).
+const CLAUDE_CODE_MODEL = "claude-opus-4-7";
+
 export function ClaudeCodeSessionDetail({
   session,
   initialEvents,
   initialPending,
+  intel,
 }: {
   session: ClaudeCodeSession;
   initialEvents: ClaudeCodeTranscriptEvent[];
   initialPending: ClaudeCodePendingItem[];
+  intel: Intel;
 }) {
   const router = useRouter();
   const [events, setEvents] = useState(initialEvents);
@@ -78,10 +132,55 @@ export function ClaudeCodeSessionDetail({
     router.refresh();
   }
 
+  const title = useMemo(() => deriveTitle(events, session.displayName), [events, session.displayName]);
+  const summary = useMemo(() => deriveSummary(events), [events]);
+
+  const totalOpenclawTokens =
+    intel.openclawTokens.input +
+    intel.openclawTokens.output +
+    intel.openclawTokens.cacheRead +
+    intel.openclawTokens.cacheCreate;
+
+  const intelItems = [
+    {
+      label: "OpenClaw model",
+      value: intel.openclawModel ? (
+        <code>{intel.openclawModel}</code>
+      ) : (
+        <span style={{ color: "var(--text-faint)" }}>unknown</span>
+      ),
+    },
+    {
+      label: "OpenClaw tokens",
+      value:
+        totalOpenclawTokens === 0 ? (
+          <span style={{ color: "var(--text-faint)" }}>—</span>
+        ) : (
+          <span className="mono" style={{ fontSize: 11.5 }}>
+            in {formatTokens(intel.openclawTokens.input)} · out{" "}
+            {formatTokens(intel.openclawTokens.output)}
+            {intel.openclawTokens.cacheRead > 0 &&
+              ` · cache ${formatTokens(intel.openclawTokens.cacheRead)}`}
+          </span>
+        ),
+    },
+    {
+      label: "Claude Code",
+      value: <code>{CLAUDE_CODE_MODEL}</code>,
+    },
+    {
+      label: "CC tokens",
+      value: <span style={{ color: "var(--text-faint)" }}>not reported</span>,
+    },
+  ];
+
   const sessionKV = [
     { label: "id", value: <code>{session.id}</code> },
     { label: "ide", value: session.ide ?? "—" },
-    { label: "workspace", value: <code style={{ wordBreak: "break-all" }}>{session.workspace}</code> },
+    {
+      label: "workspace",
+      value: <code style={{ wordBreak: "break-all" }}>{session.workspace}</code>,
+    },
     { label: "openclaw", value: <code>{session.openclawSessionId}</code> },
     { label: "created", value: new Date(session.createdAt).toLocaleString() },
   ];
@@ -89,10 +188,13 @@ export function ClaudeCodeSessionDetail({
   return (
     <>
       <PageHeader
-        title={session.displayName}
+        title={title}
         sub={
           <>
-            Claude Code ·{" "}
+            <span className="mono" style={{ color: "var(--text-faint)", fontSize: 11.5 }}>
+              {session.displayName}
+            </span>{" "}
+            ·{" "}
             <Badge kind={session.state === "active" ? "acc" : "mute"}>{session.state}</Badge>{" "}
             · <span className="mono">{session.messageCount} msgs</span>
           </>
@@ -107,7 +209,14 @@ export function ClaudeCodeSessionDetail({
       />
 
       <div className="detail-grid">
-        <Card style={{ display: "flex", flexDirection: "column", minHeight: 0, maxHeight: "calc(100vh - 220px)" }}>
+        <Card
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+            maxHeight: "calc(100vh - 220px)",
+          }}
+        >
           <SectionTitle right={<span className="mono">{events.length} events</span>}>
             Transcript
           </SectionTitle>
@@ -125,6 +234,24 @@ export function ClaudeCodeSessionDetail({
         </Card>
 
         <aside style={{ display: "flex", flexDirection: "column", gap: "var(--row-gap)" }}>
+          <Card>
+            <SectionTitle>Summary</SectionTitle>
+            <div style={{ padding: 14, fontSize: 12.5, color: "var(--text-dim)", lineHeight: 1.55 }}>
+              {events.length === 0 ? (
+                <span style={{ color: "var(--text-faint)" }}>No activity yet.</span>
+              ) : (
+                summary
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle>Intel</SectionTitle>
+            <div style={{ padding: 14 }}>
+              <KV items={intelItems} />
+            </div>
+          </Card>
+
           <Card>
             <SectionTitle>Mode</SectionTitle>
             <div style={{ padding: 14 }}>
