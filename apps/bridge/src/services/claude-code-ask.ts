@@ -43,6 +43,30 @@ function extractAssistantText(messages: GatewayMessage[]): string | null {
   return textPart?.text ?? null;
 }
 
+const FIRST_TURN_PREAMBLE = [
+  "[System instructions to OpenClaw — this is the first turn of a new session, so take these as persistent guidance for the rest of the conversation:]",
+  "",
+  "- The interlocutor is Claude Code (an AI coding assistant), not Gal. Gal is observing from the dashboard.",
+  "- Always reply in English. No Hebrew openers, no warm-up pleasantries.",
+  "- Be direct and technical. Lead with the answer or the specific question you need to ask back.",
+  "- When Claude Code presents options or a plan, commit to a concrete recommendation with brief reasoning. Do not punt back to Gal unless the decision genuinely requires his authorization (production changes, money, irreversible actions).",
+  "- To signal task completion, end your reply with `[[OPENCLAW_DONE]]` on its own line.",
+  "",
+  "[Claude Code's first message follows:]",
+  "",
+].join("\n");
+
+function wrapFirstMessage(message: string): string {
+  return `${FIRST_TURN_PREAMBLE}${message}`;
+}
+
+const DONE_SENTINEL = "[[OPENCLAW_DONE]]";
+
+function stripDoneSentinel(text: string): string {
+  // Remove the sentinel wherever it appears so Claude Code never sees it.
+  return text.split(DONE_SENTINEL).join("").replace(/\s+$/, "");
+}
+
 async function pollForReply(
   callGateway: AskOrchestratorDeps["callGateway"],
   sessionKey: string,
@@ -61,7 +85,7 @@ async function pollForReply(
     const messages = state?.messages ?? [];
     if (messages.length >= baselineLength + 2) {
       const text = extractAssistantText(messages);
-      if (text) return text;
+      if (text) return stripDoneSentinel(text);
     }
   }
   throw new Error("timeout waiting for OpenClaw reply");
@@ -101,12 +125,18 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
       })) as { messages?: GatewayMessage[] };
       const baselineLength = before?.messages?.length ?? 0;
 
+      // On the first turn of a new OpenClaw session, prepend persistent
+      // system instructions. Keep the transcript's "ask" event showing the
+      // original question — only the gateway sees the wrapped version.
+      const messageToGateway =
+        baselineLength === 0 ? wrapFirstMessage(req.question) : req.question;
+
       // Submit the user turn. Gateway is async: returns {runId, status, messageSeq}.
       await deps.callGateway("sessions.send", {
         key: session.openclawSessionId,
         agent: deps.openclawAgentId,
         idempotencyKey: req.msgId,
-        message: req.question,
+        message: messageToGateway,
       });
 
       // Poll sessions.get until the assistant reply appears.
