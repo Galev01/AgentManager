@@ -5,7 +5,7 @@ import { config } from "./config.js";
 import { getConversations } from "./services/openclaw-state.js";
 import { readSettings } from "./services/runtime-settings.js";
 import { onFileChange, startWatching } from "./services/file-watcher.js";
-import { onBrainChange } from "./services/brain.js";
+import { onBrainChange, onGlobalBrainChange } from "./services/brain.js";
 import type { WsMessage } from "@openclaw-manager/types";
 
 let _broadcast: (message: WsMessage) => void = () => {};
@@ -65,6 +65,13 @@ export function attachWebSocket(server: Server): void {
   onBrainChange((event) => {
     const type = event.kind === "removed" ? "brain_person_removed" : "brain_person_changed";
     broadcastInternal({ type, payload: { phone: event.phone } });
+  });
+
+  onGlobalBrainChange((event) => {
+    broadcastInternal({
+      type: "brain_agent_changed",
+      payload: { updatedAt: new Date().toISOString(), kind: event.kind },
+    });
   });
 
   console.log("WebSocket server attached at /ws");
