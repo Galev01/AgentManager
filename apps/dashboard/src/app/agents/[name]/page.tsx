@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { AgentForm } from "@/components/agent-form";
 import { getAgent } from "@/lib/bridge-client";
+import { PageHeader } from "@/components/ui";
 
 export async function generateMetadata({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
@@ -22,26 +23,27 @@ export default async function AgentDetailPage({
     notFound();
   }
 
+  const parts: string[] = [];
+  if (agent.createdAt) parts.push(`Created ${new Date(agent.createdAt).toLocaleString()}`);
+  if (agent.updatedAt && agent.updatedAt !== agent.createdAt) {
+    parts.push(`Updated ${new Date(agent.updatedAt).toLocaleString()}`);
+  }
+
   return (
     <AppShell title={agent.name}>
-      <div className="mx-auto max-w-2xl space-y-6">
-        <div>
+      <div className="content">
+        <div style={{ marginBottom: 12 }}>
           <Link
             href="/agents"
-            className="text-sm text-zinc-400 hover:text-zinc-200 transition"
+            style={{ fontSize: 12.5, color: "var(--text-muted)" }}
           >
-            &larr; Back to Agents
+            ← Back to Agents
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold text-zinc-100">{agent.name}</h1>
-          {agent.createdAt && (
-            <p className="mt-1 text-sm text-zinc-500">
-              Created {new Date(agent.createdAt).toLocaleString()}
-              {agent.updatedAt && agent.updatedAt !== agent.createdAt && (
-                <> &middot; Updated {new Date(agent.updatedAt).toLocaleString()}</>
-              )}
-            </p>
-          )}
         </div>
+        <PageHeader
+          title={agent.name}
+          sub={parts.length > 0 ? parts.join(" · ") : undefined}
+        />
         <AgentForm agent={agent} />
       </div>
     </AppShell>

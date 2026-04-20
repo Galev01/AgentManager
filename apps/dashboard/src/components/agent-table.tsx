@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Agent } from "@openclaw-manager/types";
+import { timeAgo } from "@/lib/format";
+import type { AgentActivity } from "@/app/agents/page";
 import {
   Badge,
   Button,
@@ -26,8 +28,27 @@ const INPUT_STYLE: React.CSSProperties = {
   minWidth: 180,
 };
 
-export function AgentTable({ initial }: { initial: Agent[] }) {
+function getWorkspace(a: Agent): string | null {
+  const w = (a as Agent & { workspace?: unknown }).workspace;
+  return typeof w === "string" && w.length > 0 ? w : null;
+}
+
+function shortenPath(p: string, max = 36): string {
+  if (p.length <= max) return p;
+  const parts = p.split(/[\\/]/);
+  if (parts.length <= 2) return "…" + p.slice(-max + 1);
+  return parts[0] + "/…/" + parts.slice(-2).join("/");
+}
+
+export function AgentTable({
+  initial,
+  activity,
+}: {
+  initial: Agent[];
+  activity: Record<string, AgentActivity>;
+}) {
   const [agents, setAgents] = useState<Agent[]>(initial);
+  const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [workspace, setWorkspace] = useState("");
   const [model, setModel] = useState("");
@@ -57,6 +78,7 @@ export function AgentTable({ initial }: { initial: Agent[] }) {
       setName("");
       setWorkspace("");
       setModel("");
+      setShowCreate(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");
     } finally {
@@ -89,6 +111,14 @@ export function AgentTable({ initial }: { initial: Agent[] }) {
       <PageHeader
         title="Agents"
         sub={`${agents.length} configured`}
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => setShowCreate((v) => !v)}
+          >
+            {showCreate ? "Cancel" : "+ New agent"}
+          </Button>
+        }
       />
 
       {error && (
@@ -113,105 +143,146 @@ export function AgentTable({ initial }: { initial: Agent[] }) {
         </div>
       )}
 
-      <TableWrap style={{ marginBottom: "var(--row-gap)" }}>
+      {showCreate && (
+        <Card style={{ marginBottom: "var(--row-gap)" }}>
+          <SectionTitle>Create agent</SectionTitle>
+          <div style={{ padding: 16 }}>
+            <p style={{ margin: "0 0 14px 0", fontSize: 12, color: "var(--text-muted)" }}>
+              Workspace is the absolute path to an OpenClaw workspace on the bridge host, e.g.{" "}
+              <code style={{ fontSize: 11.5, color: "var(--text)" }}>
+                C:\Users\you\.openclaw\workspace
+              </code>
+              .
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <input
+                type="text"
+                placeholder="Name (required)"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                style={INPUT_STYLE}
+              />
+              <input
+                type="text"
+                placeholder="Workspace path (required)"
+                value={workspace}
+                onChange={(e) => setWorkspace(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                style={{ ...INPUT_STYLE, minWidth: 260 }}
+              />
+              <input
+                type="text"
+                placeholder="Model (optional)"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                style={INPUT_STYLE}
+              />
+              <Button
+                variant="primary"
+                onClick={handleCreate}
+                disabled={adding || !name.trim() || !workspace.trim()}
+              >
+                {adding ? "Creating…" : "Create"}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      <TableWrap>
         <Table>
           <thead>
             <tr>
               <th>Name</th>
               <th>Model</th>
+              <th>Workspace</th>
               <th>Tools</th>
+              <th style={{ textAlign: "right" }}>Active</th>
+              <th>Last used</th>
               <th style={{ textAlign: "right", width: 200 }}></th>
             </tr>
           </thead>
           <tbody>
             {agents.length === 0 && (
               <tr>
-                <td colSpan={4}>
+                <td colSpan={7}>
                   <EmptyState
                     title="No agents configured"
-                    description="Add one below to get started."
+                    description="Click + New agent to create one."
+                    action={
+                      <Button
+                        variant="primary"
+                        onClick={() => setShowCreate(true)}
+                      >
+                        + New agent
+                      </Button>
+                    }
                   />
                 </td>
               </tr>
             )}
-            {agents.map((a) => (
-              <tr key={a.name}>
-                <td className="pri">{a.name}</td>
-                <td className="mono" style={{ fontSize: 12 }}>
-                  {a.model || <span style={{ color: "var(--text-faint)" }}>—</span>}
-                </td>
-                <td>
-                  {a.tools && a.tools.length > 0 ? (
-                    <Badge kind="info">{a.tools.length}</Badge>
-                  ) : (
-                    <span style={{ color: "var(--text-faint)" }}>—</span>
-                  )}
-                </td>
-                <td style={{ textAlign: "right" }}>
-                  <div style={{ display: "inline-flex", gap: 6 }}>
-                    <Link href={`/agents/${encodeURIComponent(a.name)}`}>
-                      <Button className="btn-sm">View</Button>
-                    </Link>
-                    <Button
-                      variant="danger"
-                      className="btn-sm"
-                      onClick={() => handleDelete(a.name)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {agents.map((a) => {
+              const act = activity[a.name];
+              const ws = getWorkspace(a);
+              const toolsLabel = a.tools && a.tools.length > 0 ? a.tools.join(", ") : "";
+              return (
+                <tr key={a.name}>
+                  <td className="pri">{a.name}</td>
+                  <td className="mono" style={{ fontSize: 12 }}>
+                    {a.model || <span style={{ color: "var(--text-faint)" }}>—</span>}
+                  </td>
+                  <td
+                    className="mono"
+                    style={{ fontSize: 11.5, color: "var(--text-muted)", maxWidth: 240 }}
+                    title={ws ?? ""}
+                  >
+                    {ws ? shortenPath(ws) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                  </td>
+                  <td>
+                    {a.tools && a.tools.length > 0 ? (
+                      <span title={toolsLabel}>
+                        <Badge kind="info">{a.tools.length}</Badge>
+                      </span>
+                    ) : (
+                      <span style={{ color: "var(--text-faint)" }}>—</span>
+                    )}
+                  </td>
+                  <td className="mono" style={{ textAlign: "right" }}>
+                    {act?.activeSessions ? (
+                      <Badge kind="ok">{act.activeSessions}</Badge>
+                    ) : (
+                      <span style={{ color: "var(--text-faint)" }}>0</span>
+                    )}
+                  </td>
+                  <td
+                    className="mono"
+                    style={{ fontSize: 11.5, color: "var(--text-muted)" }}
+                    title={act?.lastUsedAt ? new Date(act.lastUsedAt).toLocaleString() : ""}
+                  >
+                    {act?.lastUsedAt ? timeAgo(act.lastUsedAt) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    <div style={{ display: "inline-flex", gap: 6 }}>
+                      <Link href={`/agents/${encodeURIComponent(a.name)}`}>
+                        <Button className="btn-sm">View</Button>
+                      </Link>
+                      <Button
+                        variant="danger"
+                        className="btn-sm"
+                        onClick={() => handleDelete(a.name)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </Table>
       </TableWrap>
-
-      <Card>
-        <SectionTitle>Create agent</SectionTitle>
-        <div style={{ padding: 16 }}>
-          <p style={{ margin: "0 0 14px 0", fontSize: 12, color: "var(--text-muted)" }}>
-            Workspace is the absolute path to an OpenClaw workspace on the bridge host, e.g.{" "}
-            <code style={{ fontSize: 11.5, color: "var(--text)" }}>
-              C:\Users\you\.openclaw\workspace
-            </code>
-            .
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <input
-              type="text"
-              placeholder="Name (required)"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-              style={INPUT_STYLE}
-            />
-            <input
-              type="text"
-              placeholder="Workspace path (required)"
-              value={workspace}
-              onChange={(e) => setWorkspace(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-              style={{ ...INPUT_STYLE, minWidth: 260 }}
-            />
-            <input
-              type="text"
-              placeholder="Model (optional)"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-              style={INPUT_STYLE}
-            />
-            <Button
-              variant="primary"
-              onClick={handleCreate}
-              disabled={adding || !name.trim() || !workspace.trim()}
-            >
-              {adding ? "Creating…" : "Create"}
-            </Button>
-          </div>
-        </div>
-      </Card>
     </>
   );
 }

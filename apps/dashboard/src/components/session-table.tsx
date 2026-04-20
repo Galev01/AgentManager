@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AgentSession } from "@openclaw-manager/types";
 import { timeAgo } from "@/lib/format";
@@ -30,15 +30,57 @@ const STATUS_KIND: Record<AgentSession["status"], BadgeKind> = {
   aborted: "err",
 };
 
+const INPUT_STYLE: React.CSSProperties = {
+  background: "var(--bg-sunken)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius)",
+  padding: "7px 10px",
+  fontSize: 13,
+  color: "var(--text)",
+  fontFamily: "inherit",
+  flex: 1,
+  minWidth: 220,
+};
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${m % 60}m`;
+  const d = Math.floor(h / 24);
+  return `${d}d ${h % 24}h`;
+}
+
+function sessionDuration(s: AgentSession): string {
+  if (!s.createdAt) return "—";
+  const end = s.lastActivityAt ?? s.createdAt;
+  const ms = end - s.createdAt;
+  return ms > 0 ? formatDuration(ms) : "—";
+}
+
 export function SessionTable({ initial }: { initial: AgentSession[] }) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AgentSession[]>(initial);
   const [filter, setFilter] = useState<StatusFilter>("all");
+  const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
 
-  const filtered =
-    filter === "all" ? sessions : sessions.filter((s) => s.status === filter);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return sessions.filter((s) => {
+      if (filter !== "all" && s.status !== filter) return false;
+      if (!q) return true;
+      return (
+        s.id.toLowerCase().includes(q) ||
+        (s.agentName ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [sessions, filter, query]);
 
   const count = {
     active: sessions.filter((s) => s.status === "active").length,
@@ -74,11 +116,21 @@ export function SessionTable({ initial }: { initial: AgentSession[] }) {
     }
   }
 
+  async function copyId(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(id);
+      setTimeout(() => setCopied((c) => (c === id ? null : c)), 1200);
+    } catch {
+      // clipboard unavailable — silent
+    }
+  }
+
   return (
     <>
       <PageHeader
         title="Agent sessions"
-        sub={`${sessions.length} total · ${count.active} active · ${count.completed} completed${count.aborted ? ` · ${count.aborted} aborted` : ""}`}
         actions={
           <Button variant="primary" onClick={handleCreate} disabled={creating}>
             {creating ? "Creating…" : "+ New session"}
@@ -109,23 +161,54 @@ export function SessionTable({ initial }: { initial: AgentSession[] }) {
       )}
 
       <div className="hero-4">
-        <StatCard label="Active" value={count.active} sub="of all" />
+        <StatCard
+          label="Active"
+          value={count.active}
+          sub={count.active > 0 ? "running" : "—"}
+          accent={count.active > 0 ? "var(--ok)" : undefined}
+        />
         <StatCard label="Completed" value={count.completed} sub="finished" />
-        <StatCard label="Aborted" value={count.aborted} sub={count.aborted > 0 ? "needs review" : "—"} accent={count.aborted > 0 ? "var(--err)" : undefined} />
-        <StatCard label="Tokens total" value={totalTokens.toLocaleString()} sub={`${totalMsgs.toLocaleString()} msgs`} />
+        <StatCard
+          label="Aborted"
+          value={count.aborted}
+          sub={count.aborted > 0 ? "needs review" : "—"}
+          accent={count.aborted > 0 ? "var(--err)" : undefined}
+        />
+        <StatCard
+          label="Tokens total"
+          value={totalTokens.toLocaleString()}
+          sub={`${totalMsgs.toLocaleString()} msgs`}
+        />
       </div>
 
-      <div className="tabs" style={{ marginBottom: 12 }}>
-        {STATUS_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            type="button"
-            className={`tab ${filter === f.value ? "on" : ""}`}
-            onClick={() => setFilter(f.value)}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          alignItems: "center",
+          margin: "12px 0",
+        }}
+      >
+        <input
+          type="text"
+          placeholder="Search by id or agent…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={INPUT_STYLE}
+        />
+        <div className="tabs" style={{ margin: 0 }}>
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              className={`tab ${filter === f.value ? "on" : ""}`}
+              onClick={() => setFilter(f.value)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <TableWrap>
@@ -137,6 +220,7 @@ export function SessionTable({ initial }: { initial: AgentSession[] }) {
               <th>Status</th>
               <th style={{ textAlign: "right" }}>Messages</th>
               <th style={{ textAlign: "right" }}>Tokens</th>
+              <th>Duration</th>
               <th>Created</th>
               <th>Last activity</th>
             </tr>
@@ -144,8 +228,15 @@ export function SessionTable({ initial }: { initial: AgentSession[] }) {
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7}>
-                  <EmptyState title="No sessions" description="No agent sessions match this filter." />
+                <td colSpan={8}>
+                  <EmptyState
+                    title="No sessions"
+                    description={
+                      query || filter !== "all"
+                        ? "No sessions match the current filter."
+                        : "No agent sessions yet. Create one to get started."
+                    }
+                  />
                 </td>
               </tr>
             )}
@@ -156,9 +247,25 @@ export function SessionTable({ initial }: { initial: AgentSession[] }) {
                 style={{ cursor: "pointer" }}
               >
                 <td className="pri mono" style={{ fontSize: 12 }}>
-                  {s.id.slice(0, 8)}
+                  <button
+                    type="button"
+                    onClick={(e) => copyId(s.id, e)}
+                    title={s.id + " (click to copy)"}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      font: "inherit",
+                      color: "inherit",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {copied === s.id ? "copied!" : s.id.slice(0, 8)}
+                  </button>
                 </td>
-                <td>{s.agentName || <span style={{ color: "var(--text-faint)" }}>—</span>}</td>
+                <td>
+                  {s.agentName || <span style={{ color: "var(--text-faint)" }}>—</span>}
+                </td>
                 <td>
                   <Badge kind={STATUS_KIND[s.status]}>{s.status}</Badge>
                 </td>
@@ -169,9 +276,20 @@ export function SessionTable({ initial }: { initial: AgentSession[] }) {
                   {s.tokenUsage ? s.tokenUsage.total.toLocaleString() : "—"}
                 </td>
                 <td className="mono" style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                  {sessionDuration(s)}
+                </td>
+                <td
+                  className="mono"
+                  style={{ fontSize: 11.5, color: "var(--text-muted)" }}
+                  title={s.createdAt ? new Date(s.createdAt).toLocaleString() : ""}
+                >
                   {s.createdAt ? timeAgo(s.createdAt) : "—"}
                 </td>
-                <td className="mono" style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                <td
+                  className="mono"
+                  style={{ fontSize: 11.5, color: "var(--text-muted)" }}
+                  title={s.lastActivityAt ? new Date(s.lastActivityAt).toLocaleString() : ""}
+                >
                   {s.lastActivityAt ? timeAgo(s.lastActivityAt) : "—"}
                 </td>
               </tr>

@@ -1,34 +1,76 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Channel } from "@openclaw-manager/types";
+import { timeAgo } from "@/lib/format";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  KV,
+  PageHeader,
+  StatCard,
+  StatusLamp,
+  type BadgeKind,
+  type LampStatus,
+} from "./ui";
 
-function formatTimestamp(ts?: number) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleString();
-}
+const STATUS_KIND: Record<Channel["status"], BadgeKind> = {
+  connected: "ok",
+  disconnected: "mute",
+  error: "err",
+};
 
-function StatusBadge({ status }: { status: Channel["status"] }) {
-  const config = {
-    connected: { dot: "bg-green-400", text: "text-green-300", bg: "bg-green-900/40", label: "Connected" },
-    disconnected: { dot: "bg-zinc-500", text: "text-zinc-400", bg: "bg-zinc-700/60", label: "Disconnected" },
-    error: { dot: "bg-yellow-400", text: "text-yellow-300", bg: "bg-yellow-900/40", label: "Error" },
-  } as const;
+const STATUS_LAMP: Record<Channel["status"], LampStatus> = {
+  connected: "ok",
+  disconnected: "off",
+  error: "err",
+};
 
-  const c = config[status] ?? config.disconnected;
+const STATUS_LABEL: Record<Channel["status"], string> = {
+  connected: "Connected",
+  disconnected: "Disconnected",
+  error: "Error",
+};
 
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${c.bg} ${c.text}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
-      {c.label}
-    </span>
-  );
+function extractError(info?: Record<string, unknown>): string | null {
+  if (!info) return null;
+  const err = info.error ?? info.lastError ?? info.reason;
+  return typeof err === "string" && err.length > 0 ? err : null;
 }
 
 export function ChannelCards({ initial }: { initial: Channel[] }) {
+  const router = useRouter();
   const [channels, setChannels] = useState<Channel[]>(initial);
   const [loggingOut, setLoggingOut] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const count = {
+    connected: channels.filter((c) => c.status === "connected").length,
+    disconnected: channels.filter((c) => c.status === "disconnected").length,
+    error: channels.filter((c) => c.status === "error").length,
+  };
+
+  async function refresh() {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/channels");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to refresh channels");
+      }
+      setChannels(await res.json());
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleLogout(name: string) {
     if (!confirm(`Logout channel "${name}"? This will disconnect the channel.`)) return;
@@ -44,84 +86,198 @@ export function ChannelCards({ initial }: { initial: Channel[] }) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to logout channel");
       }
-      // Refresh channel list
       const refreshRes = await fetch("/api/channels");
       if (refreshRes.ok) setChannels(await refreshRes.json());
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
     } finally {
       setLoggingOut(null);
     }
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <PageHeader
+        title="Channels"
+        sub={`${channels.length} total · ${count.connected} connected${count.error ? ` · ${count.error} error` : ""}`}
+        actions={
+          <Button variant="ghost" onClick={refresh} disabled={refreshing}>
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </Button>
+        }
+      />
+
       {error && (
-        <div className="rounded border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-300">
-          {error}
-          <button
-            onClick={() => setError(null)}
-            className="ml-3 text-red-400 hover:text-red-200"
-          >
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "10px 14px",
+            borderRadius: "var(--radius)",
+            border: "1px solid oklch(0.68 0.20 25 / 0.4)",
+            background: "var(--err-dim)",
+            color: "var(--err)",
+            fontSize: 12.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span style={{ flex: 1 }}>{error}</span>
+          <Button variant="ghost" className="btn-sm" onClick={() => setError(null)}>
             Dismiss
-          </button>
+          </Button>
         </div>
       )}
+
+      <div className="hero-4" style={{ marginBottom: "var(--row-gap)" }}>
+        <StatCard
+          label="Connected"
+          value={count.connected}
+          sub={count.connected > 0 ? "live" : "—"}
+          accent={count.connected > 0 ? "var(--ok)" : undefined}
+        />
+        <StatCard
+          label="Disconnected"
+          value={count.disconnected}
+          sub={count.disconnected > 0 ? "offline" : "—"}
+        />
+        <StatCard
+          label="Error"
+          value={count.error}
+          sub={count.error > 0 ? "needs attention" : "—"}
+          accent={count.error > 0 ? "var(--err)" : undefined}
+        />
+        <StatCard label="Total" value={channels.length} sub="configured" />
+      </div>
 
       {channels.length === 0 ? (
-        <div className="rounded-lg border border-zinc-700 bg-zinc-800 px-6 py-16 text-center">
-          <p className="text-sm text-zinc-400">No channels configured.</p>
-        </div>
+        <Card>
+          <EmptyState
+            title="No channels configured"
+            description="Channels are defined in the bridge config. Add one there and refresh."
+          />
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {channels.map((ch) => (
-            <div
-              key={ch.name}
-              className="flex flex-col rounded-lg border border-zinc-700 bg-zinc-800 p-5 space-y-4"
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="truncate font-semibold text-zinc-100">{ch.name}</h3>
-                  <p className="mt-0.5 text-xs text-zinc-500 uppercase tracking-wide">{ch.type}</p>
-                </div>
-                <StatusBadge status={ch.status} />
-              </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gap: "var(--row-gap)",
+          }}
+        >
+          {channels.map((ch) => {
+            const errMsg = ch.status === "error" ? extractError(ch.accountInfo) : null;
+            const kvItems = ch.accountInfo
+              ? Object.entries(ch.accountInfo)
+                  .filter(([k]) => k !== "error" && k !== "lastError" && k !== "reason")
+                  .map(([k, v]) => ({ label: k, value: String(v) }))
+              : [];
 
-              {/* Last activity */}
-              <div className="text-xs text-zinc-500">
-                <span className="text-zinc-400">Last activity:</span>{" "}
-                {formatTimestamp(ch.lastActivityAt)}
-              </div>
-
-              {/* Account info */}
-              {ch.accountInfo && Object.keys(ch.accountInfo).length > 0 && (
-                <div className="rounded border border-zinc-700 bg-zinc-900/50 p-3 space-y-1">
-                  {Object.entries(ch.accountInfo).map(([k, v]) => (
-                    <div key={k} className="flex justify-between gap-2 text-xs">
-                      <span className="text-zinc-500 shrink-0">{k}</span>
-                      <span className="text-zinc-300 truncate text-right">
-                        {String(v)}
+            return (
+              <Card
+                key={ch.name}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  padding: 16,
+                  gap: 14,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 2,
+                      }}
+                    >
+                      <StatusLamp status={STATUS_LAMP[ch.status]} />
+                      <span
+                        className="pri"
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {ch.name}
                       </span>
                     </div>
-                  ))}
+                    <div
+                      className="mono"
+                      style={{
+                        fontSize: 11,
+                        color: "var(--text-faint)",
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      {ch.type}
+                    </div>
+                  </div>
+                  <Badge kind={STATUS_KIND[ch.status]}>{STATUS_LABEL[ch.status]}</Badge>
                 </div>
-              )}
 
-              {/* Logout button */}
-              <div className="mt-auto pt-1">
-                <button
-                  onClick={() => handleLogout(ch.name)}
-                  disabled={loggingOut === ch.name}
-                  className="w-full rounded px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-800/50 hover:bg-red-900/30 hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
                 >
-                  {loggingOut === ch.name ? "Logging out…" : "Logout"}
-                </button>
-              </div>
-            </div>
-          ))}
+                  <span>Last activity</span>
+                  <span className="mono" title={ch.lastActivityAt ? new Date(ch.lastActivityAt).toLocaleString() : ""}>
+                    {ch.lastActivityAt ? timeAgo(ch.lastActivityAt) : "—"}
+                  </span>
+                </div>
+
+                {errMsg && (
+                  <div
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "var(--radius)",
+                      border: "1px solid oklch(0.68 0.20 25 / 0.4)",
+                      background: "var(--err-dim)",
+                      color: "var(--err)",
+                      fontSize: 11.5,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {errMsg}
+                  </div>
+                )}
+
+                {kvItems.length > 0 && <KV items={kvItems} />}
+
+                <div style={{ marginTop: "auto", paddingTop: 4 }}>
+                  <Button
+                    variant="danger"
+                    className="btn-sm"
+                    onClick={() => handleLogout(ch.name)}
+                    disabled={loggingOut === ch.name || ch.status === "disconnected"}
+                    style={{ width: "100%" }}
+                  >
+                    {loggingOut === ch.name ? "Logging out…" : "Logout"}
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
-    </div>
+    </>
   );
 }
