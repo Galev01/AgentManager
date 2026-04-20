@@ -13,22 +13,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { computeUnread, truncate } from "../src/routes/brain.js";
 import type { ConversationRow } from "@openclaw-manager/types";
-
-// --- Helpers copied from routes/brain.ts enrichment logic ---
-// We duplicate them here to test independently; if the route logic changes, update these too.
-
-function computeUnread(c: ConversationRow): number {
-  const lastOut = Math.max(c.lastAgentReplyAt ?? 0, c.lastHumanReplyAt ?? 0);
-  const lastIn = c.lastRemoteAt ?? 0;
-  return lastIn > lastOut ? 1 : 0;
-}
-
-function truncate(s: string | null, max: number): string | null {
-  if (!s) return null;
-  if (s.length <= max) return s;
-  return s.slice(0, max - 1).trimEnd() + "…";
-}
 
 function makeConvo(overrides?: Partial<ConversationRow>): ConversationRow {
   return {

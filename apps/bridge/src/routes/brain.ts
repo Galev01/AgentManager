@@ -209,13 +209,13 @@ router.post("/brain/people/:phone/log/:index/promote", async (req, res) => {
   }
 });
 
-function computeUnread(c: ConversationRow): number {
+export function computeUnread(c: ConversationRow): number {
   const lastOut = Math.max(c.lastAgentReplyAt ?? 0, c.lastHumanReplyAt ?? 0);
   const lastIn = c.lastRemoteAt ?? 0;
   return lastIn > lastOut ? 1 : 0;
 }
 
-function truncate(s: string | null, max: number): string | null {
+export function truncate(s: string | null, max: number): string | null {
   if (!s) return null;
   if (s.length <= max) return s;
   return s.slice(0, max - 1).trimEnd() + "…";

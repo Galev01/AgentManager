@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { renderInjectionPreview, createBrainClient, resolveBrainPaths } from "@openclaw-manager/brain";
+import { renderInjectionPreview, createBrainClient } from "@openclaw-manager/brain";
 import type { GlobalBrain, BrainPerson } from "@openclaw-manager/types";
 
 function emptyBrain(): GlobalBrain {
