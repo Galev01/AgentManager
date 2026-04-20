@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useBridgeEvents } from "@/lib/ws-client";
 import type { BrainPersonSummary } from "@openclaw-manager/types";
@@ -11,6 +11,10 @@ export function BrainPeopleTable({ initial }: { initial: BrainPersonSummary[] })
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<"all" | "active" | "archived" | "blocked">("active");
+  const [sortBy, setSortBy] = useState<"lastSeen" | "name" | "unread">("lastSeen");
 
   const refresh = useCallback(async () => {
     try {
@@ -55,6 +59,23 @@ export function BrainPeopleTable({ initial }: { initial: BrainPersonSummary[] })
     setPeople(initial);
   }, [initial]);
 
+  const view = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = people.filter((p) => status === "all" || p.status === status);
+    if (q) {
+      list = list.filter((p) =>
+        (p.name || "").toLowerCase().includes(q) ||
+        p.phone.toLowerCase().includes(q),
+      );
+    }
+    list = [...list].sort((a, b) => {
+      if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
+      if (sortBy === "unread") return (b.unreadCount ?? 0) - (a.unreadCount ?? 0);
+      return (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0);
+    });
+    return list;
+  }, [people, query, status, sortBy]);
+
   return (
     <div className="space-y-6">
       {error && (
@@ -64,8 +85,29 @@ export function BrainPeopleTable({ initial }: { initial: BrainPersonSummary[] })
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          placeholder="Search name / phone"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="flex-1 min-w-[240px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+        />
+        <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="rounded border border-zinc-600 bg-zinc-900 px-2 py-2 text-sm text-zinc-100">
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+          <option value="blocked">Blocked</option>
+        </select>
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="rounded border border-zinc-600 bg-zinc-900 px-2 py-2 text-sm text-zinc-100">
+          <option value="lastSeen">Last message</option>
+          <option value="name">Name</option>
+          <option value="unread">Unread</option>
+        </select>
+      </div>
+
       <div className="overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
-        {people.length === 0 ? (
+        {view.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-zinc-400">
             No people yet. They'll appear here automatically when WhatsApp contacts write in, or you can add one below.
           </div>
@@ -83,7 +125,7 @@ export function BrainPeopleTable({ initial }: { initial: BrainPersonSummary[] })
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-700">
-              {people.map((p) => (
+              {view.map((p) => (
                 <tr key={p.phone} className="hover:bg-zinc-700/30 transition">
                   <td className="px-4 py-3 font-medium">{p.name}</td>
                   <td className="px-4 py-3 text-zinc-300 font-mono text-xs">{p.phone}</td>
