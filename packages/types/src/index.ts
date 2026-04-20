@@ -597,7 +597,8 @@ export type YoutubeRebuildPart =
   | "chunks"
   | "summary"
   | "highlights"
-  | "chat";
+  | "chapters"
+  | "chat-history";
 
 export type YoutubeJobV2Input = {
   presetId?: YoutubePromptPresetId;
