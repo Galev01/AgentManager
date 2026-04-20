@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useBridgeEvents } from "@/lib/ws-client";
-import type { BrainPerson, BrainPersonStatus, BrainPersonUpdate, GlobalBrain } from "@openclaw-manager/types";
+import type { BrainPerson, BrainPersonStatus, BrainPersonUpdate, ConversationEvent, GlobalBrain } from "@openclaw-manager/types";
 import { CollapsibleCard } from "./brain-collapsible-card";
 import { InjectionPreview } from "./brain-injection-preview";
 
@@ -68,6 +68,7 @@ export function BrainPersonDetail({ initial }: { initial: BrainPerson }) {
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [globalSnapshot, setGlobalSnapshot] = useState<GlobalBrain | null>(null);
+  const [recentEvents, setRecentEvents] = useState<ConversationEvent[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +81,19 @@ export function BrainPersonDetail({ initial }: { initial: BrainPerson }) {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const key = person.jid || person.phone;
+        const r = await fetch(`/api/messages?conversationKey=${encodeURIComponent(key)}&limit=20`, { cache: "no-store" });
+        if (!r.ok) return;
+        if (!cancelled) setRecentEvents(await r.json());
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [person.phone, person.jid]);
 
   const refresh = useCallback(async () => {
     try {
@@ -375,9 +389,21 @@ export function BrainPersonDetail({ initial }: { initial: BrainPerson }) {
         <InjectionPreviewCard phone={person.phone} />
       </CollapsibleCard>
 
-      {/* Recent chat — placeholder for T27 */}
+      {/* Recent chat */}
       <CollapsibleCard title="Recent chat" storageKey={ck("chat")} defaultOpen={true}>
-        <div className="text-xs text-zinc-500">Recent chat card — populated in T27.</div>
+        <div className="space-y-2">
+          {recentEvents === null && <div className="text-xs text-zinc-500">Loading…</div>}
+          {recentEvents && recentEvents.length === 0 && <div className="text-xs text-zinc-500">No messages yet.</div>}
+          {recentEvents?.map((e) => (
+            <div key={e.id} className={`rounded-lg px-3 py-2 text-sm ${e.actor === "user" ? "bg-zinc-900 text-zinc-200" : "bg-blue-900/30 text-blue-100 ml-8"}`}>
+              <div className="mb-0.5 text-[11px] uppercase tracking-wider text-zinc-500">{e.actor} · {new Date(e.at).toLocaleString()}</div>
+              <div className="whitespace-pre-wrap">{e.text || "(no text)"}</div>
+            </div>
+          ))}
+          <Link href={`/conversations/${encodeURIComponent(person.jid || person.phone)}`} className="block pt-2 text-xs text-blue-400 hover:text-blue-300">
+            Open full thread →
+          </Link>
+        </div>
       </CollapsibleCard>
 
       {/* Log */}
