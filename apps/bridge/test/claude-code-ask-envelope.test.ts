@@ -106,12 +106,18 @@ describe("claude-code-ask envelope integration", () => {
     assert.equal(answer.envelope?.state, "done");
 
     // --- Fixture capture for dashboard work (Tasks 9-13) ---
-    await fs.mkdir(FIXTURE_DIR, { recursive: true });
-    await fs.writeFile(
-      path.join(FIXTURE_DIR, "envelope-transcript.json"),
-      JSON.stringify(events, null, 2),
-      "utf8"
-    );
+    // Opt-in only: set CAPTURE_FIXTURES=1 when you intentionally want to
+    // refresh the committed transcript sample. Without the guard, random
+    // ids and timestamps churn the file on every test run and create
+    // dirty-worktree noise.
+    if (process.env.CAPTURE_FIXTURES === "1") {
+      await fs.mkdir(FIXTURE_DIR, { recursive: true });
+      await fs.writeFile(
+        path.join(FIXTURE_DIR, "envelope-transcript.json"),
+        JSON.stringify(events, null, 2),
+        "utf8"
+      );
+    }
   });
 
   it("manual mode: pending carries both envelopes; operator reply is operator-authored", async () => {
