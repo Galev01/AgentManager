@@ -115,11 +115,10 @@ export function BrainPeopleTable({ initial }: { initial: BrainPersonSummary[] })
           <table className="w-full text-sm text-zinc-100">
             <thead>
               <tr className="border-b border-zinc-700 bg-zinc-900/50 text-left text-xs uppercase tracking-wider text-zinc-400">
+                <th className="w-10 px-4 py-3"></th>
                 <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">Relationship</th>
-                <th className="px-4 py-3">Language</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Meta</th>
+                <th className="px-4 py-3">Last message</th>
                 <th className="px-4 py-3">Last seen</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -127,17 +126,22 @@ export function BrainPeopleTable({ initial }: { initial: BrainPersonSummary[] })
             <tbody className="divide-y divide-zinc-700">
               {view.map((p) => (
                 <tr key={p.phone} className="hover:bg-zinc-700/30 transition">
-                  <td className="px-4 py-3 font-medium">{p.name}</td>
-                  <td className="px-4 py-3 text-zinc-300 font-mono text-xs">{p.phone}</td>
-                  <td className="px-4 py-3 text-zinc-300">{p.relationship || "—"}</td>
-                  <td className="px-4 py-3 text-zinc-300">{p.language || "—"}</td>
-                  <td className="px-4 py-3 text-zinc-300">{p.status}</td>
-                  <td className="px-4 py-3 text-zinc-400">{p.lastSeen || "—"}</td>
+                  <td className="px-4 py-3">
+                    {(p.unreadCount ?? 0) > 0 && (
+                      <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-semibold text-white">
+                        {p.unreadCount}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 font-medium text-zinc-100">{p.name}</td>
+                  <td className="px-4 py-3 text-xs text-zinc-400">
+                    {[p.relationship, p.language].filter(Boolean).join(" · ") || "—"}
+                    <div className="font-mono text-[11px] text-zinc-500">{p.phone}</div>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-zinc-300 max-w-[260px] truncate">{p.lastMessageSnippet ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs text-zinc-400">{p.lastSeen || (p.lastMessageAt ? new Date(p.lastMessageAt).toLocaleString() : "—")}</td>
                   <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/brain/people/${encodeURIComponent(p.phone)}`}
-                      className="rounded px-3 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-900/30 hover:text-blue-300 transition"
-                    >
+                    <Link href={`/brain/people/${encodeURIComponent(p.phone)}`} className="rounded px-3 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-900/30 hover:text-blue-300 transition">
                       Open
                     </Link>
                   </td>
