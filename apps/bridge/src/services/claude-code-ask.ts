@@ -67,10 +67,16 @@ function stripDoneSentinel(text: string): string {
   return text.split(DONE_SENTINEL).join("").replace(/\s+$/, "");
 }
 
+function buildGatewayKey(agentId: string, openclawSessionId: string): string {
+  // If the session already carries the agent prefix (e.g. legacy
+  // "agent:main:oc-shared-claude-code"), use it verbatim. Otherwise add one.
+  if (openclawSessionId.startsWith("agent:")) return openclawSessionId;
+  return `agent:${agentId}:${openclawSessionId}`;
+}
+
 async function pollForReply(
   callGateway: AskOrchestratorDeps["callGateway"],
   sessionKey: string,
-  agentId: string,
   baselineLength: number,
   timeoutMs: number,
   intervalMs: number
@@ -80,7 +86,6 @@ async function pollForReply(
     await new Promise((r) => setTimeout(r, intervalMs));
     const state = (await callGateway("sessions.get", {
       key: sessionKey,
-      agent: agentId,
     })) as { messages?: GatewayMessage[] };
     const messages = state?.messages ?? [];
     if (messages.length >= baselineLength + 2) {
@@ -116,12 +121,13 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
       context: req.context,
     });
 
+    const gatewayKey = buildGatewayKey(deps.openclawAgentId, session.openclawSessionId);
+
     let draft: string;
     try {
       // Snapshot current message count so we know when our reply lands.
       const before = (await deps.callGateway("sessions.get", {
-        key: session.openclawSessionId,
-        agent: deps.openclawAgentId,
+        key: gatewayKey,
       })) as { messages?: GatewayMessage[] };
       const baselineLength = before?.messages?.length ?? 0;
 
@@ -133,8 +139,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
 
       // Submit the user turn. Gateway is async: returns {runId, status, messageSeq}.
       await deps.callGateway("sessions.send", {
-        key: session.openclawSessionId,
-        agent: deps.openclawAgentId,
+        key: gatewayKey,
         idempotencyKey: req.msgId,
         message: messageToGateway,
       });
@@ -142,8 +147,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
       // Poll sessions.get until the assistant reply appears.
       draft = await pollForReply(
         deps.callGateway,
-        session.openclawSessionId,
-        deps.openclawAgentId,
+        gatewayKey,
         baselineLength,
         deps.replyTimeoutMs ?? 120000,
         deps.replyPollIntervalMs ?? 500
