@@ -99,6 +99,7 @@ export type WsMessageType =
   | "event_new"
   | "settings_updated"
   | "connected"
+  | "brain_agent_changed"
   | "brain_person_changed"
   | "brain_person_removed"
   | "claude_code_session_upserted"
@@ -239,6 +240,9 @@ export type BrainPersonSummary = {
   status: BrainPersonStatus;
   lastSeen: string | null;
   tags: string[];
+  unreadCount?: number;
+  lastMessageSnippet?: string | null;
+  lastMessageAt?: number | null;
 };
 
 export type BrainPersonUpdate = {
@@ -660,3 +664,26 @@ export type YoutubeVideoMetadataFile = {
   fetchedAt: string;
   updatedAt: string;
 };
+
+export interface GlobalBrain {
+  persona: string;
+  hardRules: string[];
+  globalFacts: string[];
+  toneStyle: string;
+  doNotSay: string[];
+  defaultGoals: string[];
+  parseWarning: string | null;
+  updatedAt: string | null;
+}
+
+export type GlobalBrainUpdate = Partial<Omit<GlobalBrain, "parseWarning" | "updatedAt">>;
+
+export interface BrainInjectionPreview {
+  system: string;
+  breakdown: Array<{
+    source: "global" | "person" | "curses";
+    label: string;
+    text: string;
+  }>;
+}
+
