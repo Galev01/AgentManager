@@ -30,7 +30,7 @@ const orchestrator = createAskOrchestrator({
   pendingPath: config.claudeCodePendingPath,
   transcriptsDir: config.claudeCodeDir,
   pendingTimeoutMs: config.claudeCodePendingTimeoutMs,
-  sharedOpenclawSessionId: config.claudeCodeSharedOpenclawSessionId,
+  openclawAgentId: config.claudeCodeOpenclawAgentId,
   callGateway,
   broadcast,
 });

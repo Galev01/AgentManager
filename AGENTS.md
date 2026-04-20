@@ -161,7 +161,7 @@ The bridge dynamically imports the globally-installed OpenClaw SDK to call gatew
 | `OPENCLAW_GATEWAY_TOKEN` | Yes | — | Gateway auth token |
 | `OPENCLAW_SESSIONS_DIR` | No | — | Agent session transcripts dir |
 | `CLAUDE_CODE_PENDING_TIMEOUT_MS` | No | `300000` | Max ms to hold a manual-mode `/claude-code/ask` reply |
-| `CLAUDE_CODE_SHARED_OPENCLAW_SESSION_ID` | No | `oc-shared-claude-code` | Shared OpenClaw-side session id all Claude Code sessions use |
+| `CLAUDE_CODE_OPENCLAW_AGENT_ID` | No | `claude-code` | OpenClaw agent id that all Claude Code sessions route through. Each bridge session maps 1:1 to an OpenClaw session keyed `cc-<bridgeSessionId>` under this agent. |
 
 ### Dashboard
 | Variable | Required | Default | Purpose |

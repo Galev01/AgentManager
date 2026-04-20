@@ -6,7 +6,11 @@ import type {
   ClaudeCodeSessionMode,
 } from "@openclaw-manager/types";
 
-type CreateArgs = { ide: string; workspace: string; openclawSessionId: string };
+type CreateArgs = { ide: string; workspace: string; openclawSessionId?: string };
+
+export function deriveOpenclawSessionId(id: string): string {
+  return `cc-${id}`;
+}
 
 function normalize(workspace: string): string {
   return workspace.trim().replace(/\\/g, "/").toLowerCase();
@@ -58,7 +62,7 @@ export async function createSession(p: string, args: CreateArgs): Promise<Claude
     workspace: args.workspace,
     mode: "agent",
     state: "active",
-    openclawSessionId: args.openclawSessionId,
+    openclawSessionId: args.openclawSessionId ?? deriveOpenclawSessionId(id),
     createdAt: now,
     lastActivityAt: now,
     messageCount: 0,

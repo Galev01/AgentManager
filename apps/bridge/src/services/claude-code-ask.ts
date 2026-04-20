@@ -24,7 +24,7 @@ export type AskOrchestratorDeps = {
   pendingPath: string;
   transcriptsDir: string;
   pendingTimeoutMs: number;
-  sharedOpenclawSessionId: string;
+  openclawAgentId: string;
   callGateway: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
   broadcast: (kind: string, payload: unknown) => void;
   replyPollIntervalMs?: number;
@@ -46,6 +46,7 @@ function extractAssistantText(messages: GatewayMessage[]): string | null {
 async function pollForReply(
   callGateway: AskOrchestratorDeps["callGateway"],
   sessionKey: string,
+  agentId: string,
   baselineLength: number,
   timeoutMs: number,
   intervalMs: number
@@ -53,9 +54,10 @@ async function pollForReply(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, intervalMs));
-    const state = (await callGateway("sessions.get", { key: sessionKey })) as {
-      messages?: GatewayMessage[];
-    };
+    const state = (await callGateway("sessions.get", {
+      key: sessionKey,
+      agent: agentId,
+    })) as { messages?: GatewayMessage[] };
     const messages = state?.messages ?? [];
     if (messages.length >= baselineLength + 2) {
       const text = extractAssistantText(messages);
@@ -75,7 +77,6 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
     const session = await getOrCreateSession(deps.sessionsPath, {
       ide: req.ide,
       workspace: req.workspace,
-      openclawSessionId: deps.sharedOpenclawSessionId,
     });
     if (session.state === "ended") {
       await resurrectSession(deps.sessionsPath, session.id);
@@ -96,12 +97,14 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
       // Snapshot current message count so we know when our reply lands.
       const before = (await deps.callGateway("sessions.get", {
         key: session.openclawSessionId,
+        agent: deps.openclawAgentId,
       })) as { messages?: GatewayMessage[] };
       const baselineLength = before?.messages?.length ?? 0;
 
       // Submit the user turn. Gateway is async: returns {runId, status, messageSeq}.
       await deps.callGateway("sessions.send", {
         key: session.openclawSessionId,
+        agent: deps.openclawAgentId,
         idempotencyKey: req.msgId,
         message: req.question,
       });
@@ -110,6 +113,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
       draft = await pollForReply(
         deps.callGateway,
         session.openclawSessionId,
+        deps.openclawAgentId,
         baselineLength,
         deps.replyTimeoutMs ?? 120000,
         deps.replyPollIntervalMs ?? 500

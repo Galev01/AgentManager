@@ -66,7 +66,7 @@ test("agent mode — returns gateway reply and logs transcript", async () => {
   const orchestrator = createAskOrchestrator({
     ...p,
     pendingTimeoutMs: 1000,
-    sharedOpenclawSessionId: "oc-shared",
+    openclawAgentId: "claude-code",
     callGateway,
     broadcast: () => {},
     replyPollIntervalMs: 5,
@@ -97,7 +97,7 @@ test("manual mode — creates pending item and waits for operator", async () => 
   const orchestrator = createAskOrchestrator({
     ...p,
     pendingTimeoutMs: 2000,
-    sharedOpenclawSessionId: "oc-shared",
+    openclawAgentId: "claude-code",
     callGateway,
     broadcast: () => {},
     replyPollIntervalMs: 5,
@@ -149,7 +149,7 @@ test("manual mode discard — flips session to manual and rejects call", async (
   const orchestrator = createAskOrchestrator({
     ...p,
     pendingTimeoutMs: 2000,
-    sharedOpenclawSessionId: "oc-shared",
+    openclawAgentId: "claude-code",
     callGateway,
     broadcast: () => {},
     replyPollIntervalMs: 5,
@@ -177,7 +177,7 @@ test("gateway failure in agent mode surfaces as error", async () => {
   const orchestrator = createAskOrchestrator({
     ...p,
     pendingTimeoutMs: 1000,
-    sharedOpenclawSessionId: "oc-shared",
+    openclawAgentId: "claude-code",
     callGateway: async () => { throw new Error("gateway offline"); },
     broadcast: () => {},
     replyPollIntervalMs: 5,
@@ -205,7 +205,7 @@ test("polling times out when assistant never replies", async () => {
   const orchestrator = createAskOrchestrator({
     ...p,
     pendingTimeoutMs: 1000,
-    sharedOpenclawSessionId: "oc-shared",
+    openclawAgentId: "claude-code",
     callGateway,
     broadcast: () => {},
     replyPollIntervalMs: 5,
