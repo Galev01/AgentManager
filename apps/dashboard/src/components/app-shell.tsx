@@ -1,7 +1,11 @@
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { getClaudeCodeEscalationCount } from "@/lib/bridge-client";
 
-export function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
+export async function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
+  const decisionCount = await getClaudeCodeEscalationCount().catch(() => 0);
+  const badges: Record<string, number> =
+    decisionCount > 0 ? { claude_code: decisionCount } : {};
   return (
     <div
       className="app"
@@ -11,7 +15,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
         minHeight: "100vh",
       }}
     >
-      <Sidebar />
+      <Sidebar badges={badges} />
       <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
         <Header title={title} />
         <main style={{ flex: 1 }}>{children}</main>

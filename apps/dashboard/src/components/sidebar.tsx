@@ -55,7 +55,7 @@ const NAV: NavSection[] = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ badges = {} }: { badges?: Record<string, number> }) {
   const pathname = usePathname();
 
   return (
@@ -84,6 +84,23 @@ export function Sidebar() {
                 >
                   <IconComponent />
                   <span>{item.label}</span>
+                  {badges[item.id] ? (
+                    <span
+                      className="sb-badge"
+                      style={{
+                        marginLeft: "auto",
+                        background: "var(--warn-dim)",
+                        color: "var(--warn)",
+                        fontSize: 10,
+                        padding: "1px 6px",
+                        borderRadius: 999,
+                        fontFamily: "var(--font-mono, JetBrains Mono), monospace",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {badges[item.id]}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}

@@ -2,7 +2,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ClaudeCodeSession } from "@openclaw-manager/types";
+import type { CCEnvelope, ClaudeCodeSession } from "@openclaw-manager/types";
+
+type SessionRow = ClaudeCodeSession & { latestEnvelope?: CCEnvelope | null };
 import {
   Badge,
   Button,
@@ -19,7 +21,7 @@ export function ClaudeCodeSessionsTable({
   sessions,
   pendingBySession,
 }: {
-  sessions: ClaudeCodeSession[];
+  sessions: SessionRow[];
   pendingBySession: Record<string, number>;
 }) {
   const router = useRouter();
@@ -95,13 +97,14 @@ export function ClaudeCodeSessionsTable({
               <th>State</th>
               <th>Activity</th>
               <th>Pending</th>
+              <th>Needs decision</th>
               <th style={{ textAlign: "right", width: 120 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {sessions.length === 0 && (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <EmptyState
                     title="No Claude Code sessions yet"
                     description="Connect an IDE to start a session."
@@ -153,6 +156,16 @@ export function ClaudeCodeSessionsTable({
                     {pendingCount > 0 ? (
                       <Badge kind="warn" dot>
                         {pendingCount}
+                      </Badge>
+                    ) : (
+                      <span style={{ color: "var(--text-faint)" }}>—</span>
+                    )}
+                  </td>
+                  <td>
+                    {s.latestEnvelope?.intent === "decide" &&
+                    s.latestEnvelope?.state === "blocked" ? (
+                      <Badge kind="warn" dot>
+                        decision
                       </Badge>
                     ) : (
                       <span style={{ color: "var(--text-faint)" }}>—</span>

@@ -49,6 +49,7 @@ import type {
   GlobalBrain,
   GlobalBrainUpdate,
   BrainInjectionPreview,
+  CCEnvelope,
 } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -668,6 +669,17 @@ export async function getYoutubeHighlights(videoId: string): Promise<YoutubeHigh
 
 export async function getClaudeCodeSessions(): Promise<ClaudeCodeSession[]> {
   return bridgeFetch<ClaudeCodeSession[]>("/claude-code/sessions");
+}
+
+export async function getClaudeCodeSessionsWithEnvelope(): Promise<
+  Array<ClaudeCodeSession & { latestEnvelope: CCEnvelope | null }>
+> {
+  return bridgeFetch("/claude-code/sessions-with-envelope");
+}
+
+export async function getClaudeCodeEscalationCount(): Promise<number> {
+  const { count } = await bridgeFetch<{ count: number }>("/claude-code/escalations");
+  return count;
 }
 
 export async function getClaudeCodeTranscript(id: string): Promise<ClaudeCodeTranscriptEvent[]> {

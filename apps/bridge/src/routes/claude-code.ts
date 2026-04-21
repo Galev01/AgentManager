@@ -11,6 +11,7 @@ import {
 } from "../services/claude-code-sessions.js";
 import {
   readTranscript,
+  readLatestEnvelope,
   transcriptPathFor,
 } from "../services/claude-code-transcript.js";
 import {
@@ -41,7 +42,12 @@ function validId(id: string): boolean {
 
 router.post("/claude-code/ask", async (req, res) => {
   const body = req.body as ClaudeCodeAskRequest;
-  if (!body?.ide || !body?.workspace || !body?.msgId || typeof body.question !== "string") {
+  if (
+    !body?.ide ||
+    !body?.workspace ||
+    !body?.msgId ||
+    typeof body.question !== "string"
+  ) {
     return res.status(400).json({ error: "ide, workspace, msgId, question are required" });
   }
   try {
@@ -49,6 +55,9 @@ router.post("/claude-code/ask", async (req, res) => {
     res.json(result);
   } catch (err) {
     const message = (err as Error).message;
+    if (/message required/i.test(message)) {
+      return res.status(400).json({ error: "message required" });
+    }
     if (/discarded/i.test(message)) return res.status(409).json({ error: "operator discarded reply" });
     if (/timeout/i.test(message)) return res.status(504).json({ error: "operator timeout" });
     if (/gateway/i.test(message)) return res.status(503).json({ error: message });
@@ -58,6 +67,32 @@ router.post("/claude-code/ask", async (req, res) => {
 
 router.get("/claude-code/sessions", async (_req, res) => {
   res.json(await listSessions(config.claudeCodeSessionsPath));
+});
+
+router.get("/claude-code/sessions-with-envelope", async (_req, res) => {
+  const sessions = await listSessions(config.claudeCodeSessionsPath);
+  const rows = await Promise.all(
+    sessions.map(async (s) => {
+      const latestEnvelope = await readLatestEnvelope(
+        transcriptPathFor(config.claudeCodeDir, s.id)
+      );
+      return { ...s, latestEnvelope };
+    })
+  );
+  res.json(rows);
+});
+
+router.get("/claude-code/escalations", async (_req, res) => {
+  const sessions = await listSessions(config.claudeCodeSessionsPath);
+  let count = 0;
+  for (const s of sessions) {
+    if (s.state !== "active") continue;
+    const env = await readLatestEnvelope(
+      transcriptPathFor(config.claudeCodeDir, s.id)
+    );
+    if (env && env.intent === "decide" && env.state === "blocked") count++;
+  }
+  res.json({ count });
 });
 
 router.patch("/claude-code/sessions/:id", async (req, res) => {

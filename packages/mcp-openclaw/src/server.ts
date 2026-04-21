@@ -52,8 +52,36 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           message: { type: "string", description: "Your turn in the conversation." },
           context: {
             type: "object",
-            description: "Optional context to include (e.g. selected code, stack trace, file path).",
+            description: "Optional legacy context (e.g. file, selection, stack). Bridge maps known keys into typed refs.",
             additionalProperties: true,
+          },
+          intent: {
+            type: "string",
+            enum: ["decide", "brainstorm", "plan", "review", "research", "unblock", "handoff", "report"],
+            description: "Collaboration mode requested by this turn.",
+          },
+          state: {
+            type: "string",
+            enum: ["new", "in_progress", "blocked", "review_ready", "done", "parked"],
+            description: "Author's asserted lifecycle status for the thread after this turn.",
+          },
+          artifact: {
+            type: "string",
+            enum: ["none", "question", "decision", "spec", "plan", "review_notes", "patch", "summary"],
+            description: "Primary output shape delivered by this turn.",
+          },
+          priority: {
+            type: "string",
+            enum: ["low", "normal", "high", "urgent"],
+          },
+          parent_msg_id: {
+            type: "string",
+            description: "Parent turn's msg_id within this session (threading).",
+          },
+          refs: {
+            type: "array",
+            items: { type: "object", additionalProperties: true },
+            description: "Typed evidence references. See envelope spec.",
           },
         },
         required: ["message"],
@@ -85,12 +113,24 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const message = String(args.message ?? "");
     const context = (args.context as Record<string, unknown>) ?? undefined;
     const msgId = `m-${crypto.randomBytes(6).toString("hex")}`;
-    const result = await bridgeFetch<{ answer: string; source: string; action?: string }>(
+    const payload: Record<string, unknown> = {
+      ide: IDE,
+      workspace: WORKSPACE,
+      clientId: CLIENT_ID,
+      msgId,
+      question: message,
+      context,
+    };
+    if (typeof args.intent === "string") payload.intent = args.intent;
+    if (typeof args.state === "string") payload.state = args.state;
+    if (typeof args.artifact === "string") payload.artifact = args.artifact;
+    if (typeof args.priority === "string") payload.priority = args.priority;
+    if (typeof args.parent_msg_id === "string") payload.parentMsgId = args.parent_msg_id;
+    if (Array.isArray(args.refs)) payload.refs = args.refs;
+
+    const result = await bridgeFetch<{ answer: string; source: string; action?: string; envelope?: unknown }>(
       "/claude-code/ask",
-      {
-        method: "POST",
-        body: JSON.stringify({ ide: IDE, workspace: WORKSPACE, clientId: CLIENT_ID, msgId, question: message, context }),
-      }
+      { method: "POST", body: JSON.stringify(payload) }
     );
     return { content: [{ type: "text", text: result.answer }] };
   }
