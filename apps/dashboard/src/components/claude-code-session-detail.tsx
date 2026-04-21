@@ -18,6 +18,7 @@ import {
 import { ClaudeCodePendingCard } from "./claude-code-pending-card";
 import { CCEnvelopeChips } from "./cc-envelope-chips";
 import { CCRefChips } from "./cc-ref-chips";
+import { CCEscalationCard } from "./cc-escalation-card";
 
 type Intel = {
   openclawModel: string | null;
@@ -187,6 +188,9 @@ export function ClaudeCodeSessionDetail({
     { label: "created", value: new Date(session.createdAt).toLocaleString() },
   ];
 
+  const latestEnvelope =
+    [...events].reverse().find((e) => e.envelope)?.envelope ?? null;
+
   return (
     <>
       <PageHeader
@@ -257,6 +261,14 @@ export function ClaudeCodeSessionDetail({
               <KV items={intelItems} />
             </div>
           </Card>
+
+          {latestEnvelope ? (
+            <CCEscalationCard
+              session={session}
+              latestTurn={latestEnvelope}
+              pending={pending.find((p) => p.sessionId === session.id) ?? null}
+            />
+          ) : null}
 
           <Card>
             <SectionTitle>Mode</SectionTitle>
