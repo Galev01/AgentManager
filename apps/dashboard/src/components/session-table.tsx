@@ -76,7 +76,7 @@ export function SessionTable({ initial }: { initial: AgentSession[] }) {
       if (filter !== "all" && s.status !== filter) return false;
       if (!q) return true;
       return (
-        s.id.toLowerCase().includes(q) ||
+        (s.id ?? "").toLowerCase().includes(q) ||
         (s.agentName ?? "").toLowerCase().includes(q)
       );
     });
@@ -107,6 +107,9 @@ export function SessionTable({ initial }: { initial: AgentSession[] }) {
         throw new Error(data.error || "Failed to create session");
       }
       const newSession: AgentSession = await res.json();
+      if (!newSession || typeof newSession.id !== "string" || !newSession.id) {
+        throw new Error("Server returned a session with no id");
+      }
       setSessions((prev) => [newSession, ...prev]);
       router.push(`/sessions/${newSession.id}`);
     } catch (err) {
@@ -240,28 +243,34 @@ export function SessionTable({ initial }: { initial: AgentSession[] }) {
                 </td>
               </tr>
             )}
-            {filtered.map((s) => (
+            {filtered.map((s, idx) => {
+              const sid = typeof s.id === "string" ? s.id : "";
+              return (
               <tr
-                key={s.id}
-                onClick={() => router.push(`/sessions/${s.id}`)}
-                style={{ cursor: "pointer" }}
+                key={sid || `row-${idx}`}
+                onClick={() => sid && router.push(`/sessions/${sid}`)}
+                style={{ cursor: sid ? "pointer" : "default" }}
               >
                 <td className="pri mono" style={{ fontSize: 12 }}>
-                  <button
-                    type="button"
-                    onClick={(e) => copyId(s.id, e)}
-                    title={s.id + " (click to copy)"}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      padding: 0,
-                      font: "inherit",
-                      color: "inherit",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {copied === s.id ? "copied!" : s.id.slice(0, 8)}
-                  </button>
+                  {sid ? (
+                    <button
+                      type="button"
+                      onClick={(e) => copyId(sid, e)}
+                      title={sid + " (click to copy)"}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        font: "inherit",
+                        color: "inherit",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {copied === sid ? "copied!" : sid.slice(0, 8)}
+                    </button>
+                  ) : (
+                    <span style={{ color: "var(--text-faint)" }}>—</span>
+                  )}
                 </td>
                 <td>
                   {s.agentName || <span style={{ color: "var(--text-faint)" }}>—</span>}
@@ -293,7 +302,8 @@ export function SessionTable({ initial }: { initial: AgentSession[] }) {
                   {s.lastActivityAt ? timeAgo(s.lastActivityAt) : "—"}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </Table>
       </TableWrap>
