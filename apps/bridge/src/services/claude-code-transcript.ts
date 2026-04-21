@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ClaudeCodeTranscriptEvent } from "@openclaw-manager/types";
+import type { CCEnvelope, ClaudeCodeTranscriptEvent } from "@openclaw-manager/types";
 
 export function transcriptPathFor(dir: string, sessionId: string): string {
   return path.join(dir, `${sessionId}.jsonl`);
@@ -33,4 +33,14 @@ export async function readTranscript(filePath: string): Promise<ClaudeCodeTransc
     }
   }
   return out;
+}
+
+/** Read the most recent transcript event's envelope (or null). */
+export async function readLatestEnvelope(filePath: string): Promise<CCEnvelope | null> {
+  const events = await readTranscript(filePath);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const env = events[i]?.envelope;
+    if (env) return env;
+  }
+  return null;
 }

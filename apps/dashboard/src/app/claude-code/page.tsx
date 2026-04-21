@@ -1,12 +1,12 @@
 import { AppShell } from "@/components/app-shell";
 import { ClaudeCodeSessionsTable } from "@/components/claude-code-sessions-table";
-import { getClaudeCodeSessions, getClaudeCodePending } from "@/lib/bridge-client";
+import { getClaudeCodeSessionsWithEnvelope, getClaudeCodePending } from "@/lib/bridge-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function ClaudeCodePage() {
   const [sessions, pending] = await Promise.all([
-    getClaudeCodeSessions().catch(() => []),
+    getClaudeCodeSessionsWithEnvelope().catch(() => []),
     getClaudeCodePending().catch(() => []),
   ]);
   const pendingBySession = new Map<string, number>();

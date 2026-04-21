@@ -11,6 +11,7 @@ import {
 } from "../services/claude-code-sessions.js";
 import {
   readTranscript,
+  readLatestEnvelope,
   transcriptPathFor,
 } from "../services/claude-code-transcript.js";
 import {
@@ -66,6 +67,32 @@ router.post("/claude-code/ask", async (req, res) => {
 
 router.get("/claude-code/sessions", async (_req, res) => {
   res.json(await listSessions(config.claudeCodeSessionsPath));
+});
+
+router.get("/claude-code/sessions-with-envelope", async (_req, res) => {
+  const sessions = await listSessions(config.claudeCodeSessionsPath);
+  const rows = await Promise.all(
+    sessions.map(async (s) => {
+      const latestEnvelope = await readLatestEnvelope(
+        transcriptPathFor(config.claudeCodeDir, s.id)
+      );
+      return { ...s, latestEnvelope };
+    })
+  );
+  res.json(rows);
+});
+
+router.get("/claude-code/escalations", async (_req, res) => {
+  const sessions = await listSessions(config.claudeCodeSessionsPath);
+  let count = 0;
+  for (const s of sessions) {
+    if (s.state !== "active") continue;
+    const env = await readLatestEnvelope(
+      transcriptPathFor(config.claudeCodeDir, s.id)
+    );
+    if (env && env.intent === "decide" && env.state === "blocked") count++;
+  }
+  res.json({ count });
 });
 
 router.patch("/claude-code/sessions/:id", async (req, res) => {
