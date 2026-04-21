@@ -2,6 +2,8 @@
 import { useState } from "react";
 import type { ClaudeCodePendingItem } from "@openclaw-manager/types";
 import { Button } from "./ui";
+import { CCEnvelopeChips } from "./cc-envelope-chips";
+import { CCRefChips } from "./cc-ref-chips";
 
 type Mode = "idle" | "edit" | "replace";
 
@@ -36,13 +38,26 @@ export function ClaudeCodePendingCard({
 
       <div className="pending-block">
         <div className="pending-label">Claude Code asked</div>
+        {pending.envelope ? (
+          <div style={{ marginBottom: 4 }}>
+            <CCEnvelopeChips envelope={pending.envelope} />
+          </div>
+        ) : null}
         <div className="pending-text">{pending.question}</div>
+        {pending.envelope?.refs?.length ? (
+          <CCRefChips refs={pending.envelope.refs} />
+        ) : null}
       </div>
 
       <div className="pending-block">
         <div className="pending-label">
           {mode === "replace" ? "Your reply" : "OpenClaw drafted"}
         </div>
+        {pending.draftEnvelope && mode === "idle" ? (
+          <div style={{ marginBottom: 4 }}>
+            <CCEnvelopeChips envelope={pending.draftEnvelope} />
+          </div>
+        ) : null}
         {mode === "idle" ? (
           <div className="pending-text">{pending.draft}</div>
         ) : (

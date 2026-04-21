@@ -16,6 +16,8 @@ import {
   SectionTitle,
 } from "./ui";
 import { ClaudeCodePendingCard } from "./claude-code-pending-card";
+import { CCEnvelopeChips } from "./cc-envelope-chips";
+import { CCRefChips } from "./cc-ref-chips";
 
 type Intel = {
   openclawModel: string | null;
@@ -228,7 +230,11 @@ export function ClaudeCodeSessionDetail({
               />
             )}
             {events.map((e, i) => (
-              <TranscriptBubble key={i} event={e} />
+              <TranscriptBubble
+                key={i}
+                event={e}
+                prior={i > 0 ? events[i - 1] : null}
+              />
             ))}
           </div>
         </Card>
@@ -303,11 +309,38 @@ export function ClaudeCodeSessionDetail({
   );
 }
 
-function TranscriptBubble({ event }: { event: ClaudeCodeTranscriptEvent }) {
+function TranscriptBubble({
+  event,
+  prior,
+}: {
+  event: ClaudeCodeTranscriptEvent;
+  prior: ClaudeCodeTranscriptEvent | null;
+}) {
+  const envelope = event.envelope ?? null;
+  const priorEnv = prior?.envelope ?? null;
+  const transitioned =
+    !!envelope &&
+    !!priorEnv &&
+    (priorEnv.intent !== envelope.intent || priorEnv.state !== envelope.state);
+
+  const chrome = envelope ? (
+    <>
+      <div style={{ marginBottom: 4 }}>
+        <CCEnvelopeChips
+          envelope={envelope}
+          prior={priorEnv}
+          transitioned={transitioned}
+        />
+      </div>
+      {envelope.refs.length > 0 ? <CCRefChips refs={envelope.refs} /> : null}
+    </>
+  ) : null;
+
   if (event.kind === "ask") {
     return (
       <div className="msg us">
         <div className="msg-meta">Claude Code</div>
+        {chrome}
         <div>{event.question}</div>
         {event.context && (
           <details>
@@ -325,6 +358,7 @@ function TranscriptBubble({ event }: { event: ClaudeCodeTranscriptEvent }) {
         <div className="msg-meta">
           {isOperator ? `Operator (${event.action})` : "OpenClaw"}
         </div>
+        {chrome}
         <div>{event.answer}</div>
       </div>
     );
