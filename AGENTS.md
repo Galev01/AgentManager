@@ -214,6 +214,34 @@ Bridge endpoints: `/claude-code/ask`, `/claude-code/sessions`, `/claude-code/tra
 
 MCP tools: `openclaw_say`, `openclaw_conclude`, `openclaw_session_info`.
 
+### Collaboration Envelope (phase 1)
+
+Every CC↔OC turn carries a canonical envelope normalized by the bridge:
+
+| Field | Required? | Notes |
+|---|---|---|
+| `message` | yes | Natural-language body. The only field that causes a 400 when missing. |
+| `intent` | no | `decide \| brainstorm \| plan \| review \| research \| unblock \| handoff \| report` — what kind of collaboration is requested. |
+| `state` | no | `new \| in_progress \| blocked \| review_ready \| done \| parked` — author's asserted lifecycle status. `timeout` is system-only. |
+| `artifact` | no | `none \| question \| decision \| spec \| plan \| review_notes \| patch \| summary` — output shape. Defaults to `none`. |
+| `priority` | no | `low \| normal \| high \| urgent`. Defaults to `normal`. |
+| `refs[]` | no | Typed evidence: `file / commit / spec / error / session`, optional `relation`. |
+| `parent_msg_id` | no | Threading. |
+| `msg_id` | no | Bridge-assigned when absent. |
+| `author` | — | **Bridge-derived, never caller-supplied.** `{ kind: "ide"|"agent"|"operator"|"system", id }`. |
+
+Design principles:
+
+- **State is an author assertion, not a negotiated field.** Receiver can disagree in the next turn by declaring a different state.
+- **Artifact names the primary deliverable of the turn**, not every rhetorical element inside it.
+- **Refs point to evidence**, not narration already in `message`.
+- **Protocol semantics are shared across all agents; role prompts may specialize behavior but must not redefine envelope meaning.**
+
+Full spec: `docs/superpowers/specs/2026-04-21-openclaw-integration-envelope-design.md`.
+
+Bridge module: `apps/bridge/src/services/envelope.ts`.
+Dashboard chrome: `cc-envelope-chips.tsx`, `cc-ref-chips.tsx`, `cc-escalation-card.tsx`.
+
 ## Adding a New Feature — Checklist
 
 1. **Types first:** Add any new types to `packages/types/src/index.ts`
