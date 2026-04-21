@@ -41,7 +41,12 @@ function validId(id: string): boolean {
 
 router.post("/claude-code/ask", async (req, res) => {
   const body = req.body as ClaudeCodeAskRequest;
-  if (!body?.ide || !body?.workspace || !body?.msgId || typeof body.question !== "string") {
+  if (
+    !body?.ide ||
+    !body?.workspace ||
+    !body?.msgId ||
+    typeof body.question !== "string"
+  ) {
     return res.status(400).json({ error: "ide, workspace, msgId, question are required" });
   }
   try {
@@ -49,6 +54,9 @@ router.post("/claude-code/ask", async (req, res) => {
     res.json(result);
   } catch (err) {
     const message = (err as Error).message;
+    if (/message required/i.test(message)) {
+      return res.status(400).json({ error: "message required" });
+    }
     if (/discarded/i.test(message)) return res.status(409).json({ error: "operator discarded reply" });
     if (/timeout/i.test(message)) return res.status(504).json({ error: "operator timeout" });
     if (/gateway/i.test(message)) return res.status(503).json({ error: message });
