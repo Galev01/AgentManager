@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useBridgeEvents } from "@/lib/ws-client";
 import type { BrainPersonSummary } from "@openclaw-manager/types";
@@ -11,6 +11,10 @@ export function BrainPeopleTable({ initial }: { initial: BrainPersonSummary[] })
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<"all" | "active" | "archived" | "blocked">("active");
+  const [sortBy, setSortBy] = useState<"lastSeen" | "name" | "unread">("lastSeen");
 
   const refresh = useCallback(async () => {
     try {
@@ -55,6 +59,23 @@ export function BrainPeopleTable({ initial }: { initial: BrainPersonSummary[] })
     setPeople(initial);
   }, [initial]);
 
+  const view = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = people.filter((p) => status === "all" || p.status === status);
+    if (q) {
+      list = list.filter((p) =>
+        (p.name || "").toLowerCase().includes(q) ||
+        p.phone.toLowerCase().includes(q),
+      );
+    }
+    list = [...list].sort((a, b) => {
+      if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
+      if (sortBy === "unread") return (b.unreadCount ?? 0) - (a.unreadCount ?? 0);
+      return (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0);
+    });
+    return list;
+  }, [people, query, status, sortBy]);
+
   return (
     <div className="space-y-6">
       {error && (
@@ -64,8 +85,29 @@ export function BrainPeopleTable({ initial }: { initial: BrainPersonSummary[] })
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          placeholder="Search name / phone"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="flex-1 min-w-[240px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+        />
+        <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="rounded border border-zinc-600 bg-zinc-900 px-2 py-2 text-sm text-zinc-100">
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+          <option value="blocked">Blocked</option>
+        </select>
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="rounded border border-zinc-600 bg-zinc-900 px-2 py-2 text-sm text-zinc-100">
+          <option value="lastSeen">Last message</option>
+          <option value="name">Name</option>
+          <option value="unread">Unread</option>
+        </select>
+      </div>
+
       <div className="overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
-        {people.length === 0 ? (
+        {view.length === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-zinc-400">
             No people yet. They'll appear here automatically when WhatsApp contacts write in, or you can add one below.
           </div>
@@ -73,29 +115,33 @@ export function BrainPeopleTable({ initial }: { initial: BrainPersonSummary[] })
           <table className="w-full text-sm text-zinc-100">
             <thead>
               <tr className="border-b border-zinc-700 bg-zinc-900/50 text-left text-xs uppercase tracking-wider text-zinc-400">
+                <th className="w-10 px-4 py-3"></th>
                 <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">Relationship</th>
-                <th className="px-4 py-3">Language</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Meta</th>
+                <th className="px-4 py-3">Last message</th>
                 <th className="px-4 py-3">Last seen</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-700">
-              {people.map((p) => (
+              {view.map((p) => (
                 <tr key={p.phone} className="hover:bg-zinc-700/30 transition">
-                  <td className="px-4 py-3 font-medium">{p.name}</td>
-                  <td className="px-4 py-3 text-zinc-300 font-mono text-xs">{p.phone}</td>
-                  <td className="px-4 py-3 text-zinc-300">{p.relationship || "—"}</td>
-                  <td className="px-4 py-3 text-zinc-300">{p.language || "—"}</td>
-                  <td className="px-4 py-3 text-zinc-300">{p.status}</td>
-                  <td className="px-4 py-3 text-zinc-400">{p.lastSeen || "—"}</td>
+                  <td className="px-4 py-3">
+                    {(p.unreadCount ?? 0) > 0 && (
+                      <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-semibold text-white">
+                        {p.unreadCount}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 font-medium text-zinc-100">{p.name}</td>
+                  <td className="px-4 py-3 text-xs text-zinc-400">
+                    {[p.relationship, p.language].filter(Boolean).join(" · ") || "—"}
+                    <div className="font-mono text-[11px] text-zinc-500">{p.phone}</div>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-zinc-300 max-w-[260px] truncate">{p.lastMessageSnippet ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs text-zinc-400">{p.lastSeen || (p.lastMessageAt ? new Date(p.lastMessageAt).toLocaleString() : "—")}</td>
                   <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/brain/people/${encodeURIComponent(p.phone)}`}
-                      className="rounded px-3 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-900/30 hover:text-blue-300 transition"
-                    >
+                    <Link href={`/brain/people/${encodeURIComponent(p.phone)}`} className="rounded px-3 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-900/30 hover:text-blue-300 transition">
                       Open
                     </Link>
                   </td>

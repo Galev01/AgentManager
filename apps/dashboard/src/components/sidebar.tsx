@@ -40,7 +40,8 @@ const NAV: NavSection[] = [
       { id: "channels", label: "Channels",      href: "/channels",    icon: "channels" },
       { id: "tools",    label: "Tools",         href: "/tools",       icon: "tools"    },
       { id: "routing",  label: "Routing Rules", href: "/routing",     icon: "rules"    },
-      { id: "brain",    label: "Brain · People",href: "/brain/people",icon: "brain"    },
+      { id: "brain",       label: "Brain · People", href: "/brain/people", icon: "brain" },
+      { id: "brain-agent", label: "Brain · Global", href: "/brain/agent",  icon: "brain" },
     ],
   },
   {

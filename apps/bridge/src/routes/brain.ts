@@ -1,7 +1,8 @@
 import { Router, type Router as ExpressRouter } from "express";
-import { BrainPersonNotFoundError, normalizePhone } from "@openclaw-manager/brain";
-import { getBrainClient, isBrainEnabled } from "../services/brain.js";
-import type { BrainPersonUpdate } from "@openclaw-manager/types";
+import { BrainPersonNotFoundError, normalizePhone, renderInjectionPreview } from "@openclaw-manager/brain";
+import { getBrainClient, getGlobalBrainClient, isBrainEnabled } from "../services/brain.js";
+import { getConversations } from "../services/openclaw-state.js";
+import type { BrainPersonUpdate, GlobalBrainUpdate, ConversationRow } from "@openclaw-manager/types";
 
 const router: ExpressRouter = Router();
 
@@ -18,8 +19,22 @@ router.get("/brain/status", (_req, res) => {
 router.get("/brain/people", async (_req, res) => {
   if (!ensureEnabled(res)) return;
   try {
-    const people = await getBrainClient().listPeople();
-    res.json(people);
+    const [people, convos] = await Promise.all([
+      getBrainClient().listPeople(),
+      getConversations().catch(() => [] as ConversationRow[]),
+    ]);
+    const byPhone = new Map(convos.map((c) => [c.phone, c]));
+    const enriched = people.map((p) => {
+      const c = byPhone.get(p.phone);
+      if (!c) return { ...p, unreadCount: 0, lastMessageSnippet: null, lastMessageAt: null };
+      return {
+        ...p,
+        unreadCount: computeUnread(c),
+        lastMessageSnippet: truncate(c.lastRemoteContent, 30),
+        lastMessageAt: c.lastRemoteAt,
+      };
+    });
+    res.json(enriched);
   } catch (err) {
     res.status(503).json({ error: `Failed to list people: ${String(err)}` });
   }
@@ -105,5 +120,105 @@ router.post("/brain/people/:phone/log", async (req, res) => {
     res.status(500).json({ error: String(err) });
   }
 });
+
+router.get("/brain/agent", async (_req, res) => {
+  if (!ensureEnabled(res)) return;
+  try {
+    const brain = await getGlobalBrainClient().get();
+    res.json(brain);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+router.patch("/brain/agent", async (req, res) => {
+  if (!ensureEnabled(res)) return;
+  const body = req.body ?? {};
+  const update: GlobalBrainUpdate = {};
+  if (typeof body.persona === "string") update.persona = body.persona;
+  if (typeof body.toneStyle === "string") update.toneStyle = body.toneStyle;
+  if (Array.isArray(body.hardRules)) update.hardRules = body.hardRules.map(String);
+  if (Array.isArray(body.globalFacts)) update.globalFacts = body.globalFacts.map(String);
+  if (Array.isArray(body.doNotSay)) update.doNotSay = body.doNotSay.map(String);
+  if (Array.isArray(body.defaultGoals)) update.defaultGoals = body.defaultGoals.map(String);
+  try {
+    const brain = await getGlobalBrainClient().update(update);
+    res.json(brain);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+router.get("/brain/agent/preview", async (_req, res) => {
+  if (!ensureEnabled(res)) return;
+  try {
+    const brain = await getGlobalBrainClient().get();
+    const preview = renderInjectionPreview({ brain });
+    res.json(preview);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+router.get("/brain/people/:phone/preview", async (req, res) => {
+  if (!ensureEnabled(res)) return;
+  try {
+    const brainClient = getBrainClient();
+    const person = await brainClient.getPerson(req.params.phone);
+    if (!person) { res.status(404).json({ error: "Not found" }); return; }
+    const brain = await getGlobalBrainClient().get();
+    res.json(renderInjectionPreview({ brain, person }));
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+router.post("/brain/people/:phone/log/:index/promote", async (req, res) => {
+  if (!ensureEnabled(res)) return;
+  const target = req.body?.target;
+  if (target !== "facts" && target !== "preferences" && target !== "openThreads") {
+    res.status(400).json({ error: "target must be facts | preferences | openThreads" });
+    return;
+  }
+  const idx = Number(req.params.index);
+  if (!Number.isInteger(idx) || idx < 0) {
+    res.status(400).json({ error: "index must be a non-negative integer" });
+    return;
+  }
+  try {
+    const brainClient = getBrainClient();
+    const person = await brainClient.getPerson(req.params.phone);
+    if (!person) { res.status(404).json({ error: "Not found" }); return; }
+    const line = person.log[idx];
+    if (typeof line !== "string") {
+      res.status(409).json({ error: "log entry moved or changed; refresh and retry" });
+      return;
+    }
+    const listKey = target as "facts" | "preferences" | "openThreads";
+    const list = person[listKey];
+    if (list.includes(line)) {
+      res.status(200).json({ unchanged: true, person });
+      return;
+    }
+    const update: { facts?: string[]; preferences?: string[]; openThreads?: string[] } = {};
+    update[listKey] = [...list, line];
+    const updated = await brainClient.updatePerson(req.params.phone, update);
+    res.status(201).json({ unchanged: false, person: updated });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+export function computeUnread(c: ConversationRow): number {
+  const lastOut = Math.max(c.lastAgentReplyAt ?? 0, c.lastHumanReplyAt ?? 0);
+  const lastIn = c.lastRemoteAt ?? 0;
+  return lastIn > lastOut ? 1 : 0;
+}
+
+export function truncate(s: string | null, max: number): string | null {
+  if (!s) return null;
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1).trimEnd() + "…";
+}
 
 export default router;

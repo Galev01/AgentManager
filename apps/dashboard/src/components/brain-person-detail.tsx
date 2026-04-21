@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useBridgeEvents } from "@/lib/ws-client";
-import type { BrainPerson, BrainPersonStatus, BrainPersonUpdate } from "@openclaw-manager/types";
+import type { BrainPerson, BrainPersonStatus, BrainPersonUpdate, ConversationEvent, GlobalBrain } from "@openclaw-manager/types";
+import { CollapsibleCard } from "./brain-collapsible-card";
+import { InjectionPreview } from "./brain-injection-preview";
+import { LogLineWithPromote } from "./brain-log-line";
 
 type EditableLines = string; // newline-separated bullets
 
@@ -64,6 +68,33 @@ export function BrainPersonDetail({ initial }: { initial: BrainPerson }) {
   const [appending, setAppending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const [globalSnapshot, setGlobalSnapshot] = useState<GlobalBrain | null>(null);
+  const [recentEvents, setRecentEvents] = useState<ConversationEvent[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/brain/agent", { cache: "no-store" });
+        if (!r.ok) return;
+        if (!cancelled) setGlobalSnapshot(await r.json());
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const key = person.jid || person.phone;
+        const r = await fetch(`/api/messages?conversationKey=${encodeURIComponent(key)}&limit=20`, { cache: "no-store" });
+        if (!r.ok) return;
+        if (!cancelled) setRecentEvents(await r.json());
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [person.phone, person.jid]);
 
   const refresh = useCallback(async () => {
     try {
@@ -163,6 +194,8 @@ export function BrainPersonDetail({ initial }: { initial: BrainPerson }) {
 
   const logReversed = useMemo(() => [...person.log].reverse(), [person.log]);
 
+  const ck = (section: string) => `brain.collapsed.${person.phone}.${section}`;
+
   return (
     <div className="space-y-6">
       {error && (
@@ -182,6 +215,7 @@ export function BrainPersonDetail({ initial }: { initial: BrainPerson }) {
         </div>
       )}
 
+      {/* Header strip — non-collapsible */}
       <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name">
@@ -230,133 +264,151 @@ export function BrainPersonDetail({ initial }: { initial: BrainPerson }) {
         </div>
       </div>
 
-      <Section title="Summary" hint="One paragraph the agent reads before replying.">
-        <textarea
-          value={edit.summary}
-          onChange={(e) => update("summary", e.target.value)}
-          rows={4}
-          className={textareaClass}
-        />
-      </Section>
-
-      <Section title="Facts" hint="One bullet per line. Injected into the agent's context.">
-        <textarea
-          value={edit.facts}
-          onChange={(e) => update("facts", e.target.value)}
-          rows={5}
-          className={textareaClass}
-          placeholder="Lives in Tel Aviv\nPrefers short replies"
-        />
-      </Section>
-
-      <Section title="Preferences" hint="One per line.">
-        <textarea
-          value={edit.preferences}
-          onChange={(e) => update("preferences", e.target.value)}
-          rows={4}
-          className={textareaClass}
-        />
-      </Section>
-
-      <Section title="Open Threads" hint="One per line.">
-        <textarea
-          value={edit.openThreads}
-          onChange={(e) => update("openThreads", e.target.value)}
-          rows={4}
-          className={textareaClass}
-        />
-      </Section>
-
-      <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-100">Curses (canned replies)</h3>
-            <p className="mt-1 text-xs text-zinc-500">
-              When the toggle is on and the list has at least one entry, the bot replies with a random line for{" "}
-              <span className="font-mono text-zinc-300">{edit.cursingRate}%</span> of this contact's messages, skipping the AI entirely. The remaining {100 - edit.cursingRate}% fall through to the normal AI reply.
-            </p>
+      {/* Global brain snapshot */}
+      <CollapsibleCard title="Global brain" storageKey={ck("global")} defaultOpen={false} hint="Applied to every reply before this person's context.">
+        {globalSnapshot === null ? (
+          <div className="text-xs text-zinc-500">Loading…</div>
+        ) : (
+          <div className="space-y-2 text-sm text-zinc-300">
+            <p className="line-clamp-3">{globalSnapshot.persona || <em className="text-zinc-500">No persona set.</em>}</p>
+            <Link href="/brain/agent" className="inline-block text-xs text-blue-400 hover:text-blue-300">Edit global →</Link>
           </div>
-          <label className="flex shrink-0 items-center gap-2 text-xs text-zinc-300">
-            <input
-              type="checkbox"
-              checked={edit.cursing}
-              onChange={(e) => update("cursing", e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-blue-500 focus:ring-0 focus:ring-offset-0"
+        )}
+      </CollapsibleCard>
+
+      {/* Person brain */}
+      <CollapsibleCard title="Person brain" storageKey={ck("person")} defaultOpen={true}>
+        <div className="space-y-4">
+          <Section title="Summary" hint="One paragraph the agent reads before replying.">
+            <textarea
+              value={edit.summary}
+              onChange={(e) => update("summary", e.target.value)}
+              rows={4}
+              className={textareaClass}
             />
-            <span>Reply with random curse</span>
-          </label>
+          </Section>
+
+          <Section title="Facts" hint="One bullet per line. Injected into the agent's context.">
+            <textarea
+              value={edit.facts}
+              onChange={(e) => update("facts", e.target.value)}
+              rows={5}
+              className={textareaClass}
+              placeholder="Lives in Tel Aviv\nPrefers short replies"
+            />
+          </Section>
+
+          <Section title="Preferences" hint="One per line.">
+            <textarea
+              value={edit.preferences}
+              onChange={(e) => update("preferences", e.target.value)}
+              rows={4}
+              className={textareaClass}
+            />
+          </Section>
+
+          <Section title="Open Threads" hint="One per line.">
+            <textarea
+              value={edit.openThreads}
+              onChange={(e) => update("openThreads", e.target.value)}
+              rows={4}
+              className={textareaClass}
+            />
+          </Section>
+
+          <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-100">Curses (canned replies)</h3>
+                <p className="mt-1 text-xs text-zinc-500">
+                  When the toggle is on and the list has at least one entry, the bot replies with a random line for{" "}
+                  <span className="font-mono text-zinc-300">{edit.cursingRate}%</span> of this contact's messages, skipping the AI entirely. The remaining {100 - edit.cursingRate}% fall through to the normal AI reply.
+                </p>
+              </div>
+              <label className="flex shrink-0 items-center gap-2 text-xs text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={edit.cursing}
+                  onChange={(e) => update("cursing", e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-blue-500 focus:ring-0 focus:ring-offset-0"
+                />
+                <span>Reply with random curse</span>
+              </label>
+            </div>
+
+            <div className="mt-4 flex items-center gap-4">
+              <label className="text-xs uppercase tracking-wider text-zinc-400 shrink-0">
+                Curse rate
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={edit.cursingRate}
+                onChange={(e) => update("cursingRate", Number(e.target.value))}
+                disabled={!edit.cursing}
+                className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-zinc-700 accent-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={edit.cursingRate}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) update("cursingRate", Math.max(0, Math.min(100, Math.round(n))));
+                }}
+                disabled={!edit.cursing}
+                className={inputClass + " w-20 text-right font-mono disabled:opacity-50"}
+              />
+              <span className="text-xs text-zinc-400">%</span>
+            </div>
+
+            <textarea
+              value={edit.curses}
+              onChange={(e) => update("curses", e.target.value)}
+              rows={6}
+              placeholder="One per line, e.g.&#10;סתום את הפה&#10;לוזר רציני&#10;תתחדש"
+              className={textareaClass + " mt-4"}
+            />
+          </div>
+
+          <Section title="Notes" hint="Free-form. NOT injected into the agent. Use for your private scratch.">
+            <textarea
+              value={edit.notes}
+              onChange={(e) => update("notes", e.target.value)}
+              rows={6}
+              className={textareaClass}
+            />
+          </Section>
         </div>
+      </CollapsibleCard>
 
-        <div className="mt-4 flex items-center gap-4">
-          <label className="text-xs uppercase tracking-wider text-zinc-400 shrink-0">
-            Curse rate
-          </label>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={edit.cursingRate}
-            onChange={(e) => update("cursingRate", Number(e.target.value))}
-            disabled={!edit.cursing}
-            className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-zinc-700 accent-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-          />
-          <input
-            type="number"
-            min={0}
-            max={100}
-            value={edit.cursingRate}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (Number.isFinite(n)) update("cursingRate", Math.max(0, Math.min(100, Math.round(n))));
-            }}
-            disabled={!edit.cursing}
-            className={inputClass + " w-20 text-right font-mono disabled:opacity-50"}
-          />
-          <span className="text-xs text-zinc-400">%</span>
+      {/* Injection preview */}
+      <CollapsibleCard title="Injection preview" storageKey={ck("preview")} defaultOpen={false} hint="Exact prompt the agent sees for this contact.">
+        <InjectionPreviewCard phone={person.phone} />
+      </CollapsibleCard>
+
+      {/* Recent chat */}
+      <CollapsibleCard title="Recent chat" storageKey={ck("chat")} defaultOpen={true}>
+        <div className="space-y-2">
+          {recentEvents === null && <div className="text-xs text-zinc-500">Loading…</div>}
+          {recentEvents && recentEvents.length === 0 && <div className="text-xs text-zinc-500">No messages yet.</div>}
+          {recentEvents?.map((e) => (
+            <div key={e.id} className={`rounded-lg px-3 py-2 text-sm ${e.actor === "user" ? "bg-zinc-900 text-zinc-200" : "bg-blue-900/30 text-blue-100 ml-8"}`}>
+              <div className="mb-0.5 text-[11px] uppercase tracking-wider text-zinc-500">{e.actor} · {new Date(e.at).toLocaleString()}</div>
+              <div className="whitespace-pre-wrap">{e.text || "(no text)"}</div>
+            </div>
+          ))}
+          <Link href={`/conversations/${encodeURIComponent(person.jid || person.phone)}`} className="block pt-2 text-xs text-blue-400 hover:text-blue-300">
+            Open full thread →
+          </Link>
         </div>
+      </CollapsibleCard>
 
-        <textarea
-          value={edit.curses}
-          onChange={(e) => update("curses", e.target.value)}
-          rows={6}
-          placeholder="One per line, e.g.&#10;סתום את הפה&#10;לוזר רציני&#10;תתחדש"
-          className={textareaClass + " mt-4"}
-        />
-      </div>
-
-      <Section title="Notes" hint="Free-form. NOT injected into the agent. Use for your private scratch.">
-        <textarea
-          value={edit.notes}
-          onChange={(e) => update("notes", e.target.value)}
-          rows={6}
-          className={textareaClass}
-        />
-      </Section>
-
-      <div className="sticky bottom-4 flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800/95 px-4 py-3 backdrop-blur">
-        <span className="text-xs text-zinc-400">
-          {dirty ? "Unsaved changes" : "All saved"}
-        </span>
-        <div className="flex-1" />
-        <button
-          onClick={handleDiscard}
-          disabled={!dirty || saving}
-          className="rounded px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 disabled:opacity-50"
-        >
-          Discard
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={!dirty || saving}
-          className="rounded bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-      </div>
-
-      <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-5">
-        <h3 className="mb-3 text-sm font-semibold text-zinc-100">Log</h3>
+      {/* Log */}
+      <CollapsibleCard title="Log" storageKey={ck("log")} defaultOpen={true}>
         <p className="mb-3 text-xs text-zinc-500">
           Append-only. The agent writes here via <code className="font-mono">[[[BRAIN: fact]]]</code> in its replies.
         </p>
@@ -378,15 +430,68 @@ export function BrainPersonDetail({ initial }: { initial: BrainPerson }) {
           </button>
         </div>
         <ul className="mt-4 space-y-1.5 text-sm text-zinc-200">
-          {logReversed.length === 0 && <li className="text-zinc-500 text-xs">No log entries yet.</li>}
-          {logReversed.map((entry, i) => (
-            <li key={i} className="font-mono text-xs text-zinc-300 leading-relaxed">
-              {entry}
-            </li>
-          ))}
+          {person.log.length === 0 && <li className="text-zinc-500 text-xs">No log entries yet.</li>}
+          {logReversed.map((entry, displayIdx) => {
+            const originalIdx = person.log.length - 1 - displayIdx;
+            return (
+              <LogLineWithPromote
+                key={`${originalIdx}:${entry}`}
+                line={entry}
+                onPromote={async (target) => {
+                  const res = await fetch(`/api/brain/people/${encodeURIComponent(person.phone)}/log/${originalIdx}/promote`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ target }),
+                  });
+                  if (!res.ok) {
+                    const err = (await res.json().catch(() => ({}))).error || "Failed";
+                    throw new Error(err);
+                  }
+                  const data = await res.json();
+                  if (data.person) {
+                    setPerson(data.person);
+                    if (!dirty) setEdit(toEditor(data.person));
+                  }
+                  return { unchanged: !!data.unchanged };
+                }}
+              />
+            );
+          })}
         </ul>
+      </CollapsibleCard>
+
+      {/* Sticky save/discard bar */}
+      <div className="sticky bottom-4 flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800/95 px-4 py-3 backdrop-blur">
+        <span className="text-xs text-zinc-400">
+          {dirty ? "Unsaved changes" : "All saved"}
+        </span>
+        <div className="flex-1" />
+        <button
+          onClick={handleDiscard}
+          disabled={!dirty || saving}
+          className="rounded px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 disabled:opacity-50"
+        >
+          Discard
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={!dirty || saving}
+          className="rounded bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
       </div>
     </div>
+  );
+}
+
+function InjectionPreviewCard({ phone }: { phone: string }) {
+  return (
+    <InjectionPreview load={async () => {
+      const r = await fetch(`/api/brain/people/${encodeURIComponent(phone)}/preview`, { cache: "no-store" });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Failed");
+      return r.json();
+    }} />
   );
 }
 

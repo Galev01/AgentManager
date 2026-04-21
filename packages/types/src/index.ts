@@ -99,6 +99,7 @@ export type WsMessageType =
   | "event_new"
   | "settings_updated"
   | "connected"
+  | "brain_agent_changed"
   | "brain_person_changed"
   | "brain_person_removed"
   | "claude_code_session_upserted"
@@ -239,6 +240,9 @@ export type BrainPersonSummary = {
   status: BrainPersonStatus;
   lastSeen: string | null;
   tags: string[];
+  unreadCount?: number;
+  lastMessageSnippet?: string | null;
+  lastMessageAt?: number | null;
 };
 
 export type BrainPersonUpdate = {
@@ -475,6 +479,8 @@ export type ClaudeCodeTranscriptEvent = {
   from?: ClaudeCodeSessionMode;
   to?: ClaudeCodeSessionMode;
   by?: string;
+  /** Canonical envelope for this turn. Absent on legacy pre-envelope events. */
+  envelope?: CCEnvelope;
 };
 
 export type ClaudeCodePendingItem = {
@@ -484,6 +490,11 @@ export type ClaudeCodePendingItem = {
   question: string;
   draft: string;
   createdAt: string;
+  /** Full canonical envelope for the asking turn. Required on items created
+   *  after envelope wiring lands; absent on legacy rows. */
+  envelope?: CCEnvelope;
+  /** Envelope proposed for the reply (author.kind: 'agent' or 'operator'). */
+  draftEnvelope?: CCEnvelope;
 };
 
 export type ClaudeCodeAskRequest = {
@@ -496,12 +507,21 @@ export type ClaudeCodeAskRequest = {
   msgId: string;
   question: string;
   context?: Record<string, unknown>;
+  // Envelope input (all optional; bridge normalizes):
+  intent?: CCIntent;
+  state?: CCAuthorState;
+  artifact?: CCArtifact;
+  priority?: CCPriority;
+  refs?: CCRef[];
+  parentMsgId?: string;
 };
 
 export type ClaudeCodeAskResponse = {
   answer: string;
   source: ClaudeCodeAnswerSource;
   action?: ClaudeCodeOperatorAction;
+  /** Canonical envelope for the reply turn. Added in phase 1. */
+  envelope?: CCEnvelope;
 };
 
 export type ClaudeCodeConnectConfig = {
@@ -660,4 +680,118 @@ export type YoutubeVideoMetadataFile = {
   captionLanguage: string;
   fetchedAt: string;
   updatedAt: string;
+};
+
+export interface GlobalBrain {
+  persona: string;
+  hardRules: string[];
+  globalFacts: string[];
+  toneStyle: string;
+  doNotSay: string[];
+  defaultGoals: string[];
+  parseWarning: string | null;
+  updatedAt: string | null;
+}
+
+export type GlobalBrainUpdate = Partial<Omit<GlobalBrain, "parseWarning" | "updatedAt">>;
+
+export interface BrainInjectionPreview {
+  system: string;
+  breakdown: Array<{
+    source: "global" | "person" | "curses";
+    label: string;
+    text: string;
+  }>;
+}
+
+// --- Claude Code ↔ OpenClaw Collaboration Envelope (phase 1) ---
+
+export type CCIntent =
+  | "decide"
+  | "brainstorm"
+  | "plan"
+  | "review"
+  | "research"
+  | "unblock"
+  | "handoff"
+  | "report";
+
+export type CCAuthorState =
+  | "new"
+  | "in_progress"
+  | "blocked"
+  | "review_ready"
+  | "done"
+  | "parked";
+
+export type CCSystemState = "timeout";
+export type CCState = CCAuthorState | CCSystemState;
+
+export type CCArtifact =
+  | "none"
+  | "question"
+  | "decision"
+  | "spec"
+  | "plan"
+  | "review_notes"
+  | "patch"
+  | "summary";
+
+export type CCPriority = "low" | "normal" | "high" | "urgent";
+
+export type CCAuthorKind = "ide" | "agent" | "operator" | "system";
+
+export type CCAuthor = {
+  kind: CCAuthorKind;
+  id: string;
+};
+
+export type CCRefRelation =
+  | "background"
+  | "source_of_truth"
+  | "prior_attempt"
+  | "parallel_work";
+
+export type CCRef =
+  | { kind: "file"; path: string; range?: string; relation?: CCRefRelation }
+  | { kind: "commit"; sha: string; relation?: CCRefRelation }
+  | { kind: "spec"; path: string; relation?: CCRefRelation }
+  | { kind: "error"; text: string; relation?: CCRefRelation }
+  | { kind: "session"; id: string; relation?: CCRefRelation };
+
+/** Canonical internal envelope (after bridge normalization). */
+export type CCEnvelope = {
+  msgId: string;
+  parentMsgId: string | null;
+  author: CCAuthor;
+  intent: CCIntent;
+  state: CCState;
+  artifact: CCArtifact;
+  priority: CCPriority;
+  refs: CCRef[];
+  message: string;
+  /** Advisory raw values preserved when caller supplied unknown/invalid enums.
+   *  Internal only; never surfaced to callers in phase 1. */
+  _raw?: {
+    intent?: string;
+    state?: string;
+    artifact?: string;
+    refs?: unknown[];
+    author?: unknown;
+  };
+  /** Confidence of inferred fields. Internal only. */
+  _intentConfidence?: "low" | "normal";
+};
+
+/** Shape accepted in `openclaw_say` / `POST /claude-code/ask`. All fields
+ *  except `message` are optional. The bridge normalizes into `CCEnvelope`. */
+export type CCEnvelopeInput = {
+  message: string;
+  intent?: CCIntent;
+  state?: CCAuthorState;
+  artifact?: CCArtifact;
+  priority?: CCPriority;
+  refs?: CCRef[];
+  parentMsgId?: string;
+  msgId?: string;
 };
