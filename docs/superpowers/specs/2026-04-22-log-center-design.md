@@ -138,7 +138,13 @@ Read path mirrors: `Log Center → GET /api/telemetry/actions?...` → bridge `G
 1. **Browser → Next route** (`/api/telemetry/actions`): authenticated via the existing dashboard session cookie (`ocm_session`, HMAC-signed). Unauthenticated browser requests are rejected with HTTP 401.
 2. **Next route → Bridge** (`/telemetry/actions`): authenticated with `OPENCLAW_BRIDGE_TOKEN` bearer (server-side env only). Next route also injects `actor.id` from the verified session; it does **not** trust `actor` from the client body.
 3. **Bridge**: rejects any request without a valid bearer (existing bridge auth middleware). There is no unauthenticated telemetry path on bridge.
-4. **Client `actor` field**: overwritten by Next route. Clients may send `actor.id` but the server replaces it with the verified session user. Anonymous session → `actor = { type: "user", id: "anon" }`.
+4. **Server-owned trusted fields** — the Next route and/or bridge overwrite these on ingest; client values are never trusted:
+   - `actor` (type + id) — set from verified dashboard session.
+   - `ts` — bridge-stamped canonical timestamp.
+   - `source` — normalized to the known origin (`"dashboard"` for Next-route ingest).
+   - `surface` — normalized to a known enum; unknown values dropped.
+   - `schemaVersion` — pinned by server to the current accepted version; client value is ignored.
+   Anonymous session → `actor = { type: "user", id: "anon" }`.
 
 ## Components
 
@@ -237,7 +243,7 @@ Add "Logs" item to dashboard sidebar navigation, route `/logs`.
 ### Behavior when limits exceeded (phase 1)
 
 - `telemetry.retentionDays` and `telemetry.maxDiskMB` are surfaced as config but **not enforced** in phase 1.
-- If `maxDiskMB` is exceeded, the bridge logs a warning (`[telemetry] disk usage X MB exceeds cap Y MB`) on every append past the cap, but continues to write. No truncation, no reject.
+- If `maxDiskMB` is exceeded, the bridge logs a warning (`[telemetry] disk usage X MB exceeds cap Y MB`) and continues to write. No truncation, no reject. The warning is **rate-limited to at most once per 5 minutes per process** to avoid log-flooding on sustained overflow.
 - An optional bridge-side metric `telemetry_disk_mb_gauge` can be surfaced via existing health/overview routes in a follow-up.
 - Phase 3 adds the enforcement cron.
 
