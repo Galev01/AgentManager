@@ -820,3 +820,6 @@ export type CCEnvelopeInput = {
   parentMsgId?: string;
   msgId?: string;
 };
+
+export * from "./telemetry.js";
+export * from "./telemetry-registry.js";
