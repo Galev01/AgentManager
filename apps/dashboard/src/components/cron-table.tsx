@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CronJob } from "@openclaw-manager/types";
+import { ScheduleBuilder } from "./schedule-builder";
 
 function formatTimestamp(ts?: number) {
   if (!ts) return "—";
@@ -28,7 +29,7 @@ function StatusBadge({ status }: { status?: string }) {
 
 export function CronTable({ initial }: { initial: CronJob[] }) {
   const [jobs, setJobs] = useState<CronJob[]>(initial);
-  const [schedule, setSchedule] = useState("");
+  const [schedule, setSchedule] = useState("0 * * * *");
   const [command, setCommand] = useState("");
   const [agentName, setAgentName] = useState("");
   const [jobName, setJobName] = useState("");
@@ -57,7 +58,6 @@ export function CronTable({ initial }: { initial: CronJob[] }) {
       }
       const newJob: CronJob = await res.json();
       setJobs((prev) => [...prev, newJob]);
-      setSchedule("");
       setCommand("");
       setAgentName("");
       setJobName("");
@@ -181,16 +181,19 @@ export function CronTable({ initial }: { initial: CronJob[] }) {
       </div>
 
       {/* Add cron job form */}
-      <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-5">
-        <h3 className="mb-4 text-sm font-semibold text-zinc-100">Add Cron Job</h3>
+      <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-zinc-100">Add Cron Job</h3>
+
+        <ScheduleBuilder value={schedule} onChange={setSchedule} />
+
         <div className="flex flex-wrap gap-3">
           <input
             type="text"
-            placeholder="Schedule (required, e.g. 0 * * * *)"
-            value={schedule}
-            onChange={(e) => setSchedule(e.target.value)}
+            placeholder="Name (optional)"
+            value={jobName}
+            onChange={(e) => setJobName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            className="flex-1 min-w-[220px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+            className="flex-1 min-w-[160px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
           />
           <input
             type="text"
@@ -198,7 +201,7 @@ export function CronTable({ initial }: { initial: CronJob[] }) {
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            className="flex-1 min-w-[180px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+            className="flex-1 min-w-[200px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
           />
           <input
             type="text"
@@ -208,20 +211,12 @@ export function CronTable({ initial }: { initial: CronJob[] }) {
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             className="flex-1 min-w-[160px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
           />
-          <input
-            type="text"
-            placeholder="Name (optional)"
-            value={jobName}
-            onChange={(e) => setJobName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            className="flex-1 min-w-[140px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-          />
           <button
             onClick={handleAdd}
             disabled={adding || !schedule.trim()}
             className="rounded bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
-            {adding ? "Adding…" : "Add"}
+            {adding ? "Adding…" : "Add Job"}
           </button>
         </div>
       </div>
