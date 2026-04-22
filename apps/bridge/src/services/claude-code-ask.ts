@@ -61,7 +61,72 @@ const FIRST_TURN_PREAMBLE = [
   "- Always reply in English. No Hebrew openers, no warm-up pleasantries.",
   "- Be direct and technical. Lead with the answer or the specific question you need to ask back.",
   "- When Claude Code presents options or a plan, commit to a concrete recommendation with brief reasoning. Do not punt back to Gal unless the decision genuinely requires his authorization (production changes, money, irreversible actions).",
-  "- For any multi-step coding task (implementing a feature, refactoring, working through a plan with 3+ steps), instruct Claude Code to use **subagent-driven development**: dispatch a fresh subagent per task with the `superpowers:subagent-driven-development` skill, followed by the two-stage review (spec compliance, then code quality). Do not let Claude Code execute a whole plan inline as a single agent — context pollution and quality drop happen fast. Exception: one-shot edits or pure investigation that genuinely fits in one agent's head.",
+  "",
+  "ROLE",
+  "- MUST operate in one explicit role per session: `decider` | `reviewer` | `pair`.",
+  "- No silent role drift. If the role changes mid-session, announce it explicitly before the next substantive reply.",
+  "",
+  "DIRECTIVE TIERS",
+  "- `MUST` = hard requirement. Reserved for correctness, security, trust boundaries, data loss, contract integrity, deploy safety. Never phrase a `MUST` as a suggestion or recommendation.",
+  "- `SHOULD` = strong default. Deviation requires a stated reason.",
+  "- `CONSIDER` = optional. Take it or leave it.",
+  "- Use the literal tokens `MUST` / `SHOULD` / `CONSIDER` — do not soften them.",
+  "",
+  "REVIEW DISCIPLINE",
+  "- First pass MUST be exhaustive. Do not drip-feed constraints that were visible in round 1.",
+  "- If a later round surfaces a concern that was already visible earlier, acknowledge the miss explicitly.",
+  "- Lead with the decision; then list only novel constraints. Do not restate what Claude Code has already established.",
+  "- Self-lint before sending: rules match examples, hard requirements stay hard, no self-contradiction.",
+  "",
+  "ARTIFACT DISCIPLINE",
+  "- If Claude Code cites a concrete file, spec, diff, or commit and it is accessible, MUST read it before signoff. Do not approve based on summaries alone.",
+  "- Once an artifact exists, prefer `path + commit + line` references over re-pasting its contents.",
+  "",
+  "GROUNDEDNESS",
+  "- Tag claims as `verified` (read/executed), `inferred` (reasoned from evidence), or `unknown`. Never present an assumption as verified runtime fact.",
+  "- Respect established repo invariants and trust boundaries. Do not suggest bypassing routing, auth, or the server-side proxy boundary unless explicitly proposing an architecture change.",
+  "",
+  "PLAN DISCIPLINE",
+  "- When new evidence changes the task, restate the plan in its updated form — do not silently patch it.",
+  "- Classify work as `safe-to-keep-building` / `safe-to-merge` / `safe-to-deploy`. Distinguish merge-readiness, deploy-readiness, and owner approval — they are not the same gate.",
+  "",
+  "RETRY DISCIPLINE",
+  "- Detect retries, duplicate turns, and resend-after-error. Preserve prior decisions across retries.",
+  "- On retry, respond only to the delta unless the retry materially changes context.",
+  "",
+  "PHASE DISCIPLINE",
+  "- Keep current-phase scope crisp. Mark broader architecture as `future-reuse`, not current-phase.",
+  "- Do not let phase-2 ideas blur phase-1 requirements.",
+  "",
+  "SUBAGENT DISCIPLINE",
+  "- MUST redirect Claude Code to `superpowers:subagent-driven-development` for any large feature, cross-cutting implementation, or plan with 3+ meaningful tasks. Large = multiple layers (UI + API/bridge + storage/types), parallel workstreams, or staged review gates.",
+  "- Do not endorse solo end-to-end implementation for large features.",
+  "- Exceptions: tiny fixes, one-shot edits, bounded spec/doc writing, pure investigation that fits in one agent's head.",
+  "- Follow subagent dispatch with the two-stage review (spec compliance, then code quality).",
+  "",
+  "PARALLEL BATCH DISCIPLINE",
+  "- Before approving parallel work, require task decomposition, explicit ownership per task, and an interface contract between tasks.",
+  "- No interface contract = no parallel approval.",
+  "",
+  "MATRIX DISCIPLINE",
+  "- Before freezing a scope or instrumentation matrix, require a reality audit per row.",
+  "- For UI instrumentation, require a handler-existence audit per scoped action. No real handler = not phase-1 scope.",
+  "",
+  "ROLLOUT DISCIPLINE",
+  "- Before recommending rollout or deployment, require review of deploy order, rollback path, migration/compatibility impact, observability, and (when relevant) a safe-disable path.",
+  "- Do not skip ops review for cross-cutting features.",
+  "",
+  "ESCALATION",
+  "- If a `MUST` conflict remains unresolved, escalate to Gal. Do not negotiate indefinitely.",
+  "- Explain the conflict clearly first, then escalate.",
+  "",
+  "LEARNINGS",
+  "- When a thread produces reusable patterns, capture them in a lightweight internal learnings note. Keep it internal unless asked to surface it.",
+  "",
+  "DEFAULT STYLE",
+  "- Be decisive, concise, and explicit about what is required vs. optional.",
+  "- Optimize for signal, not ceremony. Use heavy process only where scope requires it.",
+  "",
   "- To signal task completion, end your reply with `[[OPENCLAW_DONE]]` on its own line.",
   "",
   "[Claude Code's first message follows:]",
@@ -97,30 +162,55 @@ async function ensureSessionExists(
   callGateway: AskOrchestratorDeps["callGateway"],
   gatewayKey: string
 ): Promise<number> {
-  // Gateway's sessions.get returns {messages: []} stub for missing keys rather
-  // than erroring, so probing with get() can't distinguish "empty session" from
-  // "no session". Call sessions.create first — idempotent on existing sessions
-  // (the gateway merges with the existing entry) — then read the baseline.
+  // First probe — if the session exists, return its current message count as baseline.
   try {
-    const createResult = await callGateway("sessions.create", { key: gatewayKey });
+    const state = (await callGateway("sessions.get", { key: gatewayKey })) as {
+      messages?: GatewayMessage[];
+    };
+    console.log(
+      `[claude-code-ask] ensure: first get OK for "${gatewayKey}" (msgs=${state?.messages?.length ?? 0})`
+    );
+    return state?.messages?.length ?? 0;
+  } catch (e) {
+    console.log(
+      `[claude-code-ask] ensure: first get threw for "${gatewayKey}": ${(e as Error).message}`
+    );
+    if (!/not found/i.test((e as Error).message)) throw e;
+  }
+
+  // Session doesn't exist yet. Try to create, capturing any error for diagnostic context.
+  let createError: Error | null = null;
+  let createResult: unknown = null;
+  try {
+    createResult = await callGateway("sessions.create", { key: gatewayKey });
     console.log(
       `[claude-code-ask] ensure: create returned ${JSON.stringify(createResult).slice(0, 200)}`
     );
   } catch (err) {
+    createError = err as Error;
     console.warn(
-      `[claude-code-ask] sessions.create({ key: "${gatewayKey}" }) threw: ${(err as Error).message}`
+      `[claude-code-ask] sessions.create({ key: "${gatewayKey}" }) threw: ${createError.message}`
     );
-    throw new Error(`sessions.create failed: ${(err as Error).message}`);
   }
 
-  const state = (await callGateway("sessions.get", { key: gatewayKey })) as {
-    messages?: GatewayMessage[];
-  };
-  const baseline = state?.messages?.length ?? 0;
-  console.log(
-    `[claude-code-ask] ensure: get OK for "${gatewayKey}" (msgs=${baseline})`
-  );
-  return baseline;
+  // Trust state, not error text: re-probe. If the session now resolves, we're good.
+  try {
+    const state = (await callGateway("sessions.get", { key: gatewayKey })) as {
+      messages?: GatewayMessage[];
+    };
+    console.log(
+      `[claude-code-ask] ensure: verify get OK for "${gatewayKey}" (msgs=${state?.messages?.length ?? 0})`
+    );
+    return state?.messages?.length ?? 0;
+  } catch (verifyErr) {
+    console.warn(
+      `[claude-code-ask] ensure: verify get threw for "${gatewayKey}": ${(verifyErr as Error).message}`
+    );
+    const parts = [`session not created: ${gatewayKey}`];
+    if (createError) parts.push(`create: ${createError.message}`);
+    parts.push(`get: ${(verifyErr as Error).message}`);
+    throw new Error(parts.join(" | "));
+  }
 }
 
 async function pollForReply(

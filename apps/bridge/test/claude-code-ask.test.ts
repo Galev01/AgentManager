@@ -35,14 +35,17 @@ function makePaths(dir: string) {
 // sessions.get returns the current message array.
 function makeGatewayStub(reply: string, replyDelayMs: number = 10) {
   const messages: Array<{ role: string; content: Array<{ type: string; text: string }> }> = [];
+  const sentMessages: string[] = [];
   const callGateway = async (method: string, params?: Record<string, unknown>): Promise<unknown> => {
     if (method === "sessions.get") {
       return { messages: [...messages] };
     }
     if (method === "sessions.send") {
+      const text = String(params?.message ?? "");
+      sentMessages.push(text);
       const userMsg = {
         role: "user",
-        content: [{ type: "text", text: String(params?.message ?? "") }],
+        content: [{ type: "text", text }],
       };
       messages.push(userMsg);
       const messageSeq = messages.length;
@@ -56,7 +59,7 @@ function makeGatewayStub(reply: string, replyDelayMs: number = 10) {
     }
     throw new Error(`unmocked method: ${method}`);
   };
-  return { callGateway, messages };
+  return { callGateway, messages, sentMessages };
 }
 
 test("agent mode — returns gateway reply and logs transcript", async () => {
@@ -187,6 +190,114 @@ test("gateway failure in agent mode surfaces as error", async () => {
     orchestrator.ask({ ide: "a", workspace: "/p", msgId: "m1", question: "q" }),
     /gateway/
   );
+});
+
+test("first-turn preamble injects role/directive-tier/discipline rules into gateway send", async () => {
+  const dir = await tmp();
+  const p = makePaths(dir);
+  const { callGateway, sentMessages } = makeGatewayStub("ok");
+  const orchestrator = createAskOrchestrator({
+    ...p,
+    pendingTimeoutMs: 1000,
+    openclawAgentId: "claude-code",
+    callGateway,
+    broadcast: () => {},
+    replyPollIntervalMs: 5,
+    replyTimeoutMs: 1000,
+  });
+
+  await orchestrator.ask({
+    ide: "antigravity",
+    workspace: "C:\\proj-preamble",
+    msgId: "m1",
+    question: "kickoff question",
+  });
+
+  assert.equal(sentMessages.length, 1);
+  const wrapped = sentMessages[0]!;
+  // The original question is still present at the end.
+  assert.ok(wrapped.endsWith("kickoff question"), "wrapped message should end with the user question");
+  // Existing preamble markers still live.
+  assert.match(wrapped, /\[\[OPENCLAW_DONE\]\]/);
+  assert.match(wrapped, /subagent-driven-development/);
+  // New section headings.
+  for (const heading of [
+    "ROLE",
+    "DIRECTIVE TIERS",
+    "REVIEW DISCIPLINE",
+    "ARTIFACT DISCIPLINE",
+    "GROUNDEDNESS",
+    "PLAN DISCIPLINE",
+    "RETRY DISCIPLINE",
+    "PHASE DISCIPLINE",
+    "SUBAGENT DISCIPLINE",
+    "PARALLEL BATCH DISCIPLINE",
+    "MATRIX DISCIPLINE",
+    "ROLLOUT DISCIPLINE",
+    "ESCALATION",
+    "LEARNINGS",
+    "DEFAULT STYLE",
+  ]) {
+    assert.ok(wrapped.includes(heading), `preamble should include section heading "${heading}"`);
+  }
+  // Directive tier tokens appear literally.
+  assert.match(wrapped, /\bMUST\b/);
+  assert.match(wrapped, /\bSHOULD\b/);
+  assert.match(wrapped, /\bCONSIDER\b/);
+  // Groundedness vocabulary.
+  assert.match(wrapped, /verified/);
+  assert.match(wrapped, /inferred/);
+  assert.match(wrapped, /unknown/);
+  // Role vocabulary.
+  assert.match(wrapped, /decider/);
+  assert.match(wrapped, /reviewer/);
+  assert.match(wrapped, /pair/);
+  // Subagent rule should appear exactly once as a canonical statement (no duplication).
+  const subagentRedirectCount = (wrapped.match(/superpowers:subagent-driven-development/g) ?? []).length;
+  assert.equal(subagentRedirectCount, 1, "subagent redirect rule should appear exactly once");
+});
+
+test("preamble is injected only on first turn, not on subsequent turns", async () => {
+  const dir = await tmp();
+  const p = makePaths(dir);
+  const { callGateway, sentMessages } = makeGatewayStub("reply");
+  const orchestrator = createAskOrchestrator({
+    ...p,
+    pendingTimeoutMs: 1000,
+    openclawAgentId: "claude-code",
+    callGateway,
+    broadcast: () => {},
+    replyPollIntervalMs: 5,
+    replyTimeoutMs: 1000,
+  });
+
+  await orchestrator.ask({
+    ide: "antigravity",
+    workspace: "C:\\proj-two-turn",
+    msgId: "t1",
+    question: "first turn",
+  });
+  await orchestrator.ask({
+    ide: "antigravity",
+    workspace: "C:\\proj-two-turn",
+    msgId: "t2",
+    question: "second turn",
+  });
+
+  assert.equal(sentMessages.length, 2);
+  const [first, second] = sentMessages as [string, string];
+
+  // First turn is wrapped.
+  assert.ok(first.includes("ROLE"), "first turn should contain ROLE section");
+  assert.ok(first.includes("MUST"), "first turn should contain MUST token");
+  assert.ok(first.includes("[[OPENCLAW_DONE]]"), "first turn should contain sentinel instruction");
+  assert.ok(first.endsWith("first turn"));
+
+  // Second turn is raw — no preamble markers.
+  assert.equal(second, "second turn");
+  assert.ok(!second.includes("ROLE"));
+  assert.ok(!second.includes("DIRECTIVE TIERS"));
+  assert.ok(!second.includes("[[OPENCLAW_DONE]]"));
 });
 
 test("polling times out when assistant never replies", async () => {
