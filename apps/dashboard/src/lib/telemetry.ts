@@ -54,10 +54,12 @@ export function logActionRaw(args: LogActionArgs): void {
     context: args.context,
   };
   try {
+    const body = JSON.stringify(payload);
+    if (body.length > 60_000) return; // keepalive request bodies are capped at ~64 KB by browsers
     void fetch(ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body,
       keepalive: true,
     }).catch(() => undefined);
   } catch {

@@ -26,19 +26,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     actor: { type: "user", id: "admin" },
   };
 
-  const res = await fetch(`${BRIDGE_URL}/telemetry/actions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${BRIDGE_TOKEN}`,
-    },
-    body: JSON.stringify(trusted),
-  });
-  const text = await res.text();
-  return new NextResponse(text, {
-    status: res.status,
-    headers: { "Content-Type": res.headers.get("Content-Type") ?? "application/json" },
-  });
+  try {
+    const res = await fetch(`${BRIDGE_URL}/telemetry/actions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${BRIDGE_TOKEN}`,
+      },
+      body: JSON.stringify(trusted),
+    });
+    const text = await res.text();
+    return new NextResponse(text, {
+      status: res.status,
+      headers: { "Content-Type": res.headers.get("Content-Type") ?? "application/json" },
+    });
+  } catch {
+    return NextResponse.json({ error: "bridge unreachable" }, { status: 503 });
+  }
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -46,12 +50,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const qs = req.nextUrl.search;
-  const res = await fetch(`${BRIDGE_URL}/telemetry/actions${qs}`, {
-    headers: { Authorization: `Bearer ${BRIDGE_TOKEN}` },
-  });
-  const text = await res.text();
-  return new NextResponse(text, {
-    status: res.status,
-    headers: { "Content-Type": res.headers.get("Content-Type") ?? "application/json" },
-  });
+  try {
+    const res = await fetch(`${BRIDGE_URL}/telemetry/actions${qs}`, {
+      headers: { Authorization: `Bearer ${BRIDGE_TOKEN}` },
+    });
+    const text = await res.text();
+    return new NextResponse(text, {
+      status: res.status,
+      headers: { "Content-Type": res.headers.get("Content-Type") ?? "application/json" },
+    });
+  } catch {
+    return NextResponse.json({ error: "bridge unreachable" }, { status: 503 });
+  }
 }
