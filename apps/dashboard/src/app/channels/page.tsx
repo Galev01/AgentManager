@@ -8,15 +8,31 @@ export const dynamic = "force-dynamic";
 
 export default async function ChannelsPage() {
   let channels: Channel[] = [];
+  let fetchError: string | null = null;
   try {
     channels = await getChannels();
-  } catch {
-    // bridge unavailable — show empty list
+  } catch (err) {
+    fetchError = err instanceof Error ? err.message : "Failed to load channels";
   }
 
   return (
     <AppShell title="Channels">
       <div className="content">
+        {fetchError ? (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "12px 16px",
+              borderRadius: "var(--radius)",
+              border: "1px solid oklch(0.68 0.20 25 / 0.4)",
+              background: "var(--err-dim)",
+              color: "var(--err)",
+              fontSize: 13,
+            }}
+          >
+            <strong>Failed to load channels.</strong> {fetchError}
+          </div>
+        ) : null}
         <ChannelCards initial={channels} />
       </div>
     </AppShell>
