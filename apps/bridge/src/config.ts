@@ -86,4 +86,11 @@ export const config = {
   get claudeCodePendingPath() {
     return path.join(this.managementDir, "claude-code", "pending.json");
   },
+  telemetryRetentionDays:
+    Number(process.env.TELEMETRY_RETENTION_DAYS) || 30,
+  telemetryMaxDiskMB:
+    Number(process.env.TELEMETRY_MAX_DISK_MB) || 200,
+  get telemetryDir() {
+    return path.join(this.managementDir, "telemetry");
+  },
 } as const;
