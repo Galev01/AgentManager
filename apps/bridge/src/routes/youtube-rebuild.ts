@@ -2,6 +2,10 @@ import { Router, type Router as ExpressRouter, type Request, type Response } fro
 import { isValidVideoId } from "../services/youtube-url.js";
 import { executeRebuild } from "../services/youtube-rebuild.js";
 import {
+  getStatus as getRebuildStatus,
+  listActive as listActiveRebuilds,
+} from "../services/youtube-rebuild-status.js";
+import {
   readChapters,
   readChunks,
   readHighlights,
@@ -74,6 +78,20 @@ router.post("/youtube/rebuild/:videoId", async (req: Request, res: Response) => 
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err?.message || "failed" });
   }
+});
+
+// Live rebuild status endpoints. `/active` MUST be registered before
+// `/:videoId/status` so it's matched first (Express scans handlers in
+// registration order; `active` would otherwise match `:videoId`).
+router.get("/youtube/rebuild/active", (_req: Request, res: Response) => {
+  res.json({ ok: true, statuses: listActiveRebuilds() });
+});
+
+router.get("/youtube/rebuild/:videoId/status", (req: Request, res: Response) => {
+  const videoId = req.params.videoId as string;
+  if (!isValidVideoId(videoId)) return badId(res);
+  const status = getRebuildStatus(videoId);
+  res.json({ ok: true, status });
 });
 
 router.get("/youtube/chunks/:videoId", async (req: Request, res: Response) => {

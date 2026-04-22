@@ -628,6 +628,31 @@ export type YoutubeRebuildPart =
   | "chapters"
   | "chat-history";
 
+export type YoutubeRebuildPartStatus =
+  | "pending"
+  | "running"
+  | "ok"
+  | "failed"
+  | "skipped";
+
+export type YoutubeRebuildPartState = {
+  part: YoutubeRebuildPart;
+  status: YoutubeRebuildPartStatus;
+  error?: string;
+  startedAt?: string;
+  finishedAt?: string;
+};
+
+export type YoutubeRebuildStatus = {
+  videoId: string;
+  /** True while a rebuild is in flight; false after completion (entry is
+   *  retained briefly so polling clients see the final state). */
+  active: boolean;
+  startedAt: string;
+  finishedAt?: string;
+  parts: YoutubeRebuildPartState[];
+};
+
 export type YoutubeJobV2Input = {
   presetId?: YoutubePromptPresetId;
   message?: string;

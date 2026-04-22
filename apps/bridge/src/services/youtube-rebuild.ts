@@ -14,6 +14,12 @@ import {
 } from "./youtube-store-v2.js";
 import { invalidateSessionKey } from "./youtube-chat-session.js";
 import { runSummaryNow } from "./youtube-worker.js";
+import {
+  beginRebuild,
+  endRebuild,
+  markPartDone,
+  markPartRunning,
+} from "./youtube-rebuild-status.js";
 
 /**
  * Dependency graph for rebuild parts. Downstream parts list their upstream
@@ -186,26 +192,36 @@ export async function executeRebuild(
   const results: RebuildPartResult[] = [];
   const failed = new Set<YoutubeRebuildPart>();
 
-  for (const part of ordered) {
-    if (failed.has(part)) {
-      // Figure out which upstream caused the skip for a readable message.
-      const reason = findCascadeReason(part, failed);
-      results.push({ part, ok: false, error: `skipped: ${reason} failed` });
-      continue;
-    }
-    try {
-      await runPart(ctx, part);
-      results.push({ part, ok: true });
-    } catch (err: unknown) {
-      const error = errorMessage(err);
-      results.push({ part, ok: false, error });
-      // Cascade: mark downstream parts as failed too.
-      for (const downstream of CASCADE[part]) {
-        failed.add(downstream);
+  beginRebuild(ctx.videoId, ordered);
+  try {
+    for (const part of ordered) {
+      if (failed.has(part)) {
+        // Figure out which upstream caused the skip for a readable message.
+        const reason = findCascadeReason(part, failed);
+        const error = `skipped: ${reason} failed`;
+        results.push({ part, ok: false, error });
+        markPartDone(ctx.videoId, part, "skipped", error);
+        continue;
+      }
+      markPartRunning(ctx.videoId, part);
+      try {
+        await runPart(ctx, part);
+        results.push({ part, ok: true });
+        markPartDone(ctx.videoId, part, "ok");
+      } catch (err: unknown) {
+        const error = errorMessage(err);
+        results.push({ part, ok: false, error });
+        markPartDone(ctx.videoId, part, "failed", error);
+        // Cascade: mark downstream parts as failed too.
+        for (const downstream of CASCADE[part]) {
+          failed.add(downstream);
+        }
       }
     }
+    return results;
+  } finally {
+    endRebuild(ctx.videoId);
   }
-  return results;
 }
 
 function errorMessage(err: unknown): string {
