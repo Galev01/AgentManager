@@ -1,7 +1,7 @@
 // apps/dashboard/src/app/api/telemetry/actions/route.ts
 import { NextResponse, type NextRequest } from "next/server";
 import { isAuthenticated } from "@/lib/session";
-import type { TelemetryEventInput } from "@openclaw-manager/types";
+import { TELEMETRY_SCHEMA_VERSION, type TelemetryEventInput } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://127.0.0.1:3100";
 const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Server overwrites trusted fields. Single-admin app, so actor.id = "admin".
   const trusted: TelemetryEventInput = {
     ...body,
-    schemaVersion: 1,
+    schemaVersion: TELEMETRY_SCHEMA_VERSION,
     source: "dashboard",
     surface: body.surface === "web" ? "web" : undefined,
     actor: { type: "user", id: "admin" },
