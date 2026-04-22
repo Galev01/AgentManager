@@ -142,7 +142,9 @@ export function createTelemetryLog(cfg: TelemetryLogConfig): {
         console.warn(`[telemetry] disk usage ${mb.toFixed(1)} MB exceeds cap ${cfg.maxDiskMB} MB`);
         lastOverflowWarnAt = now;
       }
-    } catch {}
+    } catch (err) {
+      console.warn(`[telemetry] overflow check failed: ${(err as Error).message}`);
+    }
   }
 
   async function appendInternal(input: TelemetryEventInput): Promise<TelemetryEvent> {
