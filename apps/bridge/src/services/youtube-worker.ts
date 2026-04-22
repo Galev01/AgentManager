@@ -10,7 +10,16 @@ import {
 } from "./youtube-store.js";
 import { fetchCaptions, CaptionsUnavailableError, VideoNotFoundError, TranscriptTooShortError } from "./youtube-captions.js";
 import { summarize } from "./youtube-summarize.js";
-import type { YoutubeJob } from "@openclaw-manager/types";
+import { executeRebuild, orderRebuildParts } from "./youtube-rebuild.js";
+import type { YoutubeJob, YoutubeRebuildPart } from "@openclaw-manager/types";
+
+const FULL_PIPELINE_PARTS: YoutubeRebuildPart[] = orderRebuildParts([
+  "captions",
+  "chunks",
+  "highlights",
+  "chapters",
+  "chat-history",
+]);
 
 type QueueItem = { job: YoutubeJob };
 
@@ -98,6 +107,15 @@ async function process(job: YoutubeJob): Promise<void> {
     await writeMarkdown(job.videoId, fileBody);
 
     await updateJob(job, { status: "done", meta });
+
+    try {
+      await executeRebuild({ videoId: job.videoId, url: job.url }, FULL_PIPELINE_PARTS);
+    } catch (rebuildErr) {
+      console.warn(
+        `[youtube-worker] post-summary rebuild failed for ${job.videoId}:`,
+        rebuildErr instanceof Error ? rebuildErr.message : rebuildErr
+      );
+    }
   } catch (err: any) {
     const msg = mapError(err);
     await updateJob(job, { status: "failed", errorMessage: msg });
