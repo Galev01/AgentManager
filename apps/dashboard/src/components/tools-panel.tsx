@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Tool, EffectiveTool, Skill } from "@openclaw-manager/types";
+import { mergeToolDoc, type EnrichedTool } from "@/lib/tool-docs";
 
 type Tab = "catalog" | "effective" | "skills";
 
@@ -50,53 +51,79 @@ function EnabledBadge({ enabled }: { enabled?: boolean }) {
 
 function CatalogTab({ tools }: { tools: Tool[] }) {
   const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  const filtered = tools.filter((t) => {
+  const enriched: EnrichedTool[] = tools.map(mergeToolDoc);
+
+  const filtered = enriched.filter((t) => {
     const q = search.toLowerCase();
-    return (
-      t.name.toLowerCase().includes(q) ||
-      (t.description ?? "").toLowerCase().includes(q)
-    );
+    const hay = [t.name, t.description ?? "", t.doc?.summary ?? "", t.doc?.whenToUse ?? ""]
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
   });
 
   return (
     <div className="space-y-4">
       <input
         type="text"
-        placeholder="Search tools…"
+        placeholder="Search tools, descriptions, or when-to-use…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full max-w-sm rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+        className="w-full max-w-md rounded border border-[color:var(--border)] bg-[color:var(--bg-sunken)] px-3 py-2 text-sm text-[color:var(--text)] placeholder-[color:var(--text-muted)] focus:border-[color:var(--accent)] focus:outline-none"
       />
-      {filtered.length === 0 ? (
-        <div className="rounded-lg border border-zinc-700 bg-zinc-800 px-6 py-10 text-center text-sm text-zinc-400">
-          No tools found.
+      {tools.length === 0 ? (
+        <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--text-muted)" }}>
+          No tools in the catalog yet.
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--text-muted)" }}>
+          No tools match that search.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((tool) => (
-            <div
-              key={tool.name}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 p-4 space-y-2"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="font-semibold text-zinc-100 text-sm leading-tight">
-                  {tool.name}
-                </span>
-                <CategoryBadge category={tool.category} />
+        <div className="tools-grid">
+          {filtered.map((tool) => {
+            const summary = tool.doc?.summary ?? tool.description ?? "No description available.";
+            const whenToUse = tool.doc?.whenToUse;
+            const isOpen = expanded === tool.name;
+            return (
+              <div key={tool.name} className="card tool-card">
+                <div className="tool-card-h">
+                  <span className="tool-card-n">{tool.name}</span>
+                  <CategoryBadge category={tool.category} />
+                </div>
+                <p className="tool-card-desc">{summary}</p>
+                {whenToUse && (
+                  <div className="tool-card-section">
+                    <div className="tool-card-label">When to use</div>
+                    <p>{whenToUse}</p>
+                  </div>
+                )}
+                {tool.parameters && tool.parameters.length > 0 && (
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => setExpanded(isOpen ? null : tool.name)}
+                  >
+                    {isOpen
+                      ? "Hide parameters"
+                      : `Show ${tool.parameters.length} parameter${tool.parameters.length !== 1 ? "s" : ""}`}
+                  </button>
+                )}
+                {isOpen && tool.parameters && (
+                  <ul className="tool-card-params">
+                    {tool.parameters.map((p) => (
+                      <li key={p.name}>
+                        <span className="mono">{p.name}</span>
+                        <span className="tool-card-ptype mono">{p.type}</span>
+                        {p.required && <span className="badge warn">required</span>}
+                        {p.description && <span className="tool-card-pdesc">{p.description}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              {tool.description && (
-                <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">
-                  {tool.description}
-                </p>
-              )}
-              {tool.parameters && tool.parameters.length > 0 && (
-                <p className="text-[11px] text-zinc-500">
-                  {tool.parameters.length} parameter{tool.parameters.length !== 1 ? "s" : ""}
-                </p>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
