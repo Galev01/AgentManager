@@ -6,6 +6,7 @@ import type { ConversationRow } from "@openclaw-manager/types";
 import { StatusBadge } from "./status-badge";
 import { timeAgo } from "@/lib/format";
 import { ComposeDialog } from "./compose-dialog";
+import { useTelemetry } from "@/lib/telemetry";
 import {
   Button,
   EmptyState,
@@ -58,6 +59,7 @@ function InlineToggle({
 
 export function ConversationTable({ conversations }: { conversations: ConversationRow[] }) {
   const router = useRouter();
+  const { logAction } = useTelemetry();
   const [composingKey, setComposingKey] = useState<string | null>(null);
   const [composingNew, setComposingNew] = useState(false);
 
@@ -139,6 +141,14 @@ export function ConversationTable({ conversations }: { conversations: Conversati
                   <Link
                     href={`/conversations/${encodeURIComponent(conv.conversationKey)}`}
                     className="pri"
+                    onClick={() =>
+                      logAction({
+                        feature: "conversations",
+                        action: "opened",
+                        target: { type: "conversation", id: conv.conversationKey },
+                        context: { conversationKey: conv.conversationKey },
+                      })
+                    }
                   >
                     {conv.displayName || "Unknown"}
                   </Link>

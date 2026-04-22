@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useTelemetry } from "@/lib/telemetry";
 
 type Props = {
   conversationKey?: string;
@@ -17,6 +18,7 @@ export function ComposeDialog({
   onClose,
   onSent,
 }: Props) {
+  const { trackOperation } = useTelemetry();
   const [phone, setPhone] = useState(initialPhone || "");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -32,18 +34,29 @@ export function ComposeDialog({
     setSending(true);
     setError(null);
     try {
-      const res = await fetch("/api/compose", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const trimmedText = text.trim();
+      const doSend = async () => {
+        const res = await fetch("/api/compose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversationKey,
+            phone: phone.trim(),
+            text: trimmedText,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+      };
+      if (conversationKey) {
+        await trackOperation("conversations", "reply_sent", doSend, {
           conversationKey,
-          phone: phone.trim(),
-          text: text.trim(),
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${res.status}`);
+          length: trimmedText.length,
+        });
+      } else {
+        await doSend();
       }
       onSent?.();
       onClose();
