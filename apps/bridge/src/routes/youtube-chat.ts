@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { Router, type Router as ExpressRouter, type Request, type Response } from "express";
 import { isValidVideoId } from "../services/youtube-url.js";
 import { enqueueChatJob } from "../services/youtube-chat-worker.js";
-import { foldChatLog, readChatMeta } from "../services/youtube-store-v2.js";
+import { appendChatRow, foldChatLog, readChatMeta } from "../services/youtube-store-v2.js";
 import type { YoutubeChatMessageRow } from "@openclaw-manager/types";
 
 const router: ExpressRouter = Router();
@@ -55,6 +55,7 @@ router.post("/youtube/chat/:videoId", async (req: Request, res: Response) => {
       createdAt: new Date().toISOString(),
       status: "complete",
     };
+    await appendChatRow(userRow);
     enqueueChatJob({ videoId, chatSessionId, userRow, assistantRowId });
     res.status(202).json({ ok: true, videoId, chatSessionId, queued: true });
   } catch (err: any) {
