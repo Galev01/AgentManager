@@ -30,7 +30,7 @@ const Sidebar = ({ active, onNav, iconsOnly }) => {
   return (
     <aside className="sb">
       <div className="sb-brand">
-        <img src="/ManageClaw-TB.png" alt="ManageClaw" className="sb-logo-img" />
+        <img src="/ManageClaw-TB-DarkMode.png" alt="ManageClaw" className="sb-logo-img" />
         <div className="sb-name">OpenClaw<em>v0.44</em></div>
       </div>
       <div className="sb-scroll">

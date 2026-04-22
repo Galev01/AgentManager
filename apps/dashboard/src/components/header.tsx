@@ -52,7 +52,7 @@ export function Header({ title }: { title: string }) {
     <header className="hd">
       {/* Breadcrumbs */}
       <div className="hd-crumb">
-        <img src="/ManageClaw-TB.png" alt="ManageClaw" className="hd-logo-img" />
+        <img src="/ManageClaw-TB-DarkMode.png" alt="ManageClaw" className="hd-logo-img" />
         <span>OpenClaw</span>
         {crumbs.map((crumb, i) => (
           <span key={i} style={{ display: "contents" }}>
