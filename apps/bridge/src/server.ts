@@ -24,6 +24,7 @@ import youtubeRouter from "./routes/youtube.js";
 import youtubeChatRouter from "./routes/youtube-chat.js";
 import youtubeRebuildRouter from "./routes/youtube-rebuild.js";
 import claudeCodeRouter from "./routes/claude-code.js";
+import { createTelemetryRouter } from "./routes/telemetry.js";
 import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
 import { scanProjects } from "./services/codebase-reviewer/discovery.js";
 import { repairOnStartup as repairYoutubeOnStartup } from "./services/youtube-worker.js";
@@ -60,6 +61,13 @@ app.use(youtubeRouter);
 app.use(youtubeChatRouter);
 app.use(youtubeRebuildRouter);
 app.use(claudeCodeRouter);
+app.use(
+  createTelemetryRouter({
+    dir: config.telemetryDir,
+    retentionDays: config.telemetryRetentionDays,
+    maxDiskMB: config.telemetryMaxDiskMB,
+  })
+);
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
