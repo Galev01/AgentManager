@@ -8,6 +8,7 @@ import type {
 import { setTriageAction } from "@/app/reviews/actions";
 import { SeverityBadge } from "./severity-badge";
 import { TriageBadge } from "./triage-badge";
+import { useTelemetry } from "@/lib/telemetry";
 
 const TRIAGE_FILTERS: { value: ReviewTriageState; label: string }[] = [
   { value: "new", label: "New" },
@@ -23,6 +24,7 @@ export function InboxTable({ items }: { items: ReviewInboxItem[] }) {
     new Set(["new", "needs_attention", "actionable"])
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const { logAction, trackOperation } = useTelemetry();
 
   const visible = items.filter((i) => activeFilters.has(i.triageState));
   const itemKey = (i: ReviewInboxItem) => `${i.projectId}::${i.reportDate}`;
@@ -32,6 +34,11 @@ export function InboxTable({ items }: { items: ReviewInboxItem[] }) {
       const next = new Set(prev);
       if (next.has(state)) next.delete(state);
       else next.add(state);
+      logAction({
+        feature: "reviews.inbox",
+        action: "filter_applied",
+        context: { status: Array.from(next).join(","), severity: "" },
+      });
       return next;
     });
   }
@@ -43,10 +50,19 @@ export function InboxTable({ items }: { items: ReviewInboxItem[] }) {
 
   function bulkSet(triageState: ReviewTriageState) {
     const targets = visible.filter((i) => selected.has(itemKey(i)));
+    // Use the first target's projectId as representative (all targets may span projects)
+    const projectId = targets[0]?.projectId ?? "";
     startTransition(async () => {
-      for (const t of targets) {
-        await setTriageAction(t.projectId, t.reportDate, triageState);
-      }
+      await trackOperation(
+        "reviews.inbox",
+        "bulk_triaged",
+        async () => {
+          for (const t of targets) {
+            await setTriageAction(t.projectId, t.reportDate, triageState);
+          }
+        },
+        { projectId, count: targets.length, decision: triageState },
+      );
       setSelected(new Set());
     });
   }
@@ -152,6 +168,14 @@ export function InboxTable({ items }: { items: ReviewInboxItem[] }) {
                       <Link
                         href={`/reviews/${i.projectId}?date=${i.reportDate}`}
                         className="text-sky-300 hover:text-sky-200"
+                        onClick={() =>
+                          logAction({
+                            feature: "reviews.inbox",
+                            action: "item_opened",
+                            target: { type: "review_item", id: i.reportDate },
+                            context: { projectId: i.projectId, itemId: i.reportDate },
+                          })
+                        }
                       >
                         Open →
                       </Link>
