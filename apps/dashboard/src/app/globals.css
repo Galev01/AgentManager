@@ -214,6 +214,13 @@ a { color: inherit; text-decoration: none; }
   gap: 8px;
 }
 .hd-crumb .sep { color: var(--border-strong); }
+.hd-logo-img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
 .hd-spacer { flex: 1; }
 
 .hd-btn {
