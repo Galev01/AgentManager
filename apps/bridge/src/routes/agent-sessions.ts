@@ -3,13 +3,44 @@ import { callGateway } from "../services/gateway.js";
 
 const router: Router = Router();
 
+function normalizeSession(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const id =
+    (typeof r.id === "string" && r.id) ||
+    (typeof r.key === "string" && r.key) ||
+    (typeof r.sessionId === "string" && r.sessionId) ||
+    (typeof r.sessionKey === "string" && r.sessionKey) ||
+    null;
+  if (!id) return null;
+  const agentName =
+    (typeof r.agentName === "string" && r.agentName) ||
+    (typeof r.agentId === "string" && r.agentId) ||
+    undefined;
+  return { ...r, id, ...(agentName ? { agentName } : {}) };
+}
+
+function extractSessionArray(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") {
+    const r = raw as Record<string, unknown>;
+    if (Array.isArray(r.sessions)) return r.sessions;
+    if (Array.isArray(r.items)) return r.items;
+    if (Array.isArray(r.data)) return r.data;
+  }
+  return [];
+}
+
 router.get("/agent-sessions", async (req: Request, res: Response) => {
   try {
     const params: Record<string, unknown> = {};
     if (req.query.agent) params.agent = String(req.query.agent);
     if (req.query.status) params.status = String(req.query.status);
     const result = await callGateway("sessions.list", params);
-    res.json(result);
+    const items = extractSessionArray(result)
+      .map(normalizeSession)
+      .filter((s): s is Record<string, unknown> => s !== null);
+    res.json(items);
   } catch (err: any) {
     res.status(502).json({ error: err.message || "Failed to list sessions" });
   }
@@ -20,8 +51,19 @@ router.post("/agent-sessions", async (req: Request, res: Response) => {
     const { agentName } = req.body;
     const params: Record<string, unknown> = {};
     if (typeof agentName === "string") params.agent = agentName.trim();
-    const result = await callGateway("sessions.create", params);
-    res.status(201).json(result);
+    const raw = await callGateway("sessions.create", params);
+    const normalized = normalizeSession(raw);
+    if (!normalized) {
+      console.warn(
+        "[agent-sessions] sessions.create returned no usable id:",
+        JSON.stringify(raw),
+      );
+      res
+        .status(502)
+        .json({ error: "Gateway did not return a session id", raw });
+      return;
+    }
+    res.status(201).json(normalized);
   } catch (err: any) {
     res.status(502).json({ error: err.message || "Failed to create session" });
   }
