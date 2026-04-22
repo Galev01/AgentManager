@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Agent } from "@openclaw-manager/types";
 import { timeAgo } from "@/lib/format";
 import type { AgentActivity } from "@/app/agents/page";
+import { useTelemetry } from "@/lib/telemetry";
 import {
   Badge,
   Button,
@@ -47,6 +48,7 @@ export function AgentTable({
   initial: Agent[];
   activity: Record<string, AgentActivity>;
 }) {
+  const { logAction } = useTelemetry();
   const [agents, setAgents] = useState<Agent[]>(initial);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
@@ -265,7 +267,17 @@ export function AgentTable({
                   </td>
                   <td style={{ textAlign: "right" }}>
                     <div style={{ display: "inline-flex", gap: 6 }}>
-                      <Link href={`/agents/${encodeURIComponent(a.name)}`}>
+                      <Link
+                        href={`/agents/${encodeURIComponent(a.name)}`}
+                        onClick={() =>
+                          logAction({
+                            feature: "agents",
+                            action: "opened",
+                            target: { type: "agent", id: a.name },
+                            context: { name: a.name },
+                          })
+                        }
+                      >
                         <Button className="btn-sm">View</Button>
                       </Link>
                       <Button

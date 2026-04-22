@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Agent } from "@openclaw-manager/types";
+import { useTelemetry } from "@/lib/telemetry";
 
 export function AgentForm({ agent }: { agent: Agent }) {
   const router = useRouter();
+  const { trackOperation } = useTelemetry();
   const [model, setModel] = useState(agent.model ?? "");
   const [systemPrompt, setSystemPrompt] = useState(agent.systemPrompt ?? "");
   const [saving, setSaving] = useState(false);
@@ -18,15 +20,22 @@ export function AgentForm({ agent }: { agent: Agent }) {
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch(`/api/agents/${encodeURIComponent(agent.name)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: model.trim() || undefined, systemPrompt: systemPrompt || undefined }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to save agent");
-      }
+      await trackOperation(
+        "agents",
+        "prompt_edited",
+        async () => {
+          const res = await fetch(`/api/agents/${encodeURIComponent(agent.name)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: model.trim() || undefined, systemPrompt: systemPrompt || undefined }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || "Failed to save agent");
+          }
+        },
+        { name: agent.name, length: systemPrompt?.length ?? 0 },
+      );
       setSuccess("Agent saved successfully.");
     } catch (err: any) {
       setError(err.message);
