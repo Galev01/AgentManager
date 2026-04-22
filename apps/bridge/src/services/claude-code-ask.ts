@@ -102,15 +102,25 @@ async function ensureSessionExists(
     const state = (await callGateway("sessions.get", { key: gatewayKey })) as {
       messages?: GatewayMessage[];
     };
+    console.log(
+      `[claude-code-ask] ensure: first get OK for "${gatewayKey}" (msgs=${state?.messages?.length ?? 0})`
+    );
     return state?.messages?.length ?? 0;
   } catch (e) {
+    console.log(
+      `[claude-code-ask] ensure: first get threw for "${gatewayKey}": ${(e as Error).message}`
+    );
     if (!/not found/i.test((e as Error).message)) throw e;
   }
 
   // Session doesn't exist yet. Try to create, capturing any error for diagnostic context.
   let createError: Error | null = null;
+  let createResult: unknown = null;
   try {
-    await callGateway("sessions.create", { key: gatewayKey });
+    createResult = await callGateway("sessions.create", { key: gatewayKey });
+    console.log(
+      `[claude-code-ask] ensure: create returned ${JSON.stringify(createResult).slice(0, 200)}`
+    );
   } catch (err) {
     createError = err as Error;
     console.warn(
@@ -123,8 +133,14 @@ async function ensureSessionExists(
     const state = (await callGateway("sessions.get", { key: gatewayKey })) as {
       messages?: GatewayMessage[];
     };
+    console.log(
+      `[claude-code-ask] ensure: verify get OK for "${gatewayKey}" (msgs=${state?.messages?.length ?? 0})`
+    );
     return state?.messages?.length ?? 0;
   } catch (verifyErr) {
+    console.warn(
+      `[claude-code-ask] ensure: verify get threw for "${gatewayKey}": ${(verifyErr as Error).message}`
+    );
     const parts = [`session not created: ${gatewayKey}`];
     if (createError) parts.push(`create: ${createError.message}`);
     parts.push(`get: ${(verifyErr as Error).message}`);
@@ -238,11 +254,24 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
         baselineLength === 0 ? wrapFirstMessage(req.question) : req.question;
 
       // Submit the user turn. Gateway is async: returns {runId, status, messageSeq}.
-      await deps.callGateway("sessions.send", {
-        key: gatewayKey,
-        idempotencyKey: askEnvelope.msgId,
-        message: messageToGateway,
-      });
+      console.log(
+        `[claude-code-ask] sending to gateway key="${gatewayKey}" idemp="${askEnvelope.msgId}" (baseline=${baselineLength})`
+      );
+      try {
+        const sendResult = await deps.callGateway("sessions.send", {
+          key: gatewayKey,
+          idempotencyKey: askEnvelope.msgId,
+          message: messageToGateway,
+        });
+        console.log(
+          `[claude-code-ask] send returned ${JSON.stringify(sendResult).slice(0, 200)}`
+        );
+      } catch (sendErr) {
+        console.warn(
+          `[claude-code-ask] sessions.send threw for "${gatewayKey}": ${(sendErr as Error).message}`
+        );
+        throw sendErr;
+      }
 
       // Poll sessions.get until the assistant reply appears.
       draft = await pollForReply(
