@@ -214,11 +214,12 @@ export function createTelemetryLog(cfg: TelemetryLogConfig): {
     const since = opts.since ? decodeCursor(opts.since) : null;
     const until = opts.until ? decodeCursor(opts.until) : null;
     const files = await listDayFiles();
-    const MAX_SCAN_DAYS = 14;
+    // Scan horizon tracks retention so the Log Center can reach anything still on disk.
+    const maxScanDays = Math.max(1, cfg.retentionDays);
     const collected: TelemetryEvent[] = [];
     let scanned = 0;
     for (const f of files) {
-      if (scanned >= MAX_SCAN_DAYS) break;
+      if (scanned >= maxScanDays) break;
       scanned++;
       const events = await readFileEvents(path.join(cfg.dir, f));
       for (const ev of events) {

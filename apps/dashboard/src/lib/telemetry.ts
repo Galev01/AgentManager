@@ -18,11 +18,16 @@ function uuid(): string {
 
 export function getTabSessionId(): string {
   if (typeof window === "undefined") return "server";
-  const existing = sessionStorage.getItem(TAB_KEY);
-  if (existing) return existing;
-  const fresh = uuid();
-  sessionStorage.setItem(TAB_KEY, fresh);
-  return fresh;
+  try {
+    const existing = sessionStorage.getItem(TAB_KEY);
+    if (existing) return existing;
+    const fresh = uuid();
+    sessionStorage.setItem(TAB_KEY, fresh);
+    return fresh;
+  } catch {
+    // sessionStorage can throw in locked-down browsers / blocked iframes
+    return "no-storage";
+  }
 }
 
 export type LogActionArgs = {
@@ -36,24 +41,27 @@ export type LogActionArgs = {
 };
 
 export function logActionRaw(args: LogActionArgs): void {
-  const payload: TelemetryEventInput = {
-    schemaVersion: TELEMETRY_SCHEMA_VERSION,
-    eventId: uuid(),
-    clientTs: new Date().toISOString(),
-    source: "dashboard",
-    surface: "web",
-    sessionId: getTabSessionId(),
-    actor: { type: "user", id: "anon" }, // server overwrites with verified session
-    feature: args.feature,
-    action: args.action,
-    target: args.target,
-    route: typeof window !== "undefined" ? window.location.pathname : "",
-    outcome: args.outcome,
-    errorCode: args.errorCode,
-    traceId: args.traceId,
-    context: args.context,
-  };
+  // Whole function is best-effort: a synchronous throw anywhere here
+  // (e.g., sessionStorage DOMException in locked-down browsers) must never
+  // reach trackOperation's caller and abort the business action.
   try {
+    const payload: TelemetryEventInput = {
+      schemaVersion: TELEMETRY_SCHEMA_VERSION,
+      eventId: uuid(),
+      clientTs: new Date().toISOString(),
+      source: "dashboard",
+      surface: "web",
+      sessionId: getTabSessionId(),
+      actor: { type: "user", id: "anon" }, // server overwrites with verified session
+      feature: args.feature,
+      action: args.action,
+      target: args.target,
+      route: typeof window !== "undefined" ? window.location.pathname : "",
+      outcome: args.outcome,
+      errorCode: args.errorCode,
+      traceId: args.traceId,
+      context: args.context,
+    };
     const body = JSON.stringify(payload);
     if (body.length > 60_000) return; // keepalive request bodies are capped at ~64 KB by browsers
     void fetch(ENDPOINT, {
