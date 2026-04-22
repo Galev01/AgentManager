@@ -32,16 +32,16 @@ export function TriageActions({
             key={s.value}
             disabled={pending || isCurrent}
             onClick={() =>
-              startTransition(() =>
-                trackOperation(
+              startTransition(async () => {
+                await trackOperation(
                   "reviews.inbox",
                   "item_triaged",
                   async () => {
                     await setTriageAction(projectId, reportDate, s.value);
                   },
                   { projectId, itemId: `${projectId}::${reportDate}`, decision: s.value },
-                )
-              )
+                );
+              })
             }
             className={`rounded px-2 py-1 text-xs ${
               isCurrent

@@ -30,16 +30,14 @@ export function InboxTable({ items }: { items: ReviewInboxItem[] }) {
   const itemKey = (i: ReviewInboxItem) => `${i.projectId}::${i.reportDate}`;
 
   function toggleFilter(state: ReviewTriageState) {
-    setActiveFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(state)) next.delete(state);
-      else next.add(state);
-      logAction({
-        feature: "reviews.inbox",
-        action: "filter_applied",
-        context: { status: Array.from(next).join(","), severity: "" },
-      });
-      return next;
+    const next = new Set(activeFilters);
+    if (next.has(state)) next.delete(state);
+    else next.add(state);
+    setActiveFilters(next);
+    logAction({
+      feature: "reviews.inbox",
+      action: "filter_applied",
+      context: { status: Array.from(next).join(","), severity: "" },
     });
   }
 
