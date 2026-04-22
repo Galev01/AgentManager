@@ -201,6 +201,22 @@ export type ConfigSchema = {
   properties: Record<string, ConfigSchemaProperty>;
 };
 
+// Response shape for `config.get` (redacted snapshot). `hash` is the opaque
+// fingerprint of the on-disk file — the UI must round-trip it as `baseHash`
+// on subsequent `config.set` / `config.apply` calls so the gateway can
+// detect concurrent edits.
+export type GatewayConfigSnapshot = {
+  path?: string;
+  exists?: boolean;
+  valid?: boolean;
+  hash?: string;
+  raw?: string | null;
+  parsed?: Record<string, unknown>;
+  config?: Record<string, unknown>;
+  resolved?: Record<string, unknown>;
+  runtimeConfig?: Record<string, unknown>;
+};
+
 // --- Brainclaw: Obsidian vault integration ---
 
 export type BrainPersonStatus = "active" | "archived" | "blocked";

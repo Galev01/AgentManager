@@ -16,6 +16,7 @@ import type {
   EffectiveTool,
   Skill,
   ConfigSchema,
+  GatewayConfigSnapshot,
   BrainPerson,
   BrainPersonSummary,
   BrainPersonUpdate,
@@ -298,7 +299,10 @@ export async function removeCronJob(id: string): Promise<{ ok: boolean }> {
 // --- Channels ---
 export async function getChannels(): Promise<Channel[]> {
   const result = await bridgeFetch<unknown>("/channels");
-  return Array.isArray(result) ? result : [];
+  if (!Array.isArray(result)) {
+    throw new Error(`Unexpected /channels response shape: ${typeof result}`);
+  }
+  return result as Channel[];
 }
 
 export async function logoutChannel(name: string): Promise<unknown> {
@@ -326,20 +330,32 @@ export async function installSkill(name: string): Promise<unknown> {
 }
 
 // --- Gateway Config ---
-export async function getGatewayConfig(): Promise<Record<string, unknown>> {
-  return bridgeFetch<Record<string, unknown>>("/gateway-config");
+export async function getGatewayConfig(): Promise<GatewayConfigSnapshot> {
+  return bridgeFetch<GatewayConfigSnapshot>("/gateway-config");
 }
 
 export async function getGatewayConfigSchema(): Promise<ConfigSchema> {
   return bridgeFetch<ConfigSchema>("/gateway-config/schema");
 }
 
-export async function setGatewayConfig(updates: Record<string, unknown>): Promise<unknown> {
-  return bridgeFetch("/gateway-config", { method: "PATCH", body: JSON.stringify(updates) });
+export async function setGatewayConfig(
+  config: Record<string, unknown>,
+  baseHash: string,
+): Promise<unknown> {
+  return bridgeFetch("/gateway-config", {
+    method: "PATCH",
+    body: JSON.stringify({ config, baseHash }),
+  });
 }
 
-export async function applyGatewayConfig(): Promise<unknown> {
-  return bridgeFetch("/gateway-config/apply", { method: "POST" });
+export async function applyGatewayConfig(
+  config: Record<string, unknown>,
+  baseHash: string,
+): Promise<unknown> {
+  return bridgeFetch("/gateway-config/apply", {
+    method: "POST",
+    body: JSON.stringify({ config, baseHash }),
+  });
 }
 
 // --- Brain ---
