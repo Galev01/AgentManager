@@ -9,6 +9,7 @@
     "start": "next start --port 3000"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@openclaw-manager/types": "workspace:*",
     "next": "^15.3.1",
     "react": "^19.1.0",
