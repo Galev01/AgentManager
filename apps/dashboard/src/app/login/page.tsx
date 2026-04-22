@@ -31,8 +31,9 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="h-1 rounded-t bg-gradient-to-r from-primary to-[#AA6CC0]" />
         <div className="rounded-b bg-dark-card p-8 shadow-card-dark">
-          <h1 className="mb-2 text-2xl font-semibold tracking-tight text-text-primary">OpenClaw Manager</h1>
-          <p className="mb-8 text-sm text-text-muted">Sign in to manage your WhatsApp bot</p>
+          <img src="/ManageClaw-TB.png" alt="ManageClaw" className="mx-auto mb-4 h-16 w-auto" />
+          <h1 className="mb-2 text-center text-2xl font-semibold tracking-tight text-text-primary">OpenClaw Manager</h1>
+          <p className="mb-8 text-center text-sm text-text-muted">Sign in to manage your WhatsApp bot</p>
           <form onSubmit={handleSubmit}>
             <label className="mb-2 block text-sm text-text-gray" htmlFor="password">Admin Password</label>
             <input

@@ -4,6 +4,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "OpenClaw Manager",
   description: "OpenClaw operator console",
+  icons: {
+    icon: "/ManageClaw-TB.png",
+    shortcut: "/ManageClaw-TB.png",
+    apple: "/ManageClaw-TB.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

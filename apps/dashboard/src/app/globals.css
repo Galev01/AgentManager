@@ -111,6 +111,12 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: -0.02em;
   flex-shrink: 0;
 }
+.sb-logo-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
 .sb-name { font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em; }
 
 .sb-scroll { flex: 1; overflow-y: auto; padding: 10px 8px 16px; }

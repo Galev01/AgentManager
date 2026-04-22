@@ -62,7 +62,7 @@ export function Sidebar({ badges = {} }: { badges?: Record<string, number> }) {
     <aside className="sb">
       {/* Brand */}
       <div className="sb-brand">
-        <div className="sb-logo">◐</div>
+        <img src="/ManageClaw-TB.png" alt="ManageClaw" className="sb-logo-img" />
         <div className="sb-name">OpenClaw</div>
       </div>
 
