@@ -51,6 +51,7 @@ const NAV: NavSection[] = [
       { id: "commands",     label: "Commands",     href: "/commands",     icon: "cmd"      },
       { id: "config",       label: "Raw Config",   href: "/config",       icon: "config"   },
       { id: "settings",     label: "Settings",     href: "/settings",     icon: "settings" },
+      { id: "logs",         label: "Logs",         href: "/logs",         icon: "logs"     },
     ],
   },
 ];
