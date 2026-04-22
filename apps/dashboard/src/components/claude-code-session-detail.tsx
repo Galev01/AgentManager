@@ -30,63 +30,53 @@ type Intel = {
   };
 };
 
-function truncate(s: string, n: number): string {
-  const trimmed = s.replace(/\s+/g, " ").trim();
-  if (trimmed.length <= n) return trimmed;
-  return `${trimmed.slice(0, n - 1)}…`;
+function truncate(value: string, maxChars: number): string {
+  const trimmed = value.replace(/\s+/g, " ").trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, maxChars - 3)}...`;
 }
 
 function deriveTitle(events: ClaudeCodeTranscriptEvent[], fallback: string): string {
-  const firstAsk = events.find((e) => e.kind === "ask" && typeof e.question === "string");
+  const firstAsk = events.find(
+    (event) => event.kind === "ask" && typeof event.question === "string"
+  );
   if (firstAsk?.question) return truncate(firstAsk.question, 80);
   return fallback;
 }
 
-function deriveSummary(events: ClaudeCodeTranscriptEvent[]): string {
-  const asks = events.filter((e) => e.kind === "ask").length;
-  const answers = events.filter((e) => e.kind === "answer").length;
-  const firstAsk = events.find((e) => e.kind === "ask" && typeof e.question === "string");
-  const lastAnswer = [...events].reverse().find(
-    (e) => e.kind === "answer" && typeof e.answer === "string",
-  );
-
-  const parts: string[] = [];
-  if (firstAsk?.question) {
-    parts.push(`Started: "${truncate(firstAsk.question, 100)}"`);
-  }
-  parts.push(`${asks} turn${asks === 1 ? "" : "s"} · ${answers} repl${answers === 1 ? "y" : "ies"}`);
-  if (lastAnswer?.answer) {
-    parts.push(`Latest reply: "${truncate(lastAnswer.answer, 100)}"`);
-  }
-  return parts.join(". ");
+function formatTokens(value: number): string {
+  if (value === 0) return "-";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+  return value.toLocaleString();
 }
 
-function formatTokens(n: number): string {
-  if (n === 0) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return n.toLocaleString();
-}
-
-// Claude Code runs on this assistant's model. MCP doesn't report it to the bridge,
-// so we surface the current assistant model (known from the Claude Code runtime).
+// Claude Code does not currently report its own runtime model back through the
+// MCP bridge, so the dashboard still uses a fixed label here.
 const CLAUDE_CODE_MODEL = "claude-opus-4-7";
 
 export function ClaudeCodeSessionDetail({
   session,
   initialEvents,
   initialPending,
+  llmSummary,
   intel,
 }: {
   session: ClaudeCodeSession;
   initialEvents: ClaudeCodeTranscriptEvent[];
   initialPending: ClaudeCodePendingItem[];
+  llmSummary?: string | null;
   intel: Intel;
 }) {
   const router = useRouter();
   const [events, setEvents] = useState(initialEvents);
   const [pending, setPending] = useState(initialPending);
+  const [summary, setSummary] = useState<string | null>(llmSummary ?? null);
+  const [summaryStatus, setSummaryStatus] = useState<"idle" | "loading" | "error">(
+    "idle"
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastSummaryEventCountRef = useRef(llmSummary ? initialEvents.length : 0);
 
   useEffect(() => {
     const url = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/ws`;
@@ -96,26 +86,79 @@ export function ClaudeCodeSessionDetail({
     } catch {
       return;
     }
-    ws.onmessage = (ev) => {
+    ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(ev.data);
-        if (msg.type === "claude_code_transcript_appended" && msg.payload?.sessionId === session.id) {
-          setEvents((prev) => [...prev, msg.payload.event]);
-        } else if (msg.type === "claude_code_pending_upserted" && msg.payload?.sessionId === session.id) {
-          setPending((prev) => [...prev.filter((p) => p.id !== msg.payload.id), msg.payload]);
-        } else if (msg.type === "claude_code_pending_resolved") {
-          setPending((prev) => prev.filter((p) => p.id !== msg.payload?.id));
-        } else if (msg.type === "claude_code_session_upserted") {
+        const message = JSON.parse(event.data);
+        if (
+          message.type === "claude_code_transcript_appended" &&
+          message.payload?.sessionId === session.id
+        ) {
+          setEvents((prev) => [...prev, message.payload.event]);
+        } else if (
+          message.type === "claude_code_pending_upserted" &&
+          message.payload?.sessionId === session.id
+        ) {
+          setPending((prev) => [
+            ...prev.filter((item) => item.id !== message.payload.id),
+            message.payload,
+          ]);
+        } else if (message.type === "claude_code_pending_resolved") {
+          setPending((prev) => prev.filter((item) => item.id !== message.payload?.id));
+        } else if (message.type === "claude_code_session_upserted") {
           router.refresh();
         }
       } catch {}
     };
     return () => ws?.close();
-  }, [session.id, router]);
+  }, [router, session.id]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
   }, [events]);
+
+  useEffect(() => {
+    setSummary(llmSummary ?? null);
+    setSummaryStatus("idle");
+    lastSummaryEventCountRef.current = llmSummary ? initialEvents.length : 0;
+  }, [initialEvents.length, llmSummary, session.id]);
+
+  useEffect(() => {
+    if (events.length === 0) {
+      setSummary(null);
+      setSummaryStatus("idle");
+      lastSummaryEventCountRef.current = 0;
+      return;
+    }
+
+    if (events.length <= lastSummaryEventCountRef.current) return;
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      setSummaryStatus("loading");
+      try {
+        const res = await fetch(`/api/claude-code/sessions/${session.id}/summary`, {
+          method: "POST",
+        });
+        if (!res.ok) throw new Error("failed to summarize session");
+        const data = (await res.json()) as { summary?: string | null };
+        if (cancelled) return;
+        setSummary(typeof data.summary === "string" ? data.summary : null);
+        setSummaryStatus("idle");
+        lastSummaryEventCountRef.current = events.length;
+      } catch {
+        if (cancelled) return;
+        setSummaryStatus("error");
+      }
+    }, 800);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [events.length, session.id]);
 
   async function toggleMode() {
     await fetch(`/api/claude-code/sessions/${session.id}`, {
@@ -135,8 +178,10 @@ export function ClaudeCodeSessionDetail({
     router.refresh();
   }
 
-  const title = useMemo(() => deriveTitle(events, session.displayName), [events, session.displayName]);
-  const summary = useMemo(() => deriveSummary(events), [events]);
+  const title = useMemo(
+    () => deriveTitle(events, session.displayName),
+    [events, session.displayName]
+  );
 
   const totalOpenclawTokens =
     intel.openclawTokens.input +
@@ -157,13 +202,13 @@ export function ClaudeCodeSessionDetail({
       label: "OpenClaw tokens",
       value:
         totalOpenclawTokens === 0 ? (
-          <span style={{ color: "var(--text-faint)" }}>—</span>
+          <span style={{ color: "var(--text-faint)" }}>-</span>
         ) : (
           <span className="mono" style={{ fontSize: 11.5 }}>
-            in {formatTokens(intel.openclawTokens.input)} · out{" "}
+            in {formatTokens(intel.openclawTokens.input)} | out{" "}
             {formatTokens(intel.openclawTokens.output)}
             {intel.openclawTokens.cacheRead > 0 &&
-              ` · cache ${formatTokens(intel.openclawTokens.cacheRead)}`}
+              ` | cache ${formatTokens(intel.openclawTokens.cacheRead)}`}
           </span>
         ),
     },
@@ -179,7 +224,7 @@ export function ClaudeCodeSessionDetail({
 
   const sessionKV = [
     { label: "id", value: <code>{session.id}</code> },
-    { label: "ide", value: session.ide ?? "—" },
+    { label: "ide", value: session.ide ?? "-" },
     {
       label: "workspace",
       value: <code style={{ wordBreak: "break-all" }}>{session.workspace}</code>,
@@ -189,7 +234,7 @@ export function ClaudeCodeSessionDetail({
   ];
 
   const latestEnvelope =
-    [...events].reverse().find((e) => e.envelope)?.envelope ?? null;
+    [...events].reverse().find((event) => event.envelope)?.envelope ?? null;
 
   return (
     <>
@@ -197,12 +242,14 @@ export function ClaudeCodeSessionDetail({
         title={title}
         sub={
           <>
-            <span className="mono" style={{ color: "var(--text-faint)", fontSize: 11.5 }}>
+            <span
+              className="mono"
+              style={{ color: "var(--text-faint)", fontSize: 11.5 }}
+            >
               {session.displayName}
             </span>{" "}
-            ·{" "}
-            <Badge kind={session.state === "active" ? "acc" : "mute"}>{session.state}</Badge>{" "}
-            · <span className="mono">{session.messageCount} msgs</span>
+            | <Badge kind={session.state === "active" ? "acc" : "mute"}>{session.state}</Badge>{" "}
+            | <span className="mono">{session.messageCount} msgs</span>
           </>
         }
         actions={
@@ -233,11 +280,11 @@ export function ClaudeCodeSessionDetail({
                 description="Start a conversation from your IDE."
               />
             )}
-            {events.map((e, i) => (
+            {events.map((event, index) => (
               <TranscriptBubble
-                key={i}
-                event={e}
-                prior={i > 0 ? events[i - 1] : null}
+                key={index}
+                event={event}
+                prior={index > 0 ? events[index - 1] : null}
               />
             ))}
           </div>
@@ -246,11 +293,30 @@ export function ClaudeCodeSessionDetail({
         <aside style={{ display: "flex", flexDirection: "column", gap: "var(--row-gap)" }}>
           <Card>
             <SectionTitle>Summary</SectionTitle>
-            <div style={{ padding: 14, fontSize: 12.5, color: "var(--text-dim)", lineHeight: 1.55 }}>
+            <div
+              style={{
+                padding: 14,
+                fontSize: 12.5,
+                color: "var(--text-dim)",
+                lineHeight: 1.55,
+              }}
+            >
               {events.length === 0 ? (
                 <span style={{ color: "var(--text-faint)" }}>No activity yet.</span>
-              ) : (
+              ) : summary ? (
                 summary
+              ) : summaryStatus === "loading" ? (
+                <span style={{ color: "var(--text-faint)" }}>
+                  OpenClaw is generating a summary...
+                </span>
+              ) : summaryStatus === "error" ? (
+                <span style={{ color: "var(--text-faint)" }}>
+                  OpenClaw summary unavailable right now.
+                </span>
+              ) : (
+                <span style={{ color: "var(--text-faint)" }}>
+                  OpenClaw summary unavailable.
+                </span>
               )}
             </div>
           </Card>
@@ -266,7 +332,7 @@ export function ClaudeCodeSessionDetail({
             <CCEscalationCard
               session={session}
               latestTurn={latestEnvelope}
-              pending={pending.find((p) => p.sessionId === session.id) ?? null}
+              pending={pending.find((item) => item.sessionId === session.id) ?? null}
             />
           ) : null}
 
@@ -301,11 +367,13 @@ export function ClaudeCodeSessionDetail({
               Pending approvals
             </SectionTitle>
           )}
-          {pending.map((p) => (
+          {pending.map((item) => (
             <ClaudeCodePendingCard
-              key={p.id}
-              pending={p}
-              onResolved={(id) => setPending((prev) => prev.filter((x) => x.id !== id))}
+              key={item.id}
+              pending={item}
+              onResolved={(id) =>
+                setPending((prev) => prev.filter((pendingItem) => pendingItem.id !== id))
+              }
             />
           ))}
 
@@ -329,18 +397,19 @@ function TranscriptBubble({
   prior: ClaudeCodeTranscriptEvent | null;
 }) {
   const envelope = event.envelope ?? null;
-  const priorEnv = prior?.envelope ?? null;
+  const priorEnvelope = prior?.envelope ?? null;
   const transitioned =
     !!envelope &&
-    !!priorEnv &&
-    (priorEnv.intent !== envelope.intent || priorEnv.state !== envelope.state);
+    !!priorEnvelope &&
+    (priorEnvelope.intent !== envelope.intent ||
+      priorEnvelope.state !== envelope.state);
 
   const chrome = envelope ? (
     <>
       <div style={{ marginBottom: 4 }}>
         <CCEnvelopeChips
           envelope={envelope}
-          prior={priorEnv}
+          prior={priorEnvelope}
           transitioned={transitioned}
         />
       </div>
@@ -363,6 +432,7 @@ function TranscriptBubble({
       </div>
     );
   }
+
   if (event.kind === "answer") {
     const isOperator = event.source === "operator";
     return (
@@ -375,33 +445,38 @@ function TranscriptBubble({
       </div>
     );
   }
+
   if (event.kind === "discarded") {
     return (
       <div className="msg-sys err">
-        <span className="line" />— operator discarded reply —<span className="line" />
+        <span className="line" />- operator discarded reply -<span className="line" />
       </div>
     );
   }
+
   if (event.kind === "timeout") {
     return (
       <div className="msg-sys warn">
-        <span className="line" />— operator timeout —<span className="line" />
+        <span className="line" />- operator timeout -<span className="line" />
       </div>
     );
   }
+
   if (event.kind === "mode_change") {
     return (
       <div className="msg-sys">
-        <span className="line" />— mode: {event.from} → {event.to} —<span className="line" />
+        <span className="line" />- mode: {event.from} {"->"} {event.to} -<span className="line" />
       </div>
     );
   }
+
   if (event.kind === "ended") {
     return (
       <div className="msg-sys">
-        <span className="line" />— session ended —<span className="line" />
+        <span className="line" />- session ended -<span className="line" />
       </div>
     );
   }
+
   return null;
 }

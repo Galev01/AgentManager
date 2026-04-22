@@ -19,6 +19,7 @@ import {
   resolvePending,
 } from "../services/claude-code-pending.js";
 import { createAskOrchestrator } from "../services/claude-code-ask.js";
+import { summarizeSession } from "../services/claude-code-summarize.js";
 import type {
   ClaudeCodeAskRequest,
   ClaudeCodeConnectConfig,
@@ -121,6 +122,25 @@ router.get("/claude-code/transcripts/:id", async (req, res) => {
   if (!validId(id)) return res.status(400).json({ error: "invalid id" });
   const events = await readTranscript(transcriptPathFor(config.claudeCodeDir, id));
   res.json(events);
+});
+
+router.post("/claude-code/sessions/:id/summarize", async (req, res) => {
+  const id = req.params.id;
+  if (!validId(id)) return res.status(400).json({ error: "invalid id" });
+  const events = await readTranscript(transcriptPathFor(config.claudeCodeDir, id));
+  if (events.length === 0) {
+    return res.json({ summary: null });
+  }
+  try {
+    const summary = await summarizeSession(events, {
+      callGateway,
+      agentId: config.claudeCodeOpenclawAgentId,
+    });
+    res.json({ summary });
+  } catch (err) {
+    console.warn(`[claude-code] summarize failed for ${id}: ${(err as Error).message}`);
+    res.json({ summary: null });
+  }
 });
 
 router.get("/claude-code/pending", async (_req, res) => {

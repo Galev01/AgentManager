@@ -738,6 +738,14 @@ export async function getClaudeCodeConnectConfig(): Promise<ClaudeCodeConnectCon
   return bridgeFetch<ClaudeCodeConnectConfig>("/claude-code/connect-config");
 }
 
+export async function summarizeClaudeCodeSession(id: string): Promise<string | null> {
+  const { summary } = await bridgeFetch<{ summary: string | null }>(
+    `/claude-code/sessions/${id}/summarize`,
+    { method: "POST" }
+  );
+  return summary;
+}
+
 // --- Global Brain ---
 
 export async function getGlobalBrain(): Promise<GlobalBrain> {

@@ -5,6 +5,7 @@ import {
   getClaudeCodeTranscript,
   getClaudeCodePending,
   callGatewayMethod,
+  summarizeClaudeCodeSession,
 } from "@/lib/bridge-client";
 import { notFound } from "next/navigation";
 
@@ -28,13 +29,77 @@ type GatewaySessionState = {
   usage?: UsageBlock;
 };
 
-function readPrimaryModel(config: unknown): string | null {
+type GatewaySessionListEntry = {
+  key?: string;
+  model?: string;
+  agentId?: string;
+  agentName?: string;
+};
+
+function readPrimaryModel(config: unknown, agentId?: string): string | null {
   const parsed = (config as { parsed?: Record<string, unknown> })?.parsed;
   const agents = parsed?.agents as Record<string, unknown> | undefined;
+
+  // Check per-agent model override first (agents.<agentId>.model.primary)
+  if (agentId && agents) {
+    const agentConfig = agents[agentId] as Record<string, unknown> | undefined;
+    const agentModel = agentConfig?.model as { primary?: unknown } | undefined;
+    if (typeof agentModel?.primary === "string") return agentModel.primary;
+  }
+
+  // Fall back to global default (agents.defaults.model.primary)
   const defaults = agents?.defaults as Record<string, unknown> | undefined;
   const model = defaults?.model as { primary?: unknown } | undefined;
   const primary = model?.primary;
   return typeof primary === "string" ? primary : null;
+}
+
+function extractSessionsListModel(sessionsList: unknown): {
+  defaultsModel: string | null;
+  sessions: GatewaySessionListEntry[];
+} {
+  if (!sessionsList || typeof sessionsList !== "object") {
+    return { defaultsModel: null, sessions: [] };
+  }
+
+  const sl = sessionsList as {
+    defaults?: { model?: unknown };
+    sessions?: unknown[];
+  };
+
+  return {
+    defaultsModel: typeof sl.defaults?.model === "string" ? sl.defaults.model : null,
+    sessions: Array.isArray(sl.sessions) ? (sl.sessions as GatewaySessionListEntry[]) : [],
+  };
+}
+
+function matchSessionEntry(
+  sessions: GatewaySessionListEntry[],
+  openclawSessionId: string
+): GatewaySessionListEntry | null {
+  return (
+    sessions.find(
+      (session) =>
+        typeof session.key === "string" &&
+        (session.key === openclawSessionId || session.key.endsWith(`:${openclawSessionId}`))
+    ) ?? null
+  );
+}
+
+function readSessionAgentId(session: GatewaySessionListEntry | null): string | null {
+  if (!session) return null;
+  if (typeof session.agentName === "string" && session.agentName) return session.agentName;
+  if (typeof session.agentId === "string" && session.agentId) return session.agentId;
+  if (typeof session.key === "string") {
+    const match = /^agent:([^:]+):/.exec(session.key);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+function readAgentIdentityModel(agentIdentity: unknown): string | null {
+  const model = (agentIdentity as { model?: unknown })?.model;
+  return typeof model === "string" ? model : null;
 }
 
 function aggregateTokens(state: GatewaySessionState | null): {
@@ -78,11 +143,12 @@ export default async function ClaudeCodeSessionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [sessions, events, pending, config] = await Promise.all([
+  const [sessions, events, pending, config, sessionsList] = await Promise.all([
     getClaudeCodeSessions().catch(() => []),
     getClaudeCodeTranscript(id).catch(() => []),
     getClaudeCodePending().catch(() => []),
     callGatewayMethod("config.get", {}).catch(() => null),
+    callGatewayMethod("sessions.list", {}).catch(() => null),
   ]);
   const session = sessions.find((s) => s.id === id);
   if (!session) notFound();
@@ -97,8 +163,33 @@ export default async function ClaudeCodeSessionPage({
     gatewayState = null;
   }
 
-  const configuredModel = readPrimaryModel(config);
+  const { defaultsModel, sessions: listedSessions } = extractSessionsListModel(sessionsList);
+  const matchedSession = matchSessionEntry(listedSessions, session.openclawSessionId);
+  const sessionAgentId = readSessionAgentId(matchedSession);
+
+  let agentIdentity: unknown = null;
+  if (sessionAgentId) {
+    try {
+      agentIdentity = await callGatewayMethod("agents.identity", { name: sessionAgentId });
+    } catch {
+      agentIdentity = null;
+    }
+  }
+
+  const configuredModel = readPrimaryModel(config, sessionAgentId ?? undefined);
   const usage = aggregateTokens(gatewayState);
+  const sessionModel =
+    matchedSession && typeof matchedSession.model === "string" ? matchedSession.model : null;
+  const agentIdentityModel = readAgentIdentityModel(agentIdentity);
+  const resolvedModel =
+    agentIdentityModel ??
+    sessionModel ??
+    usage.openclawModel ??
+    configuredModel ??
+    defaultsModel;
+
+  // Fetch LLM-generated summary (don't block page render on failure)
+  const llmSummary = await summarizeClaudeCodeSession(id).catch(() => null);
 
   return (
     <AppShell title={`Claude Code · ${session.displayName}`}>
@@ -107,8 +198,9 @@ export default async function ClaudeCodeSessionPage({
           session={session}
           initialEvents={events}
           initialPending={sessionPending}
+          llmSummary={llmSummary}
           intel={{
-            openclawModel: usage.openclawModel ?? configuredModel,
+            openclawModel: resolvedModel,
             openclawTokens: {
               input: usage.openclawInput,
               output: usage.openclawOutput,
