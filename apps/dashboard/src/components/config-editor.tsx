@@ -13,6 +13,27 @@ function formatLabel(key: string): string {
     .trim();
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function highlightJson(json: string): string {
+  const escaped = escapeHtml(json);
+  return escaped.replace(
+    /("(?:\\.|[^"\\])*"\s*:)|("(?:\\.|[^"\\])*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+    (_m, key, str, bool, num) => {
+      if (key) return `<span class="text-sky-400">${key}</span>`;
+      if (str) return `<span class="text-emerald-300">${str}</span>`;
+      if (bool) return `<span class="text-amber-400">${bool}</span>`;
+      if (num) return `<span class="text-fuchsia-300">${num}</span>`;
+      return _m;
+    },
+  );
+}
+
 function FormField({
   propKey,
   def,
@@ -129,6 +150,7 @@ export function ConfigEditor({
   const [dirty, setDirty] = useState(false);
   const [rawText, setRawText] = useState(JSON.stringify(initialValues, null, 2));
   const [rawError, setRawError] = useState<string | null>(null);
+  const [rawEditing, setRawEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
@@ -274,14 +296,43 @@ export function ConfigEditor({
         </div>
       ) : (
         <div className="space-y-2">
-          <textarea
-            rows={20}
-            value={rawText}
-            onChange={(e) => handleRawChange(e.target.value)}
-            onBlur={handleRawBlur}
-            className="w-full rounded border border-zinc-600 bg-zinc-900 px-4 py-3 font-mono text-xs text-zinc-100 focus:border-blue-500 focus:outline-none resize-y"
-            spellCheck={false}
-          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">
+              {rawEditing ? "Editing — click Done to parse" : "Read-only view"}
+            </span>
+            <button
+              onClick={() => {
+                if (rawEditing) {
+                  handleRawBlur();
+                  if (!rawError) setRawEditing(false);
+                } else {
+                  setRawText(JSON.stringify(values, null, 2));
+                  setRawEditing(true);
+                }
+              }}
+              className="rounded border border-zinc-600 bg-zinc-800 px-3 py-1 text-xs text-zinc-200 hover:bg-zinc-700"
+            >
+              {rawEditing ? "Done" : "Edit"}
+            </button>
+          </div>
+          {rawEditing ? (
+            <textarea
+              rows={20}
+              value={rawText}
+              onChange={(e) => handleRawChange(e.target.value)}
+              onBlur={handleRawBlur}
+              className="w-full rounded border border-zinc-600 bg-zinc-900 px-4 py-3 font-mono text-xs text-zinc-100 focus:border-blue-500 focus:outline-none resize-y"
+              spellCheck={false}
+              autoFocus
+            />
+          ) : (
+            <pre
+              className="max-h-[32rem] overflow-auto rounded border border-zinc-700 bg-zinc-900 px-4 py-3 font-mono text-xs leading-relaxed text-zinc-300"
+              dangerouslySetInnerHTML={{
+                __html: highlightJson(JSON.stringify(values, null, 2)),
+              }}
+            />
+          )}
           {rawError && (
             <p className="text-xs text-red-400">{rawError}</p>
           )}
