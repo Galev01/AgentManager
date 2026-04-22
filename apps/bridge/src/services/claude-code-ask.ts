@@ -97,55 +97,30 @@ async function ensureSessionExists(
   callGateway: AskOrchestratorDeps["callGateway"],
   gatewayKey: string
 ): Promise<number> {
-  // First probe — if the session exists, return its current message count as baseline.
+  // Gateway's sessions.get returns {messages: []} stub for missing keys rather
+  // than erroring, so probing with get() can't distinguish "empty session" from
+  // "no session". Call sessions.create first — idempotent on existing sessions
+  // (the gateway merges with the existing entry) — then read the baseline.
   try {
-    const state = (await callGateway("sessions.get", { key: gatewayKey })) as {
-      messages?: GatewayMessage[];
-    };
-    console.log(
-      `[claude-code-ask] ensure: first get OK for "${gatewayKey}" (msgs=${state?.messages?.length ?? 0})`
-    );
-    return state?.messages?.length ?? 0;
-  } catch (e) {
-    console.log(
-      `[claude-code-ask] ensure: first get threw for "${gatewayKey}": ${(e as Error).message}`
-    );
-    if (!/not found/i.test((e as Error).message)) throw e;
-  }
-
-  // Session doesn't exist yet. Try to create, capturing any error for diagnostic context.
-  let createError: Error | null = null;
-  let createResult: unknown = null;
-  try {
-    createResult = await callGateway("sessions.create", { key: gatewayKey });
+    const createResult = await callGateway("sessions.create", { key: gatewayKey });
     console.log(
       `[claude-code-ask] ensure: create returned ${JSON.stringify(createResult).slice(0, 200)}`
     );
   } catch (err) {
-    createError = err as Error;
     console.warn(
-      `[claude-code-ask] sessions.create({ key: "${gatewayKey}" }) threw: ${createError.message}`
+      `[claude-code-ask] sessions.create({ key: "${gatewayKey}" }) threw: ${(err as Error).message}`
     );
+    throw new Error(`sessions.create failed: ${(err as Error).message}`);
   }
 
-  // Trust state, not error text: re-probe. If the session now resolves, we're good.
-  try {
-    const state = (await callGateway("sessions.get", { key: gatewayKey })) as {
-      messages?: GatewayMessage[];
-    };
-    console.log(
-      `[claude-code-ask] ensure: verify get OK for "${gatewayKey}" (msgs=${state?.messages?.length ?? 0})`
-    );
-    return state?.messages?.length ?? 0;
-  } catch (verifyErr) {
-    console.warn(
-      `[claude-code-ask] ensure: verify get threw for "${gatewayKey}": ${(verifyErr as Error).message}`
-    );
-    const parts = [`session not created: ${gatewayKey}`];
-    if (createError) parts.push(`create: ${createError.message}`);
-    parts.push(`get: ${(verifyErr as Error).message}`);
-    throw new Error(parts.join(" | "));
-  }
+  const state = (await callGateway("sessions.get", { key: gatewayKey })) as {
+    messages?: GatewayMessage[];
+  };
+  const baseline = state?.messages?.length ?? 0;
+  console.log(
+    `[claude-code-ask] ensure: get OK for "${gatewayKey}" (msgs=${baseline})`
+  );
+  return baseline;
 }
 
 async function pollForReply(
