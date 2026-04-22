@@ -86,6 +86,7 @@ export type RoutingRule = {
   displayName: string | null;
   relayRecipientIds: string[];
   suppressBot: boolean;
+  isDefault: boolean;
   note: string;
 };
 

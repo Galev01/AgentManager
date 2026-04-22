@@ -18,17 +18,20 @@ router.get("/routing-rules", async (_req: Request, res: Response) => {
 
 router.post("/routing-rules", async (req: Request, res: Response) => {
   try {
-    const { conversationKey, phone, displayName, relayRecipientIds, suppressBot, note } = req.body;
-    if (typeof conversationKey !== "string" || !conversationKey.trim()) {
+    const { conversationKey, phone, displayName, relayRecipientIds, suppressBot, isDefault, note } = req.body;
+    const isDefaultRule = isDefault === true;
+    const hasKey = typeof conversationKey === "string" && conversationKey.trim().length > 0;
+    if (!isDefaultRule && !hasKey) {
       res.status(400).json({ error: "conversationKey is required" });
       return;
     }
     const rule = await upsertRule({
-      conversationKey: conversationKey.trim(),
+      conversationKey: hasKey ? conversationKey.trim() : "",
       phone: typeof phone === "string" ? phone.trim() : "",
       displayName: typeof displayName === "string" ? displayName : null,
       relayRecipientIds: Array.isArray(relayRecipientIds) ? relayRecipientIds : [],
       suppressBot: suppressBot === true,
+      isDefault: isDefaultRule,
       note: typeof note === "string" ? note : "",
     });
     res.status(201).json(rule);
@@ -39,14 +42,21 @@ router.post("/routing-rules", async (req: Request, res: Response) => {
 
 router.put("/routing-rules/:id", async (req: Request, res: Response) => {
   try {
-    const { conversationKey, phone, displayName, relayRecipientIds, suppressBot, note } = req.body;
+    const { conversationKey, phone, displayName, relayRecipientIds, suppressBot, isDefault, note } = req.body;
+    const isDefaultRule = isDefault === true;
+    const hasKey = typeof conversationKey === "string" && conversationKey.trim().length > 0;
+    if (!isDefaultRule && !hasKey) {
+      res.status(400).json({ error: "conversationKey is required" });
+      return;
+    }
     const rule = await upsertRule({
       id: req.params.id as string,
-      conversationKey: typeof conversationKey === "string" ? conversationKey.trim() : "",
+      conversationKey: hasKey ? conversationKey.trim() : "",
       phone: typeof phone === "string" ? phone.trim() : "",
       displayName: typeof displayName === "string" ? displayName : null,
       relayRecipientIds: Array.isArray(relayRecipientIds) ? relayRecipientIds : [],
       suppressBot: suppressBot === true,
+      isDefault: isDefaultRule,
       note: typeof note === "string" ? note : "",
     });
     res.json(rule);
