@@ -32,42 +32,50 @@ export function LogCenterTable(): React.ReactElement {
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const liveSinceRef = useRef<string | null>(null);
+  const nextCursorRef = useRef<string | null>(null);
 
   const load = useCallback(async (reset: boolean) => {
     setLoading(true);
     try {
+      const cursor = reset ? null : nextCursorRef.current;
       const qs = toQuery(filters, {
         limit: String(PAGE_SIZE),
-        ...(reset ? {} : nextCursor ? { until: nextCursor } : {}),
+        ...(cursor ? { until: cursor } : {}),
       });
       const res = await fetch(`/api/telemetry/actions${qs}`);
       if (!res.ok) return;
       const body = (await res.json()) as TelemetryQueryResponse;
       setEvents((prev) => (reset ? body.events : [...prev, ...body.events]));
       setNextCursor(body.nextCursor);
-      if (reset && body.prevCursor) {
+      nextCursorRef.current = body.nextCursor;
+      if (reset) {
         liveSinceRef.current = body.prevCursor;
       }
     } finally {
       setLoading(false);
     }
-  }, [filters, nextCursor]);
+  }, [filters]);
 
   useEffect(() => {
     void load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+  }, [load]);
 
   useEffect(() => {
     if (!live) return;
     const id = setInterval(async () => {
-      if (!liveSinceRef.current) return;
-      const qs = toQuery(filters, { since: liveSinceRef.current, limit: String(PAGE_SIZE) });
+      const since = liveSinceRef.current;
+      const qs = toQuery(filters, {
+        limit: String(PAGE_SIZE),
+        ...(since ? { since } : {}),
+      });
       const res = await fetch(`/api/telemetry/actions${qs}`);
       if (!res.ok) return;
       const body = (await res.json()) as TelemetryQueryResponse;
       if (body.events.length > 0) {
-        setEvents((prev) => [...body.events, ...prev]);
+        setEvents((prev) => {
+          if (since) return [...body.events, ...prev];
+          return body.events;
+        });
         liveSinceRef.current = body.prevCursor;
       }
     }, POLL_MS);
