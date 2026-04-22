@@ -172,8 +172,8 @@ export function InboxTable({ items }: { items: ReviewInboxItem[] }) {
                           logAction({
                             feature: "reviews.inbox",
                             action: "item_opened",
-                            target: { type: "review_item", id: i.reportDate },
-                            context: { projectId: i.projectId, itemId: i.reportDate },
+                            target: { type: "review_item", id: `${i.projectId}::${i.reportDate}` },
+                            context: { projectId: i.projectId, itemId: `${i.projectId}::${i.reportDate}` },
                           })
                         }
                       >

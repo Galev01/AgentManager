@@ -39,7 +39,7 @@ export function TriageActions({
                   async () => {
                     await setTriageAction(projectId, reportDate, s.value);
                   },
-                  { projectId, itemId: reportDate, decision: s.value },
+                  { projectId, itemId: `${projectId}::${reportDate}`, decision: s.value },
                 )
               )
             }
