@@ -6,25 +6,17 @@ import {
   useRef,
   useState,
 } from "react";
-import type { YoutubeRebuildPart } from "@openclaw-manager/types";
+import type {
+  YoutubeRebuildPart,
+  YoutubeRebuildPartState,
+  YoutubeRebuildPartStatus,
+  YoutubeRebuildStatus,
+} from "@openclaw-manager/types";
 import { Badge, Button, Card } from "@/components/ui";
 
 type Props = {
   videoId: string;
   url: string;
-};
-
-type RebuildResult = {
-  part: YoutubeRebuildPart;
-  ok: boolean;
-  skipped?: boolean;
-  error?: string;
-};
-
-type RebuildResponse = {
-  ok: boolean;
-  videoId: string;
-  results: RebuildResult[];
 };
 
 const ALL_PARTS: YoutubeRebuildPart[] = [
@@ -36,12 +28,41 @@ const ALL_PARTS: YoutubeRebuildPart[] = [
   "chat-history",
 ];
 
+const STATUS_POLL_MS = 1000;
+/** How long the final per-part state stays visible after the rebuild ends. */
 const RESULT_DISMISS_MS = 5000;
 
-function resultBadge(r: RebuildResult) {
-  if (r.skipped) return <Badge tone="neutral">skipped</Badge>;
-  if (r.ok) return <Badge tone="ok">ok</Badge>;
-  return <Badge tone="error">failed</Badge>;
+const STATUS_ICON: Record<YoutubeRebuildPartStatus, string> = {
+  pending: "\u23f3", // hourglass
+  running: "\ud83d\udd04", // anti-clockwise arrows
+  ok: "\u2713",
+  failed: "\u2717",
+  skipped: "\u2212",
+};
+
+const STATUS_TONE: Record<
+  YoutubeRebuildPartStatus,
+  Parameters<typeof Badge>[0]["tone"]
+> = {
+  pending: "neutral",
+  running: "info",
+  ok: "ok",
+  failed: "error",
+  skipped: "neutral",
+};
+
+function PartRow({ part }: { part: YoutubeRebuildPartState }) {
+  return (
+    <span
+      title={part.error || part.status}
+      style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
+    >
+      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{part.part}</span>
+      <Badge tone={STATUS_TONE[part.status]}>
+        {STATUS_ICON[part.status]} {part.status}
+      </Badge>
+    </span>
+  );
 }
 
 export function RebuildMenu({ videoId, url }: Props) {
@@ -50,24 +71,23 @@ export function RebuildMenu({ videoId, url }: Props) {
     () => new Set<YoutubeRebuildPart>()
   );
   const [submitting, setSubmitting] = useState(false);
-  const [results, setResults] = useState<RebuildResult[] | null>(null);
+  /** Live status from the bridge — replaces the old POST-result rendering.
+   *  null = idle (no rebuild in flight or recently finished). */
+  const [status, setStatus] = useState<YoutubeRebuildStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-dismiss results after 5s
+  // Stop any in-flight timers on unmount.
   useEffect(() => {
-    if (!results) return;
-    if (dismissTimer.current) clearTimeout(dismissTimer.current);
-    dismissTimer.current = setTimeout(() => {
-      setResults(null);
-    }, RESULT_DISMISS_MS);
     return () => {
+      if (pollTimer.current) clearTimeout(pollTimer.current);
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
     };
-  }, [results]);
+  }, []);
 
-  // Close dropdown on outside click
+  // Close dropdown on outside click.
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
@@ -89,11 +109,55 @@ export function RebuildMenu({ videoId, url }: Props) {
     });
   }, []);
 
+  /** Polls the status endpoint until the rebuild ends, then schedules the
+   *  final state to fade away after RESULT_DISMISS_MS. */
+  const pollStatus = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/youtube/rebuild/${encodeURIComponent(videoId)}/status`,
+        { cache: "no-store" }
+      );
+      if (res.ok) {
+        const body = (await res.json()) as {
+          status: YoutubeRebuildStatus | null;
+        };
+        setStatus(body.status);
+        if (body.status && body.status.active) {
+          // Still running — keep polling.
+          pollTimer.current = setTimeout(() => void pollStatus(), STATUS_POLL_MS);
+          return;
+        }
+        if (body.status && !body.status.active) {
+          // Finished — keep showing the final state for a beat, then drop it.
+          if (dismissTimer.current) clearTimeout(dismissTimer.current);
+          dismissTimer.current = setTimeout(() => setStatus(null), RESULT_DISMISS_MS);
+          return;
+        }
+        // status === null: bridge has no record (retention expired or fresh
+        // process). Stop polling.
+        return;
+      }
+    } catch {
+      // network blip — try again
+    }
+    // Generic retry path for non-OK or thrown errors while we believe a
+    // rebuild is still active.
+    pollTimer.current = setTimeout(() => void pollStatus(), STATUS_POLL_MS);
+  }, [videoId]);
+
   const runRebuild = useCallback(async () => {
     if (selected.size === 0 || submitting) return;
     setSubmitting(true);
     setError(null);
-    setResults(null);
+    setStatus(null);
+    if (dismissTimer.current) clearTimeout(dismissTimer.current);
+    if (pollTimer.current) clearTimeout(pollTimer.current);
+
+    // Kick off polling immediately — the bridge writes the initial status
+    // synchronously inside POST handler before any part starts, so the first
+    // tick (≤1s after submit) typically returns the seeded status.
+    pollTimer.current = setTimeout(() => void pollStatus(), STATUS_POLL_MS);
+
     try {
       const res = await fetch(
         `/api/youtube/rebuild/${encodeURIComponent(videoId)}`,
@@ -110,31 +174,28 @@ export function RebuildMenu({ videoId, url }: Props) {
         const body = await res.text();
         throw new Error(body || `HTTP ${res.status}`);
       }
-      const data = (await res.json()) as RebuildResponse;
-      setResults(data.results || []);
+      // Discard the response body — polling drives display now.
+      await res.json().catch(() => undefined);
       setOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Rebuild failed");
     } finally {
       setSubmitting(false);
+      // POST returned (or failed) — fetch one more status snapshot so the
+      // final state appears even if the polling loop is mid-wait.
+      void pollStatus();
     }
-  }, [selected, submitting, videoId, url]);
+  }, [selected, submitting, videoId, url, pollStatus]);
+
+  const showStatus = status && status.parts.length > 0;
+  const headerText = status && status.active ? "Rebuilding\u2026" : "Rebuild \u25be";
 
   return (
     <div ref={containerRef} style={{ position: "relative", display: "inline-flex", gap: 8, alignItems: "center" }}>
-      {results && results.length > 0 ? (
+      {showStatus ? (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {results.map((r) => (
-            <span
-              key={r.part}
-              title={r.error || (r.skipped ? "skipped" : "ok")}
-              style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
-            >
-              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                {r.part}
-              </span>
-              {resultBadge(r)}
-            </span>
+          {status.parts.map((p) => (
+            <PartRow key={p.part} part={p} />
           ))}
         </div>
       ) : null}
@@ -143,11 +204,11 @@ export function RebuildMenu({ videoId, url }: Props) {
         type="button"
         variant="primary"
         onClick={() => setOpen((v) => !v)}
-        disabled={submitting}
+        disabled={submitting || (status?.active ?? false)}
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        {submitting ? "Rebuilding\u2026" : "Rebuild \u25be"}
+        {submitting || status?.active ? "Rebuilding\u2026" : headerText}
       </Button>
 
       {open ? (

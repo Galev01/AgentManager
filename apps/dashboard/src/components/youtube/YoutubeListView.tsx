@@ -5,6 +5,7 @@ import Link from "next/link";
 import type {
   YoutubeJob,
   YoutubeJobStatus,
+  YoutubeRebuildStatus,
   YoutubeSummaryListItem,
 } from "@openclaw-manager/types";
 import {
@@ -16,6 +17,17 @@ import {
 } from "@/components/ui";
 
 const POLL_INTERVAL_MS = 3000;
+const REBUILD_POLL_INTERVAL_MS = 3000;
+
+/** Pick a short label describing what the rebuild is currently doing. */
+function rebuildLabel(status: YoutubeRebuildStatus): string {
+  const running = status.parts.find((p) => p.status === "running");
+  if (running) return running.part;
+  // No part has started yet — show the first pending one as "next up".
+  const pending = status.parts.find((p) => p.status === "pending");
+  if (pending) return pending.part;
+  return "starting";
+}
 
 type Props = {
   initialSummaries: YoutubeSummaryListItem[];
@@ -64,7 +76,11 @@ export function YoutubeListView({ initialSummaries, initialJobs }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [rejected, setRejected] = useState<RejectedUrl[]>([]);
   const [busyRow, setBusyRow] = useState<string | null>(null);
+  const [activeRebuilds, setActiveRebuilds] = useState<Map<string, YoutubeRebuildStatus>>(
+    () => new Map()
+  );
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rebuildPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -91,6 +107,45 @@ export function YoutubeListView({ initialSummaries, initialJobs }: Props) {
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
   }, [activeJobs, refresh]);
+
+  // Independent poll for live rebuilds. We always tick — when nothing is
+  // active, the response is empty and the loop is cheap; when a rebuild
+  // starts mid-tick we pick it up within REBUILD_POLL_INTERVAL_MS without
+  // needing the user to refresh. When a rebuild finishes, we trigger one
+  // refresh of summaries/jobs so the row's true status is up to date.
+  useEffect(() => {
+    let cancelled = false;
+    let prevActiveCount = 0;
+
+    const tick = async () => {
+      try {
+        const res = await fetch("/api/youtube/rebuild/active", { cache: "no-store" });
+        if (res.ok) {
+          const body = (await res.json()) as { statuses?: YoutubeRebuildStatus[] };
+          if (cancelled) return;
+          const next = new Map<string, YoutubeRebuildStatus>();
+          for (const s of body.statuses || []) next.set(s.videoId, s);
+          setActiveRebuilds(next);
+          // Trailing-edge: a rebuild just finished — pull fresh summary state.
+          if (prevActiveCount > 0 && next.size < prevActiveCount) {
+            void refresh();
+          }
+          prevActiveCount = next.size;
+        }
+      } catch {
+        // network blip — try again next tick
+      }
+      if (!cancelled) {
+        rebuildPollTimer.current = setTimeout(() => void tick(), REBUILD_POLL_INTERVAL_MS);
+      }
+    };
+
+    void tick();
+    return () => {
+      cancelled = true;
+      if (rebuildPollTimer.current) clearTimeout(rebuildPollTimer.current);
+    };
+  }, [refresh]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -215,8 +270,16 @@ export function YoutubeListView({ initialSummaries, initialJobs }: Props) {
       {
         key: "status",
         header: "Status",
-        width: "110px",
-        render: (row) => <StatusBadge status={row.status} />,
+        width: "140px",
+        render: (row) => {
+          const rebuild = activeRebuilds.get(row.videoId);
+          if (rebuild) {
+            return (
+              <Badge tone="info">{`Rebuilding \u00b7 ${rebuildLabel(rebuild)}`}</Badge>
+            );
+          }
+          return <StatusBadge status={row.status} />;
+        },
       },
       {
         key: "actions",
@@ -244,7 +307,7 @@ export function YoutubeListView({ initialSummaries, initialJobs }: Props) {
         ),
       },
     ],
-    [busyRow, handleRerun, handleDelete]
+    [busyRow, handleRerun, handleDelete, activeRebuilds]
   );
 
   return (

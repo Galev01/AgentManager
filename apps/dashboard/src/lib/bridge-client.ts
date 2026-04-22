@@ -41,6 +41,7 @@ import type {
   YoutubeChaptersFile,
   YoutubeHighlightsFile,
   YoutubeRebuildPart,
+  YoutubeRebuildStatus,
   ClaudeCodeSession,
   ClaudeCodeTranscriptEvent,
   ClaudeCodePendingItem,
@@ -623,6 +624,28 @@ export async function postYoutubeRebuild(
       body: JSON.stringify({ parts, ...(url ? { url } : {}) }),
     }
   );
+}
+
+export type YoutubeRebuildStatusResponse = {
+  ok: boolean;
+  status: YoutubeRebuildStatus | null;
+};
+
+export type YoutubeRebuildActiveResponse = {
+  ok: boolean;
+  statuses: YoutubeRebuildStatus[];
+};
+
+export async function getYoutubeRebuildStatus(
+  videoId: string,
+): Promise<YoutubeRebuildStatusResponse> {
+  return bridgeFetch<YoutubeRebuildStatusResponse>(
+    `/youtube/rebuild/${encodeURIComponent(videoId)}/status`,
+  );
+}
+
+export async function listActiveYoutubeRebuilds(): Promise<YoutubeRebuildActiveResponse> {
+  return bridgeFetch<YoutubeRebuildActiveResponse>("/youtube/rebuild/active");
 }
 
 export type YoutubeChunksResponse = {
