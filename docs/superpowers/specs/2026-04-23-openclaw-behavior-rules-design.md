@@ -107,7 +107,7 @@ Grouped by preamble section. Terse; see the source string for exact wording.
 
 ### LEARNINGS
 
-- Capture reusable patterns from a thread in a lightweight internal learnings note. Internal unless surfaced is requested.
+- Capture reusable patterns from a thread in a lightweight internal learnings note. Keep internal unless surfacing is requested.
 
 ### DEFAULT STYLE
 
