@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { RoutingRule, RelayRecipient } from "@openclaw-manager/types";
+import { useTelemetry } from "@/lib/telemetry";
 
 interface Props {
   initialRules: RoutingRule[];
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function RoutingRulesTable({ initialRules, recipients }: Props) {
+  const { trackOperation } = useTelemetry();
   const [rules, setRules] = useState<RoutingRule[]>(initialRules);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,23 +39,30 @@ export function RoutingRulesTable({ initialRules, recipients }: Props) {
     setAdding(true);
     setError(null);
     try {
-      const res = await fetch("/api/routing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conversationKey: conversationKey.trim(),
-          phone: phone.trim() || null,
-          displayName: displayName.trim() || null,
-          note: note.trim() || null,
-          relayRecipientIds: selectedRecipientIds,
-          suppressBot,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create routing rule");
-      }
-      const newRule: RoutingRule = await res.json();
+      const newRule = await trackOperation(
+        "routing",
+        "rule_created",
+        async () => {
+          const res = await fetch("/api/routing", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              conversationKey: conversationKey.trim(),
+              phone: phone.trim() || null,
+              displayName: displayName.trim() || null,
+              note: note.trim() || null,
+              relayRecipientIds: selectedRecipientIds,
+              suppressBot,
+            }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || "Failed to create routing rule");
+          }
+          return res.json() as Promise<RoutingRule>;
+        },
+        { ruleId: "new" },
+      );
       setRules((prev) => [...prev, newRule]);
       setConversationKey("");
       setPhone("");
@@ -71,15 +80,22 @@ export function RoutingRulesTable({ initialRules, recipients }: Props) {
   async function handleDelete(id: string) {
     setRules((prev) => prev.filter((r) => r.id !== id));
     try {
-      const res = await fetch("/api/routing", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to delete routing rule");
-      }
+      await trackOperation(
+        "routing",
+        "rule_deleted",
+        async () => {
+          const res = await fetch("/api/routing", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || "Failed to delete routing rule");
+          }
+        },
+        { ruleId: id },
+      );
     } catch (err: any) {
       setError(err.message);
       const res = await fetch("/api/routing");
