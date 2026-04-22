@@ -67,7 +67,7 @@ export function HighlightsTab({ videoId }: Props) {
     return (
       <Card>
         <div style={{ padding: "14px 16px" }}>
-          <LoadingRow label="Loading highlights\u2026" />
+          <LoadingRow label="Loading highlights…" />
         </div>
       </Card>
     );
@@ -89,7 +89,7 @@ export function HighlightsTab({ videoId }: Props) {
         <div style={{ padding: "14px 16px" }}>
           <EmptyState
             title="No highlights yet"
-            description="Use Rebuild \u2192 Highlights to extract memorable quotes."
+            description="Use Rebuild → Highlights to extract memorable quotes."
           />
         </div>
       </Card>

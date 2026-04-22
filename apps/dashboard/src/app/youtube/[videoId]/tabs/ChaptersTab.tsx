@@ -62,7 +62,7 @@ export function ChaptersTab({ videoId }: Props) {
     return (
       <Card>
         <div style={{ padding: "14px 16px" }}>
-          <LoadingRow label="Loading chapters\u2026" />
+          <LoadingRow label="Loading chapters…" />
         </div>
       </Card>
     );
@@ -84,7 +84,7 @@ export function ChaptersTab({ videoId }: Props) {
         <div style={{ padding: "14px 16px" }}>
           <EmptyState
             title="No chapters yet"
-            description="Use Rebuild \u2192 Chapters to extract chapters from this video."
+            description="Use Rebuild → Chapters to extract chapters from this video."
           />
         </div>
       </Card>

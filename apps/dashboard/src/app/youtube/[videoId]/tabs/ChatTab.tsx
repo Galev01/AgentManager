@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -23,6 +24,11 @@ type ChatGetResponse = {
   messages: YoutubeChatMessageRow[];
 };
 
+type PendingMsg = YoutubeChatMessageRow & {
+  __pending: true;
+  __thinking?: boolean;
+};
+
 function formatTimestamp(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -36,8 +42,22 @@ function roleTone(role: YoutubeChatMessageRow["role"]) {
   return "neutral" as const;
 }
 
+function matchesServer(
+  pending: YoutubeChatMessageRow,
+  server: YoutubeChatMessageRow[]
+): boolean {
+  const pendingTime = new Date(pending.createdAt).getTime();
+  return server.some((m) => {
+    if (m.role !== pending.role) return false;
+    if (m.content.trim() !== pending.content.trim()) return false;
+    const t = new Date(m.createdAt).getTime();
+    return Math.abs(t - pendingTime) < 5 * 60 * 1000;
+  });
+}
+
 export function ChatTab({ videoId }: Props) {
   const [messages, setMessages] = useState<YoutubeChatMessageRow[]>([]);
+  const [pending, setPending] = useState<PendingMsg[]>([]);
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,8 +76,27 @@ export function ChatTab({ videoId }: Props) {
       }
       const data = (await res.json()) as ChatGetResponse;
       if (!mountedRef.current) return;
-      setMessages(data.messages || []);
+      const serverMsgs = data.messages || [];
+      setMessages(serverMsgs);
       setChatSessionId(data.chatSessionId || null);
+      setPending((prev) => {
+        if (prev.length === 0) return prev;
+        const userPendings = prev.filter((p) => p.role === "user");
+        const allUserConfirmed =
+          userPendings.length > 0 &&
+          userPendings.every((u) => matchesServer(u, serverMsgs));
+        const newAssistantInServer = serverMsgs.some(
+          (m) =>
+            m.role === "assistant" &&
+            !messages.some((existing) => existing.id === m.id)
+        );
+        return prev.filter((p) => {
+          if (p.__thinking) {
+            return !(allUserConfirmed && newAssistantInServer);
+          }
+          return !matchesServer(p, serverMsgs);
+        });
+      });
       setError(null);
     } catch (err) {
       if (!mountedRef.current) return;
@@ -65,7 +104,7 @@ export function ChatTab({ videoId }: Props) {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [videoId]);
+  }, [videoId, messages]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -79,13 +118,14 @@ export function ChatTab({ videoId }: Props) {
   useEffect(() => {
     if (loading) return;
     if (pollTimer.current) clearTimeout(pollTimer.current);
+    const interval = pending.some((p) => p.__thinking) ? 1500 : POLL_INTERVAL_MS;
     pollTimer.current = setTimeout(() => {
       void fetchMessages();
-    }, POLL_INTERVAL_MS);
+    }, interval);
     return () => {
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
-  }, [messages, loading, fetchMessages]);
+  }, [messages, pending, loading, fetchMessages]);
 
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
@@ -95,17 +135,32 @@ export function ChatTab({ videoId }: Props) {
       setSubmitting(true);
       setError(null);
 
-      const optimistic: YoutubeChatMessageRow = {
-        id: `optimistic-${Date.now()}`,
+      const now = Date.now();
+      const sessionForOptimistic = chatSessionId || `${videoId}-main`;
+      const optimisticUser: PendingMsg = {
+        id: `optimistic-user-${now}`,
         videoId,
-        chatSessionId: chatSessionId || "pending",
-        turnId: `optimistic-${Date.now()}`,
+        chatSessionId: sessionForOptimistic,
+        turnId: `optimistic-${now}`,
         role: "user",
         content: text,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date(now).toISOString(),
         status: "complete",
+        __pending: true,
       };
-      setMessages((prev) => [...prev, optimistic]);
+      const thinkingAssistant: PendingMsg = {
+        id: `thinking-${now}`,
+        videoId,
+        chatSessionId: sessionForOptimistic,
+        turnId: `optimistic-${now}`,
+        role: "assistant",
+        content: "",
+        createdAt: new Date(now + 1).toISOString(),
+        status: "streaming",
+        __pending: true,
+        __thinking: true,
+      };
+      setPending((prev) => [...prev, optimisticUser, thinkingAssistant]);
       setDraft("");
 
       try {
@@ -127,6 +182,11 @@ export function ChatTab({ videoId }: Props) {
         await fetchMessages();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to send message");
+        setPending((prev) =>
+          prev.filter(
+            (p) => p.id !== optimisticUser.id && p.id !== thinkingAssistant.id
+          )
+        );
       } finally {
         setSubmitting(false);
       }
@@ -134,15 +194,20 @@ export function ChatTab({ videoId }: Props) {
     [draft, submitting, videoId, chatSessionId, fetchMessages]
   );
 
+  const displayMessages = useMemo<(YoutubeChatMessageRow | PendingMsg)[]>(
+    () => [...messages, ...pending],
+    [messages, pending]
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {loading ? (
         <Card>
           <div style={{ padding: "14px 16px" }}>
-            <LoadingRow label="Loading chat\u2026" />
+            <LoadingRow label="Loading chat…" />
           </div>
         </Card>
-      ) : messages.length === 0 ? (
+      ) : displayMessages.length === 0 ? (
         <Card>
           <div style={{ padding: "14px 16px" }}>
             <EmptyState
@@ -153,58 +218,88 @@ export function ChatTab({ videoId }: Props) {
         </Card>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {messages.map((msg) => (
-            <Card key={msg.id}>
-              <div
-                style={{
-                  padding: "12px 14px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                }}
-              >
+          {displayMessages.map((msg) => {
+            const isThinking = (msg as PendingMsg).__thinking === true;
+            const isPending = (msg as PendingMsg).__pending === true;
+            return (
+              <Card key={msg.id}>
                 <div
                   style={{
+                    padding: "12px 14px",
                     display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    justifyContent: "space-between",
+                    flexDirection: "column",
+                    gap: 8,
+                    opacity: isPending && !isThinking ? 0.7 : 1,
                   }}
                 >
-                  <Badge tone={roleTone(msg.role)}>{msg.role}</Badge>
-                  <span
-                    style={{
-                      color: "var(--text-muted)",
-                      fontSize: 12,
-                    }}
-                  >
-                    {formatTimestamp(msg.createdAt)}
-                    {msg.status !== "complete" ? ` \u00b7 ${msg.status}` : ""}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    fontSize: 13.5,
-                    lineHeight: 1.5,
-                  }}
-                  dir="auto"
-                >
-                  {msg.content}
-                </div>
-                {msg.errorMessage ? (
                   <div
                     style={{
-                      color: "var(--err, #f87171)",
-                      fontSize: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      justifyContent: "space-between",
                     }}
                   >
-                    {msg.errorMessage}
+                    <Badge tone={roleTone(msg.role)}>{msg.role}</Badge>
+                    <span
+                      style={{
+                        color: "var(--text-muted)",
+                        fontSize: 12,
+                      }}
+                    >
+                      {isThinking
+                        ? "thinking…"
+                        : isPending
+                          ? "sending…"
+                          : formatTimestamp(msg.createdAt)}
+                      {!isThinking && !isPending && msg.status !== "complete"
+                        ? ` · ${msg.status}`
+                        : ""}
+                    </span>
                   </div>
-                ) : null}
-              </div>
-            </Card>
-          ))}
+                  {isThinking ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        color: "var(--text-muted)",
+                        fontSize: 13.5,
+                      }}
+                    >
+                      <span className="thinking" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                      <span>Assistant is composing a reply…</span>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        fontSize: 13.5,
+                        lineHeight: 1.5,
+                      }}
+                      dir="auto"
+                    >
+                      {msg.content}
+                    </div>
+                  )}
+                  {msg.errorMessage ? (
+                    <div
+                      style={{
+                        color: "var(--err, #f87171)",
+                        fontSize: 12,
+                      }}
+                    >
+                      {msg.errorMessage}
+                    </div>
+                  ) : null}
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -221,7 +316,7 @@ export function ChatTab({ videoId }: Props) {
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Ask about this video\u2026"
+            placeholder="Ask about this video…"
             rows={3}
             disabled={submitting}
             dir="auto"
@@ -259,7 +354,7 @@ export function ChatTab({ videoId }: Props) {
               variant="primary"
               disabled={submitting || !draft.trim()}
             >
-              {submitting ? "Sending\u2026" : "Send"}
+              {submitting ? "Sending…" : "Send"}
             </Button>
           </div>
         </form>

@@ -62,7 +62,7 @@ export function SummaryTab({ videoId, initialMeta, initialMarkdown }: Props) {
           ) : (
             <EmptyState
               title="No summary yet"
-              description="Use Rebuild \u2192 Summary to generate one."
+              description="Use Rebuild → Summary to generate one."
             />
           )}
         </div>

@@ -150,11 +150,11 @@ export function RawTab({ videoId }: Props) {
         emptyState={
           <div style={{ padding: "14px 16px" }}>
             {loading ? (
-              <LoadingRow label="Loading chunks\u2026" />
+              <LoadingRow label="Loading chunks…" />
             ) : (
               <EmptyState
                 title="No chunks yet"
-                description="Use Rebuild \u2192 Chunks to chunk the captions for this video."
+                description="Use Rebuild → Chunks to chunk the captions for this video."
               />
             )}
           </div>
