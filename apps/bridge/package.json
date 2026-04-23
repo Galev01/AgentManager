@@ -10,6 +10,7 @@
     "test": "tsx --env-file=.env --test test/**/*.test.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@openclaw-manager/brain": "workspace:*",
     "@openclaw-manager/types": "workspace:*",
     "express": "^5.1.0",

@@ -19,6 +19,8 @@ export const config = {
   token: requireEnv("BRIDGE_TOKEN"),
   openclawStatePath: requireEnv("OPENCLAW_STATE_PATH"),
   managementDir: requireEnv("MANAGEMENT_DIR"),
+  runtimesConfigPath: process.env.RUNTIMES_CONFIG_PATH
+    ?? `${process.env.MANAGEMENT_DIR}/runtimes.json`,
   gatewayUrl: process.env.OPENCLAW_GATEWAY_URL || "http://127.0.0.1:18789",
   gatewayToken: requireEnv("OPENCLAW_GATEWAY_TOKEN"),
   sessionsDir: process.env.OPENCLAW_SESSIONS_DIR || "",

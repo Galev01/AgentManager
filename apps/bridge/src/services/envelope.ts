@@ -208,6 +208,24 @@ export function normalizeEnvelope(
     message: input.message,
   };
 
+  // Runtime taxonomy passthrough. When runtime_kind is present the envelope
+  // defaults to exact/none so single-runtime turns stay honest; non-OpenClaw
+  // or bridge-projected turns are expected to supply their own values.
+  if (input.runtime_kind) envelope.runtime_kind = input.runtime_kind;
+  if (input.runtime_id) envelope.runtime_id = input.runtime_id;
+  if (input.entity_kind) envelope.entity_kind = input.entity_kind;
+  if (input.entity_id) envelope.entity_id = input.entity_id;
+  if (input.native_type) envelope.native_type = input.native_type;
+  if (input.native_ref !== undefined) envelope.native_ref = input.native_ref;
+  if (input.capabilities_snapshot) envelope.capabilities_snapshot = input.capabilities_snapshot;
+  if (input.runtime_kind) {
+    envelope.projection_mode = input.projection_mode ?? "exact";
+    envelope.lossiness = input.lossiness ?? "none";
+  } else {
+    if (input.projection_mode) envelope.projection_mode = input.projection_mode;
+    if (input.lossiness) envelope.lossiness = input.lossiness;
+  }
+
   if (Object.keys(raw).length > 0) envelope._raw = raw;
   if (!input.intent) envelope._intentConfidence = "low";
 

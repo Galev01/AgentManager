@@ -10,6 +10,9 @@ importers:
 
   apps/bridge:
     dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.3.6)
       '@openclaw-manager/brain':
         specifier: workspace:*
         version: link:../../packages/brain

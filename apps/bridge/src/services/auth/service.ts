@@ -66,6 +66,7 @@ export const SYSTEM_ROLES = {
       "capabilities.view",
       "settings.read",
       "logs.read","telemetry.read",
+      "runtimes.view",
     ] as PermissionId[],
   },
   viewer: {
@@ -76,6 +77,7 @@ export const SYSTEM_ROLES = {
       "tools.view","routing.view","relay.view",
       "brain.people.read","brain.global.read",
       "capabilities.view","settings.read","logs.read","telemetry.read",
+      "runtimes.view",
     ] as PermissionId[],
   },
 };

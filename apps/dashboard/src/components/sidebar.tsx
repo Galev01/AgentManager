@@ -31,6 +31,7 @@ const NAV: NavSection[] = [
   {
     group: "Runtime",
     items: [
+      { id: "runtimes", label: "Runtimes",      href: "/runtimes", icon: "bolt",     perm: "runtimes.view"       },
       { id: "agents",   label: "Agents",        href: "/agents",   icon: "agents",   perm: "agents.view"         },
       { id: "sessions", label: "Sessions",      href: "/sessions", icon: "sessions", perm: "agent_sessions.view" },
       { id: "youtube",  label: "YouTube Relay", href: "/youtube",  icon: "yt",       perm: "youtube.view"        },

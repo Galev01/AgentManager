@@ -309,6 +309,19 @@ Full spec: `docs/superpowers/specs/2026-04-21-openclaw-integration-envelope-desi
 Bridge module: `apps/bridge/src/services/envelope.ts`.
 Dashboard chrome: `cc-envelope-chips.tsx`, `cc-ref-chips.tsx`, `cc-escalation-card.tsx`.
 
+## Runtimes (multi-runtime control plane)
+
+OpenClaw-Manager acts as a control plane over multiple local agent runtimes. Phase 1 covers OpenClaw (full) plus honest stubs for Hermes Agent, ZeroClaw, and Nanobot — health + describe + capability snapshot, no write actions.
+
+- Contract: `packages/types/src/runtimes.ts` (`RuntimeAdapter`, `CapabilitySnapshot`, `RuntimeEntity`, `RuntimeActivityEvent`).
+- Registry: `apps/bridge/src/services/runtimes/registry.ts`, config at `$MANAGEMENT_DIR/runtimes.json`.
+- Adapters: `apps/bridge/src/services/runtimes/{openclaw,hermes,zeroclaw,nanobot}.ts`.
+- Routes: `/runtimes`, `/runtimes/:id`, `/runtimes/:id/capabilities`, `/runtimes/:id/entities/:kind`, `/runtimes/:id/activity`, `/runtimes/:id/actions` (all strict-actor gated).
+- Permissions: `runtimes.view`, `runtimes.invoke`.
+- Dashboard: `/runtimes` (list), `/runtimes/[runtimeId]` (detail with capability badges + activity).
+
+Full guide: [`docs/RUNTIMES.md`](docs/RUNTIMES.md).
+
 ## Adding a New Feature — Checklist
 
 1. **Types first:** Add any new types to `packages/types/src/index.ts`
