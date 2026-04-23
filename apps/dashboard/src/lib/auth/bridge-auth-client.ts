@@ -3,7 +3,7 @@ import type {
   AuthAuditEntry, WsTicketResponse, AuthUserCreateInput, AuthUserUpdateInput,
   AuthRoleCreateInput, AuthRoleUpdateInput,
 } from "@openclaw-manager/types";
-import { signActorAssertion } from "./assertion.js";
+import { signActorAssertion } from "./assertion";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
 const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";

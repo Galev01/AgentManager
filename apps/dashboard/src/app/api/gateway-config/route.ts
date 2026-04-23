@@ -5,15 +5,12 @@ import {
   setGatewayConfig,
   applyGatewayConfig,
 } from "@/lib/bridge-client";
-import { isAuthenticated } from "@/lib/session";
+import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET(request: Request) {
-  const authed = await isAuthenticated();
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const { searchParams } = new URL(request.url);
   try {
+    await requireAuthApi();
+    const { searchParams } = new URL(request.url);
     if (searchParams.get("schema") === "true") {
       const schema = await getGatewayConfigSchema();
       return NextResponse.json(schema);
@@ -21,6 +18,9 @@ export async function GET(request: Request) {
     const config = await getGatewayConfig();
     return NextResponse.json(config);
   } catch (err: any) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
     return NextResponse.json(
       { error: err.message || "Failed to fetch config" },
       { status: 502 }
@@ -40,11 +40,8 @@ function validateBody(body: any): { config: Record<string, unknown>; baseHash: s
 }
 
 export async function PATCH(request: Request) {
-  const authed = await isAuthenticated();
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
+    await requireAuthApi();
     const body = await request.json();
     const validated = validateBody(body);
     if (typeof validated === "string") {
@@ -53,6 +50,9 @@ export async function PATCH(request: Request) {
     const result = await setGatewayConfig(validated.config, validated.baseHash);
     return NextResponse.json(result);
   } catch (err: any) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
     return NextResponse.json(
       { error: err.message || "Failed to update config" },
       { status: 502 }
@@ -61,11 +61,8 @@ export async function PATCH(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const authed = await isAuthenticated();
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
+    await requireAuthApi();
     const body = await request.json();
     if (body?.action === "apply") {
       const validated = validateBody(body);
@@ -77,6 +74,9 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err: any) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
     return NextResponse.json(
       { error: err.message || "Failed to apply config" },
       { status: 502 }

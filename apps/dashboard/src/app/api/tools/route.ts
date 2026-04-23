@@ -5,16 +5,13 @@ import {
   getSkills,
   installSkill,
 } from "@/lib/bridge-client";
-import { isAuthenticated } from "@/lib/session";
+import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET(request: Request) {
-  const authed = await isAuthenticated();
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const { searchParams } = new URL(request.url);
-  const tab = searchParams.get("tab") ?? "catalog";
   try {
+    await requireAuthApi();
+    const { searchParams } = new URL(request.url);
+    const tab = searchParams.get("tab") ?? "catalog";
     if (tab === "effective") {
       const data = await getEffectiveTools();
       return NextResponse.json(data);
@@ -27,6 +24,9 @@ export async function GET(request: Request) {
     const data = await getToolsCatalog();
     return NextResponse.json(data);
   } catch (err: any) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
     return NextResponse.json(
       { error: err.message || "Failed to fetch tools" },
       { status: 502 }
@@ -35,11 +35,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const authed = await isAuthenticated();
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
+    await requireAuthApi();
     const body = await request.json();
     if (body.action === "install" && body.name) {
       const result = await installSkill(body.name);
@@ -47,6 +44,9 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err: any) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
     return NextResponse.json(
       { error: err.message || "Failed to perform action" },
       { status: 502 }

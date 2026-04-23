@@ -1,14 +1,21 @@
 // apps/dashboard/src/app/api/telemetry/actions/route.ts
 import { NextResponse, type NextRequest } from "next/server";
-import { isAuthenticated } from "@/lib/session";
+import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
 import { TELEMETRY_SCHEMA_VERSION, type TelemetryEventInput } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://127.0.0.1:3100";
 const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const authed = await isAuthenticated();
-  if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  let session;
+  try {
+    session = await requireAuthApi();
+  } catch (err) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
+    throw err;
+  }
 
   let body: TelemetryEventInput;
   try {
@@ -17,13 +24,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
 
-  // Server overwrites trusted fields. Single-admin app, so actor.id = "admin".
+  // Server overwrites trusted fields with authenticated identity.
   const trusted: TelemetryEventInput = {
     ...body,
     schemaVersion: TELEMETRY_SCHEMA_VERSION,
     source: "dashboard",
     surface: body.surface === "web" ? "web" : undefined,
-    actor: { type: "user", id: "admin" },
+    actor: { type: "user", id: session.user.id },
   };
 
   try {
@@ -46,8 +53,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  const authed = await isAuthenticated();
-  if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  try {
+    await requireAuthApi();
+  } catch (err) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
+    throw err;
+  }
 
   const qs = req.nextUrl.search;
   try {

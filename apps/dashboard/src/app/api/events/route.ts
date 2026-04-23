@@ -1,4 +1,4 @@
-import { isAuthenticated } from "@/lib/session";
+import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
 import { WebSocket } from "ws";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -9,9 +9,13 @@ function getBridgeWsUrl(): string {
 }
 
 export async function GET() {
-  const authed = await isAuthenticated();
-  if (!authed) {
-    return new Response("Unauthorized", { status: 401 });
+  try {
+    await requireAuthApi();
+  } catch (err) {
+    if (err instanceof AuthFailure) {
+      return new Response(err.message, { status: err.status });
+    }
+    throw err;
   }
 
   const encoder = new TextEncoder();

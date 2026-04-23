@@ -1,8 +1,8 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { AuthUserPublic, PermissionId } from "@openclaw-manager/types";
-import { getSid } from "./session.js";
-import { bridgeResolveSession } from "./bridge-auth-client.js";
+import { getSid } from "./session";
+import { bridgeResolveSession } from "./bridge-auth-client";
 
 export type ResolvedSession = {
   user: AuthUserPublic;

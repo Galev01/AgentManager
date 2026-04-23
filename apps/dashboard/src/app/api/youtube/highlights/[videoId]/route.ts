@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getYoutubeHighlights } from "@/lib/bridge-client";
-import { isAuthenticated } from "@/lib/session";
+import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
 
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 
@@ -8,18 +8,18 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ videoId: string }> }
 ) {
-  const authed = await isAuthenticated();
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const { videoId } = await params;
-  if (!VIDEO_ID_RE.test(videoId)) {
-    return NextResponse.json({ error: "invalid videoId" }, { status: 400 });
-  }
   try {
+    await requireAuthApi();
+    const { videoId } = await params;
+    if (!VIDEO_ID_RE.test(videoId)) {
+      return NextResponse.json({ error: "invalid videoId" }, { status: 400 });
+    }
     const result = await getYoutubeHighlights(videoId);
     return NextResponse.json(result);
   } catch (err: any) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
     return NextResponse.json(
       { error: err?.message || "Failed to load highlights" },
       { status: 502 }
