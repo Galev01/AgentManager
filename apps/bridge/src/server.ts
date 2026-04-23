@@ -55,6 +55,12 @@ app.get("/health", (_req, res) => { res.json({ ok: true, uptime: process.uptime(
 app.use(bearerAuth);
 app.use(createPublicAuthRouter(authService));
 
+// Claude Code MCP bridge: headless agent traffic carves identity from the
+// request body (ide/workspace/clientId). Actor assertion is optional so the
+// stdio MCP can talk without a user session; dashboard callers still sign and
+// req.auth is populated when they do.
+app.use(actorAssertionAuth(authService, { strict: false }), claudeCodeRouter);
+
 // Strict actor assertion required for authenticated routes.
 app.use(actorAssertionAuth(authService, { strict: true }));
 app.use(createAuthRouter(authService));
@@ -81,7 +87,6 @@ app.use(reviewsRouter);
 app.use(youtubeRouter);
 app.use(youtubeChatRouter);
 app.use(youtubeRebuildRouter);
-app.use(claudeCodeRouter);
 app.use(createTelemetryRouter({
   dir: config.telemetryDir,
   retentionDays: config.telemetryRetentionDays,
