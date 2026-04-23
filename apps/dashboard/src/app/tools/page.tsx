@@ -5,11 +5,13 @@ import {
   getEffectiveTools,
   getSkills,
 } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { Tool, EffectiveTool, Skill } from "@openclaw-manager/types";
 
 export const metadata = { title: "Tools & Skills" };
 
 export default async function ToolsPage() {
+  await requirePermission("tools.view");
   let catalog: Tool[] = [];
   let effective: EffectiveTool[] = [];
   let skills: Skill[] = [];

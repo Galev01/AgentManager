@@ -1,11 +1,13 @@
 import { AppShell } from "@/components/app-shell";
 import { RelayRecipientsForm } from "@/components/relay-recipients-form";
 import { getRelayRecipients } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { RelayRecipient } from "@openclaw-manager/types";
 
 export const metadata = { title: "Relay Recipients" };
 
 export default async function RelayPage() {
+  await requirePermission("relay.view");
   let recipients: RelayRecipient[] = [];
   try {
     recipients = await getRelayRecipients();

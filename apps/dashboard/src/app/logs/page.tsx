@@ -1,4 +1,4 @@
-import { requireAuth } from "@/lib/auth/current-user";
+import { requirePermission } from "@/lib/auth/current-user";
 import { AppShell } from "@/components/app-shell";
 import { LogCenterTable } from "@/components/log-center-table";
 
@@ -6,7 +6,7 @@ export const metadata = { title: "Logs" };
 export const dynamic = "force-dynamic";
 
 export default async function LogsPage() {
-  await requireAuth();
+  await requirePermission("logs.read");
   return (
     <AppShell title="Log Center">
       <div className="content">

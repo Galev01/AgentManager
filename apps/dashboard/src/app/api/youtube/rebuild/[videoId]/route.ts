@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { postYoutubeRebuild } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 import type { YoutubeRebuildPart } from "@openclaw-manager/types";
 
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -18,7 +18,7 @@ export async function POST(
   { params }: { params: Promise<{ videoId: string }> }
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("youtube.rebuild");
     const { videoId } = await params;
     if (!VIDEO_ID_RE.test(videoId)) {
       return NextResponse.json({ error: "invalid videoId" }, { status: 400 });

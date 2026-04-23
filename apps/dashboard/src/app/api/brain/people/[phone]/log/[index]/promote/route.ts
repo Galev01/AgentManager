@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { promoteLog } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ phone: string; index: string }> },
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("brain.people.write");
     const { phone, index } = await params;
     const body = await request.json().catch(() => ({}));
     const target = body.target;

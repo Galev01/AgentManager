@@ -5,10 +5,12 @@ import {
   getClaudeCodeSessionsWithEnvelope,
   getClaudeCodePending,
 } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 
 export const dynamic = "force-dynamic";
 
 export default async function ClaudeCodePage() {
+  await requirePermission("claude_code.view");
   // Fall back to the pre-envelope list endpoint when the bridge hasn't been
   // redeployed with the new /sessions-with-envelope route yet.
   const [sessions, pending] = await Promise.all([

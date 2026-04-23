@@ -1,6 +1,6 @@
 // apps/dashboard/src/app/api/telemetry/actions/route.ts
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requireAuthApi, requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 import { TELEMETRY_SCHEMA_VERSION, type TelemetryEventInput } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://127.0.0.1:3100";
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("telemetry.read");
   } catch (err) {
     if (err instanceof AuthFailure) {
       return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });

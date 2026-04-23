@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { IdeasBacklog } from "@/components/ideas-backlog";
 import { getReviewIdeas } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type {
   ReviewIdea,
   ReviewIdeaStatus,
@@ -27,6 +28,7 @@ function toArr(v: string | string[] | undefined): string[] | undefined {
 }
 
 export default async function IdeasPage({ searchParams }: { searchParams: SP }) {
+  await requirePermission("reviews.view");
   const sp = await searchParams;
   let ideas: ReviewIdea[] = [];
   try {

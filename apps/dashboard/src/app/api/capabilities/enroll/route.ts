@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
 const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";
 
 export async function POST(request: Request) {
   try {
+    await requirePermissionApi("capabilities.enroll");
     const { method, params } = await request.json();
     if (!method || typeof method !== "string") {
       return NextResponse.json({ error: "Missing method" }, { status: 400 });
@@ -27,7 +29,10 @@ export async function POST(request: Request) {
 
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
-  } catch {
+  } catch (err) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
     return NextResponse.json({ error: "Bridge unreachable" }, { status: 503 });
   }
 }

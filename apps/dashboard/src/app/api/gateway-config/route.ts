@@ -5,11 +5,11 @@ import {
   setGatewayConfig,
   applyGatewayConfig,
 } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("config.raw.read");
     const { searchParams } = new URL(request.url);
     if (searchParams.get("schema") === "true") {
       const schema = await getGatewayConfigSchema();
@@ -41,7 +41,7 @@ function validateBody(body: any): { config: Record<string, unknown>; baseHash: s
 
 export async function PATCH(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("config.raw.write");
     const body = await request.json();
     const validated = validateBody(body);
     if (typeof validated === "string") {
@@ -62,7 +62,7 @@ export async function PATCH(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("config.raw.apply");
     const body = await request.json();
     if (body?.action === "apply") {
       const validated = validateBody(body);

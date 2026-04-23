@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { getAgent, updateAgent, deleteAgent } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ name: string }> }
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("agents.view");
     const { name } = await params;
     const agent = await getAgent(decodeURIComponent(name));
     if (!agent) {
@@ -30,7 +30,7 @@ export async function PATCH(
   { params }: { params: Promise<{ name: string }> }
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("agents.manage");
     const { name } = await params;
     const body = await request.json();
     const agent = await updateAgent(decodeURIComponent(name), body);
@@ -51,7 +51,7 @@ export async function DELETE(
   { params }: { params: Promise<{ name: string }> }
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("agents.manage");
     const { name } = await params;
     const result = await deleteAgent(decodeURIComponent(name));
     return NextResponse.json(result);

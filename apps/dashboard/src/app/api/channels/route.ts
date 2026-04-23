@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getChannels, logoutChannel } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET() {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("channels.view");
     const channels = await getChannels();
     return NextResponse.json(channels);
   } catch (err: any) {
@@ -20,7 +20,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("channels.logout");
     const { name, action } = await request.json();
     if (action === "logout") {
       const result = await logoutChannel(name);

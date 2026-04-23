@@ -5,11 +5,11 @@ import {
   removeRelayRecipient,
   toggleRelayRecipient,
 } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET() {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("relay.view");
     const recipients = await getRelayRecipients();
     return NextResponse.json(recipients);
   } catch (err: any) {
@@ -25,7 +25,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("relay.manage");
     const body = await request.json();
     const recipient = await addRelayRecipient(body);
     return NextResponse.json(recipient, { status: 201 });
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("relay.manage");
     const { id } = await request.json();
     const result = await removeRelayRecipient(id);
     return NextResponse.json(result);
@@ -59,7 +59,7 @@ export async function DELETE(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("relay.manage");
     const { id, enabled } = await request.json();
     const recipient = await toggleRelayRecipient(id, enabled);
     return NextResponse.json(recipient);

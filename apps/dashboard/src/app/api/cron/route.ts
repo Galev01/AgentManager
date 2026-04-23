@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { listCronJobs, addCronJob, removeCronJob } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET() {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("cron.view");
     const jobs = await listCronJobs();
     return NextResponse.json(jobs);
   } catch (err: any) {
@@ -20,7 +20,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("cron.manage");
     const body = await request.json();
     const job = await addCronJob(body);
     return NextResponse.json(job, { status: 201 });
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("cron.manage");
     const { id } = await request.json();
     const result = await removeCronJob(id);
     return NextResponse.json(result);

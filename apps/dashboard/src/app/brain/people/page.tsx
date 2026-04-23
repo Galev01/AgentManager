@@ -2,12 +2,14 @@ import { AppShell } from "@/components/app-shell";
 import { DegradedBanner } from "@/components/degraded-banner";
 import { BrainPeopleTable } from "@/components/brain-people-table";
 import { listBrainPeople, getBrainStatus } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { BrainPersonSummary } from "@openclaw-manager/types";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Brain · People" };
 
 export default async function BrainPeoplePage() {
+  await requirePermission("brain.people.read");
   let people: BrainPersonSummary[] = [];
   let enabled = false;
   let bridgeError = false;

@@ -1,4 +1,4 @@
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 import { WebSocket } from "ws";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -10,7 +10,7 @@ function getBridgeWsUrl(): string {
 
 export async function GET() {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("conversations.view");
   } catch (err) {
     if (err instanceof AuthFailure) {
       return new Response(err.message, { status: err.status });

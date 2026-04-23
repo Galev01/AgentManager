@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { AgentForm } from "@/components/agent-form";
 import { getAgent } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import { PageHeader } from "@/components/ui";
 
 export async function generateMetadata({ params }: { params: Promise<{ name: string }> }) {
@@ -15,6 +16,7 @@ export default async function AgentDetailPage({
 }: {
   params: Promise<{ name: string }>;
 }) {
+  await requirePermission("agents.view");
   const { name } = await params;
   const agentName = decodeURIComponent(name);
 

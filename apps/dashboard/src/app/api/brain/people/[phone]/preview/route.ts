@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { getPersonPreview } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ phone: string }> },
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("brain.people.read");
     const { phone } = await params;
     return NextResponse.json(await getPersonPreview(decodeURIComponent(phone)));
   } catch (err: any) {

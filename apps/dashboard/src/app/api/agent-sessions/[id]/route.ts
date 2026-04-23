@@ -7,14 +7,15 @@ import {
   deleteSession,
   getSessionUsage,
 } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
+import type { PermissionId } from "@openclaw-manager/types";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("agent_sessions.view");
     const { id } = await params;
     const usage = await getSessionUsage(id);
     return NextResponse.json(usage);
@@ -33,13 +34,27 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  let body: any;
   try {
-    await requireAuthApi();
-    const { id } = await params;
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+  const action = body?.action;
+  const needed: PermissionId =
+    action === "reset"
+      ? "agent_sessions.reset"
+      : action === "abort"
+      ? "agent_sessions.abort"
+      : action === "compact"
+      ? "agent_sessions.compact"
+      : "agent_sessions.send";
+  try {
+    await requirePermissionApi(needed);
     let result: unknown;
 
-    switch (body.action) {
+    switch (action) {
       case "send":
         result = await sendSessionMessage(id, body.message);
         break;
@@ -73,7 +88,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("agent_sessions.delete");
     const { id } = await params;
     const result = await deleteSession(id);
     return NextResponse.json(result);

@@ -5,11 +5,11 @@ import {
   updateRoutingRule,
   deleteRoutingRule,
 } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET() {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("routing.view");
     const rules = await getRoutingRules();
     return NextResponse.json(rules);
   } catch (err: any) {
@@ -25,7 +25,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("routing.manage");
     const body = await request.json();
     const rule = await createRoutingRule(body);
     return NextResponse.json(rule, { status: 201 });
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("routing.manage");
     const { id, ...body } = await request.json();
     const rule = await updateRoutingRule(id, body);
     return NextResponse.json(rule);
@@ -59,7 +59,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("routing.manage");
     const { id } = await request.json();
     const result = await deleteRoutingRule(id);
     return NextResponse.json(result);

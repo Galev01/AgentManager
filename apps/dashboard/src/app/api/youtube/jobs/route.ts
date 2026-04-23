@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { listYoutubeJobs } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET() {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("youtube.view");
     const result = await listYoutubeJobs();
     return NextResponse.json(result);
   } catch (err: any) {

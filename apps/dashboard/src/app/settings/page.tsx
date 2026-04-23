@@ -2,11 +2,13 @@ import { AppShell } from "@/components/app-shell";
 import { SettingsForm } from "@/components/settings-form";
 import { DegradedBanner } from "@/components/degraded-banner";
 import { getSettings } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { RuntimeSettings } from "@openclaw-manager/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  await requirePermission("settings.read");
   let settings: RuntimeSettings | null = null;
   let bridgeError = false;
   try { settings = await getSettings(); } catch { bridgeError = true; }

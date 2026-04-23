@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { getBrainPerson, updateBrainPerson } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ phone: string }> },
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("brain.people.read");
     const { phone } = await params;
     const person = await getBrainPerson(phone);
     if (!person) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -25,7 +25,7 @@ export async function PATCH(
   { params }: { params: Promise<{ phone: string }> },
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("brain.people.write");
     const { phone } = await params;
     const body = await request.json();
     const person = await updateBrainPerson(phone, body);

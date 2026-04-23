@@ -5,11 +5,11 @@ import {
   getSkills,
   installSkill,
 } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("tools.view");
     const { searchParams } = new URL(request.url);
     const tab = searchParams.get("tab") ?? "catalog";
     if (tab === "effective") {
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("tools.install");
     const body = await request.json();
     if (body.action === "install" && body.name) {
       const result = await installSkill(body.name);

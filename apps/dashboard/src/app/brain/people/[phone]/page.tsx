@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { DegradedBanner } from "@/components/degraded-banner";
 import { BrainPersonDetail } from "@/components/brain-person-detail";
 import { getBrainPerson } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export default async function BrainPersonPage({
 }: {
   params: Promise<{ phone: string }>;
 }) {
+  await requirePermission("brain.people.read");
   const { phone } = await params;
   const decoded = decodeURIComponent(phone);
   let person = null;

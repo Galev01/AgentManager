@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { listAgents, createAgent, deleteAgent } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET() {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("agents.view");
     const agents = await listAgents();
     return NextResponse.json(agents);
   } catch (err: any) {
@@ -20,7 +20,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("agents.manage");
     const body = await request.json();
     const agent = await createAgent(body);
     return NextResponse.json(agent, { status: 201 });
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("agents.manage");
     const { name } = await request.json();
     const result = await deleteAgent(name);
     return NextResponse.json(result);

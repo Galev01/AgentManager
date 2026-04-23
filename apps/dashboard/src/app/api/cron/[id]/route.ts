@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { runCronJob, removeCronJob } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("cron.run");
     const { id } = await params;
     const body = await request.json();
     if (body.action === "run") {
@@ -31,7 +31,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("cron.manage");
     const { id } = await params;
     const result = await removeCronJob(id);
     return NextResponse.json(result);

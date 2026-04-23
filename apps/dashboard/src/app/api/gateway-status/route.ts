@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 import { callGatewayMethod } from "@/lib/bridge-client";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -19,7 +19,7 @@ async function bridgeFetch(path: string, options?: RequestInit) {
 
 export async function GET() {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("commands.gateway_proxy");
     try {
       await callGatewayMethod("models.list", {});
       return NextResponse.json({ status: "online" });
@@ -36,7 +36,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("commands.gateway_proxy");
     const { action } = await request.json();
     if (action === "start") {
       const res = await bridgeFetch("/gateway-control/start", { method: "POST" });

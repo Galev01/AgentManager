@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { listAgentSessions, createAgentSession } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("agent_sessions.view");
     const { searchParams } = new URL(request.url);
     const agent = searchParams.get("agent") ?? undefined;
     const status = searchParams.get("status") ?? undefined;
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("agent_sessions.create");
     const body = await request.json();
     const session = await createAgentSession(body.agentName);
     return NextResponse.json(session, { status: 201 });

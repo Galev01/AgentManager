@@ -2,11 +2,13 @@ import { listYoutubeSummaries, listYoutubeJobs } from "@/lib/bridge-client";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/ui";
 import { YoutubeListView } from "@/components/youtube/YoutubeListView";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { YoutubeJob, YoutubeSummaryListItem } from "@openclaw-manager/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function YoutubePage() {
+  await requirePermission("youtube.view");
   let initialSummaries: YoutubeSummaryListItem[] = [];
   let initialJobs: YoutubeJob[] = [];
   try {

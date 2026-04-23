@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { SessionChat } from "@/components/session-chat";
 import { getSessionUsage } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { AgentSession } from "@openclaw-manager/types";
 import { Badge, Card, KV, PageHeader, SectionTitle, type BadgeKind } from "@/components/ui";
 
@@ -25,6 +26,7 @@ export default async function SessionDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("agent_sessions.view");
   const { id } = await params;
 
   let usage: any = null;

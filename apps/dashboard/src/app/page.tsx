@@ -6,6 +6,7 @@ import { ActivityFeed } from "@/components/overview/activity-feed";
 import { StatRow } from "@/components/overview/stat-row";
 import { PageHeader } from "@/components/ui";
 import { getOverview, getReviewInbox, callGatewayMethod } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 
 import type { OverviewData } from "@openclaw-manager/types";
 import type { LampStatus } from "@/components/ui/status-lamp";
@@ -13,6 +14,7 @@ import type { LampStatus } from "@/components/ui/status-lamp";
 export const dynamic = "force-dynamic";
 
 export default async function OverviewPage() {
+  await requirePermission("overview.view");
   let data: OverviewData | null = null;
   let bridgeError = false;
 

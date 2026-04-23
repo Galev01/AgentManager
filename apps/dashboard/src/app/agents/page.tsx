@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { AgentTable } from "@/components/agent-table";
 import { listAgents, listAgentSessions } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { Agent, AgentSession } from "@openclaw-manager/types";
 
 export const metadata = { title: "Agents" };
@@ -12,6 +13,7 @@ export type AgentActivity = {
 };
 
 export default async function AgentsPage() {
+  await requirePermission("agents.view");
   let agents: Agent[] = [];
   let sessions: AgentSession[] = [];
   try {

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { listBrainPeople, createBrainPerson } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET() {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("brain.people.read");
     const people = await listBrainPeople();
     return NextResponse.json(people);
   } catch (err: any) {
@@ -17,7 +17,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("brain.people.write");
     const body = await request.json();
     const person = await createBrainPerson({ phone: body.phone, name: body.name });
     return NextResponse.json(person, { status: 201 });

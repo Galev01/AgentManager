@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { submitYoutubeJobs } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function POST(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("youtube.submit");
     const body = await request.json().catch(() => ({}));
     const urls = Array.isArray(body?.urls) ? body.urls.map(String) : [];
     const result = await submitYoutubeJobs(urls);

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getMessages } from "@/lib/bridge-client";
-import { requireAuthApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET(request: Request) {
   try {
-    await requireAuthApi();
+    await requirePermissionApi("conversations.view");
     const url = new URL(request.url);
     const conversationKey = url.searchParams.get("conversationKey");
     const limit = Number(url.searchParams.get("limit")) || 20;

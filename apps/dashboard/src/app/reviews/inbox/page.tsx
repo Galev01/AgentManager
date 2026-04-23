@@ -2,10 +2,12 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { InboxTable } from "@/components/inbox-table";
 import { getReviewInbox } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReviewInboxPage() {
+  await requirePermission("reviews.view");
   let items: Awaited<ReturnType<typeof getReviewInbox>>["items"] = [];
   let error: string | null = null;
   try {
