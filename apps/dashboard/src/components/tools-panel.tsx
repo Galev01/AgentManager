@@ -266,13 +266,12 @@ export function ToolsPanel({
   return (
     <div className="space-y-6">
       {/* Tab bar */}
-      <div className="tools-tabbar" role="tablist" aria-label="Tools sections">
+      <div className="tools-tabbar">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
+            aria-pressed={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`tools-tab ${activeTab === tab.id ? "active" : ""}`}
           >
