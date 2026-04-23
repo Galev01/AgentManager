@@ -812,6 +812,17 @@ export type CCEnvelope = {
   priority: CCPriority;
   refs: CCRef[];
   message: string;
+  // Runtime taxonomy — set by bridge when a turn relates to a non-OpenClaw runtime
+  // or when cross-runtime projection must be made explicit.
+  runtime_kind?: import("./runtimes.js").RuntimeKind;
+  runtime_id?: string;
+  entity_kind?: import("./runtimes.js").RuntimeEntityKind;
+  entity_id?: string;
+  native_type?: string;
+  projection_mode?: import("./runtimes.js").ProjectionMode;
+  lossiness?: import("./runtimes.js").Lossiness;
+  native_ref?: unknown;
+  capabilities_snapshot?: import("./runtimes.js").CapabilitySnapshot;
   /** Advisory raw values preserved when caller supplied unknown/invalid enums.
    *  Internal only; never surfaced to callers in phase 1. */
   _raw?: {
@@ -836,6 +847,17 @@ export type CCEnvelopeInput = {
   refs?: CCRef[];
   parentMsgId?: string;
   msgId?: string;
+  // Runtime taxonomy — optional. Callers from non-OpenClaw runtimes (or
+  // bridge-side projection code) may tag a turn's origin + projection quality.
+  runtime_kind?: import("./runtimes.js").RuntimeKind;
+  runtime_id?: string;
+  entity_kind?: import("./runtimes.js").RuntimeEntityKind;
+  entity_id?: string;
+  native_type?: string;
+  projection_mode?: import("./runtimes.js").ProjectionMode;
+  lossiness?: import("./runtimes.js").Lossiness;
+  native_ref?: unknown;
+  capabilities_snapshot?: import("./runtimes.js").CapabilitySnapshot;
 };
 
 export * from "./telemetry.js";
