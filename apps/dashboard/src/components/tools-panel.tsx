@@ -172,49 +172,56 @@ function SkillsTab({ skills: initialSkills }: { skills: Skill[] }) {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="rounded border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-300">
-          {error}
-          <button
-            onClick={() => setError(null)}
-            className="ml-3 text-red-400 hover:text-red-200"
-          >
+        <div
+          className="card"
+          style={{
+            padding: "12px 14px",
+            borderColor: "var(--err)",
+            background: "var(--err-dim)",
+            color: "var(--err)",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <span>{error}</span>
+          <button type="button" className="btn btn-sm" onClick={() => setError(null)}>
             Dismiss
           </button>
         </div>
       )}
-      <div className="overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
-        {skills.length === 0 ? (
-          <div className="px-6 py-10 text-center text-sm text-zinc-400">
-            No skills found.
-          </div>
-        ) : (
-          <table className="w-full text-sm text-zinc-100">
+      {skills.length === 0 ? (
+        <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--text-muted)" }}>
+          No skills available.
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <table className="tools-table">
             <thead>
-              <tr className="border-b border-zinc-700 bg-zinc-900/50 text-left text-xs uppercase tracking-wider text-zinc-400">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Version</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3"></th>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Version</th>
+                <th>Description</th>
+                <th></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-700">
+            <tbody>
               {skills.map((s) => (
-                <tr key={s.name} className="transition hover:bg-zinc-700/30">
-                  <td className="px-4 py-3 font-medium">{s.name}</td>
-                  <td className="px-4 py-3">
+                <tr key={s.name}>
+                  <td className="mono">{s.name}</td>
+                  <td>
                     <StatusBadge status={s.status} />
                   </td>
-                  <td className="px-4 py-3 text-zinc-400">{s.version ?? "—"}</td>
-                  <td className="px-4 py-3 text-zinc-400 max-w-xs truncate">
-                    {s.description ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="tools-table-dim">{s.version ?? "—"}</td>
+                  <td className="tools-table-dim">{s.description ?? "—"}</td>
+                  <td style={{ textAlign: "right" }}>
                     {s.status === "available" && (
                       <button
+                        type="button"
+                        className="btn btn-pri btn-sm"
                         onClick={() => handleInstall(s.name)}
                         disabled={installing === s.name}
-                        className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
                       >
                         {installing === s.name ? "Installing…" : "Install"}
                       </button>
@@ -224,8 +231,8 @@ function SkillsTab({ skills: initialSkills }: { skills: Skill[] }) {
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
