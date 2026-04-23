@@ -171,6 +171,19 @@ export function ConversationTable({ conversations }: { conversations: Conversati
                       conversationKey={conv.conversationKey}
                       status={conv.status}
                     />
+                    <Link
+                      href={`/routing?conversationKey=${encodeURIComponent(conv.conversationKey)}`}
+                      onClick={() =>
+                        logAction({
+                          feature: "conversations",
+                          action: "create_rule_started",
+                          target: { type: "conversation", id: conv.conversationKey },
+                          context: { conversationKey: conv.conversationKey },
+                        })
+                      }
+                    >
+                      <Button className="btn-sm">Route</Button>
+                    </Link>
                     <Button
                       onClick={() => setComposingKey(conv.conversationKey)}
                       className="btn-sm"
