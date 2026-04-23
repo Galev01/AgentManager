@@ -1,7 +1,7 @@
 export const PERMISSION_CATEGORIES = [
   "overview","conversations","claude_code","reviews","agents","agent_sessions",
   "youtube","cron","channels","tools","routing","relay","brain","capabilities",
-  "commands","config","settings","logs","telemetry","auth",
+  "commands","config","settings","logs","telemetry","auth","runtimes",
 ] as const;
 
 export type PermissionCategory = (typeof PERMISSION_CATEGORIES)[number];
@@ -79,6 +79,8 @@ export const PERMISSION_REGISTRY = {
   "auth.sessions.read":         { category: "auth",           label: "Read sessions",             description: "List sessions." },
   "auth.sessions.revoke":       { category: "auth",           label: "Revoke sessions",           description: "Revoke sessions." },
   "auth.audit.read":            { category: "auth",           label: "Read audit",                description: "View audit log." },
+  "runtimes.view":              { category: "runtimes",       label: "View runtimes",             description: "List runtimes + capability snapshots + activity." },
+  "runtimes.invoke":            { category: "runtimes",       label: "Invoke runtime actions",    description: "Send actions to a runtime adapter." },
 } as const satisfies Record<string, Omit<PermissionMeta, "id">>;
 
 export type PermissionId = keyof typeof PERMISSION_REGISTRY;
