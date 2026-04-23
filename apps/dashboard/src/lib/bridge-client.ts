@@ -170,8 +170,14 @@ export async function getRoutingRules(): Promise<RoutingRule[]> {
   return bridgeFetch<RoutingRule[]>("/routing-rules");
 }
 
+// The server coerces missing `isDefault` to false, so specific-rule callers
+// shouldn't have to pass it explicitly. The type reflects that.
+export type RoutingRuleInput = Omit<RoutingRule, "id" | "isDefault"> & {
+  isDefault?: boolean;
+};
+
 export async function createRoutingRule(
-  input: Omit<RoutingRule, "id">
+  input: RoutingRuleInput
 ): Promise<RoutingRule> {
   return bridgeFetch<RoutingRule>("/routing-rules", {
     method: "POST",
@@ -181,7 +187,7 @@ export async function createRoutingRule(
 
 export async function updateRoutingRule(
   id: string,
-  input: Omit<RoutingRule, "id">
+  input: RoutingRuleInput
 ): Promise<RoutingRule> {
   return bridgeFetch<RoutingRule>(
     `/routing-rules/${encodeURIComponent(id)}`,

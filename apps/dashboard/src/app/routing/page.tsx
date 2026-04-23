@@ -1,34 +1,42 @@
 import { AppShell } from "@/components/app-shell";
-import { RoutingRulesTable } from "@/components/routing-rules-table";
-import { getRoutingRules, getRelayRecipients } from "@/lib/bridge-client";
-import type { RoutingRule, RelayRecipient } from "@openclaw-manager/types";
+import { RoutingRulesManager } from "@/components/routing-rules-manager";
+import {
+  getRoutingRules,
+  getRelayRecipients,
+  getConversations,
+} from "@/lib/bridge-client";
+import type {
+  ConversationRow,
+  RoutingRule,
+  RelayRecipient,
+} from "@openclaw-manager/types";
 
 export const metadata = { title: "Routing Rules" };
+export const dynamic = "force-dynamic";
 
 export default async function RoutingPage() {
   let rules: RoutingRule[] = [];
   let recipients: RelayRecipient[] = [];
+  let conversations: ConversationRow[] = [];
 
   try {
-    [rules, recipients] = await Promise.all([
+    [rules, recipients, conversations] = await Promise.all([
       getRoutingRules(),
       getRelayRecipients(),
+      getConversations(),
     ]);
   } catch {
-    // bridge unavailable — show empty lists
+    // bridge unavailable — render with empty lists so the UI still loads.
   }
 
   return (
     <AppShell title="Routing Rules">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-zinc-100">Routing Rules</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Configure per-contact routing overrides: relay messages to specific
-            recipients, suppress the bot, or attach notes for a given conversation.
-          </p>
-        </div>
-        <RoutingRulesTable initialRules={rules} recipients={recipients} />
+      <div className="content">
+        <RoutingRulesManager
+          initialRules={rules}
+          recipients={recipients}
+          conversations={conversations}
+        />
       </div>
     </AppShell>
   );
