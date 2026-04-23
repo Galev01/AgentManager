@@ -7,6 +7,7 @@
     "build": "pnpm -r build",
     "build:dashboard": "pnpm --filter dashboard build",
     "build:bridge": "pnpm --filter bridge build",
-    "smoke:youtube": "node scripts/smoke-youtube-v2.mjs"
+    "smoke:youtube": "node scripts/smoke-youtube-v2.mjs",
+    "smoke:runtimes": "node scripts/smoke-runtimes.mjs"
   }
 }
