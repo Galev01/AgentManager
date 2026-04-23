@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { isAuthenticated } from "@/lib/session";
+import { requirePermission } from "@/lib/auth/current-user";
 import { AppShell } from "@/components/app-shell";
 import { LogCenterTable } from "@/components/log-center-table";
 
@@ -7,7 +6,7 @@ export const metadata = { title: "Logs" };
 export const dynamic = "force-dynamic";
 
 export default async function LogsPage() {
-  if (!(await isAuthenticated())) redirect("/login");
+  await requirePermission("logs.read");
   return (
     <AppShell title="Log Center">
       <div className="content">

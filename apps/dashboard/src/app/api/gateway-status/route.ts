@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAuthenticated } from "@/lib/session";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 import { callGatewayMethod } from "@/lib/bridge-client";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
@@ -18,24 +18,25 @@ async function bridgeFetch(path: string, options?: RequestInit) {
 }
 
 export async function GET() {
-  const authed = await isAuthenticated();
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
-    await callGatewayMethod("models.list", {});
-    return NextResponse.json({ status: "online" });
-  } catch {
-    return NextResponse.json({ status: "offline" });
+    await requirePermissionApi("commands.gateway_proxy");
+    try {
+      await callGatewayMethod("models.list", {});
+      return NextResponse.json({ status: "online" });
+    } catch {
+      return NextResponse.json({ status: "offline" });
+    }
+  } catch (err) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
+    throw err;
   }
 }
 
 export async function POST(request: Request) {
-  const authed = await isAuthenticated();
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
+    await requirePermissionApi("commands.gateway_proxy");
     const { action } = await request.json();
     if (action === "start") {
       const res = await bridgeFetch("/gateway-control/start", { method: "POST" });
@@ -51,6 +52,9 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (err: any) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
     return NextResponse.json({ error: err.message || "Failed" }, { status: 502 });
   }
 }

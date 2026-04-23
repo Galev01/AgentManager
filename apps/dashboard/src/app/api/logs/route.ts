@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
 const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";
 
 export async function GET(request: Request) {
   try {
+    await requirePermissionApi("logs.read");
     const { searchParams } = new URL(request.url);
     const lines = Number(searchParams.get("lines")) || 100;
 
@@ -22,7 +24,10 @@ export async function GET(request: Request) {
 
     const data = await res.json();
     return NextResponse.json(data);
-  } catch {
+  } catch (err) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
     return NextResponse.json({ error: "Bridge unreachable" }, { status: 503 });
   }
 }

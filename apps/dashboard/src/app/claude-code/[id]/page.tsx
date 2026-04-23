@@ -8,6 +8,7 @@ import {
   summarizeClaudeCodeSession,
 } from "@/lib/bridge-client";
 import { notFound } from "next/navigation";
+import { requirePermission } from "@/lib/auth/current-user";
 
 export const dynamic = "force-dynamic";
 
@@ -142,6 +143,7 @@ export default async function ClaudeCodeSessionPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("claude_code.view");
   const { id } = await params;
   const [sessions, events, pending, config, sessionsList] = await Promise.all([
     getClaudeCodeSessions().catch(() => []),

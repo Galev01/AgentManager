@@ -3,12 +3,14 @@ import { AppShell } from "@/components/app-shell";
 import { ReviewsTable } from "@/components/reviews-table";
 import { ReviewsEmptyState } from "@/components/reviews-empty-state";
 import { getReviewProjects } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { ReviewProject, ReviewerWorkerState } from "@openclaw-manager/types";
 
 export const metadata = { title: "Reviews" };
 export const dynamic = "force-dynamic";
 
 export default async function ReviewsPage() {
+  await requirePermission("reviews.view");
   let projects: ReviewProject[] = [];
   let worker: ReviewerWorkerState = { current: null, queue: [] };
   let scanRoots: string[] = [];

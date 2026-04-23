@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/ui";
 import { YoutubeDetailTabs } from "./YoutubeDetailTabs";
 import { RebuildMenu } from "./RebuildMenu";
+import { requirePermission } from "@/lib/auth/current-user";
 
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 
@@ -25,6 +26,7 @@ export default async function YoutubeDetailPage({
 }: {
   params: Promise<{ videoId: string }>;
 }) {
+  await requirePermission("youtube.view");
   const { videoId } = await params;
   if (!VIDEO_ID_RE.test(videoId)) {
     notFound();

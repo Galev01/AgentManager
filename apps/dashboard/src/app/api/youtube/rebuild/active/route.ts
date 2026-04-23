@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { listActiveYoutubeRebuilds } from "@/lib/bridge-client";
-import { isAuthenticated } from "@/lib/session";
+import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
 
 export async function GET() {
-  const authed = await isAuthenticated();
-  if (!authed) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
+    await requirePermissionApi("youtube.view");
     const result = await listActiveYoutubeRebuilds();
     return NextResponse.json(result);
   } catch (err: unknown) {
+    if (err instanceof AuthFailure) {
+      return NextResponse.json({ error: err.message, missing: err.missing }, { status: err.status });
+    }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to load active rebuilds" },
       { status: 502 }

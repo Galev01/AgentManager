@@ -53,15 +53,22 @@ import type {
   BrainInjectionPreview,
   CCEnvelope,
 } from "@openclaw-manager/types";
+import { actorHeaders } from "./auth/bridge-actor";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
 const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";
 
 async function bridgeFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${BRIDGE_URL}${path}`;
+  const actor = await actorHeaders();
   const res = await fetch(url, {
     ...options,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${BRIDGE_TOKEN}`, ...options?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${BRIDGE_TOKEN}`,
+      ...actor,
+      ...(options?.headers as Record<string, string> | undefined),
+    },
     next: { revalidate: 0 },
   });
   if (!res.ok) throw new Error(`Bridge ${res.status}: ${await res.text()}`);
@@ -569,11 +576,7 @@ export async function rerunYoutubeSummary(videoId: string): Promise<{ job: Youtu
 }
 
 export async function deleteYoutubeSummary(videoId: string): Promise<void> {
-  const res = await fetch(`${BRIDGE_URL}/youtube/summaries/${encodeURIComponent(videoId)}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${BRIDGE_TOKEN}` },
-  });
-  if (!res.ok) throw new Error(`Bridge ${res.status}: ${await res.text()}`);
+  await bridgeFetch<{ ok: boolean }>(`/youtube/summaries/${encodeURIComponent(videoId)}`, { method: "DELETE" });
 }
 
 // --- YouTube v2: chat / rebuild / chunks / chapters / highlights ---

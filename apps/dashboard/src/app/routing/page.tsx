@@ -5,6 +5,7 @@ import {
   getRelayRecipients,
   getConversations,
 } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type {
   ConversationRow,
   RoutingRule,
@@ -15,6 +16,7 @@ export const metadata = { title: "Routing Rules" };
 export const dynamic = "force-dynamic";
 
 export default async function RoutingPage() {
+  await requirePermission("routing.view");
   let rules: RoutingRule[] = [];
   let recipients: RelayRecipient[] = [];
   let conversations: ConversationRow[] = [];

@@ -10,6 +10,7 @@ import {
   getReviewReports,
 } from "@/lib/bridge-client";
 import { ackAction, runNowAction } from "../actions";
+import { requirePermission } from "@/lib/auth/current-user";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export default async function ReviewDetailPage({ params, searchParams }: Props) {
+  await requirePermission("reviews.view");
   const { projectId } = await params;
   const { date } = await searchParams;
   let projectName = projectId;

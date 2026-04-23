@@ -4,12 +4,14 @@ import { GlobalBrainEditor } from "@/components/brain-global-editor";
 import { CollapsibleCard } from "@/components/brain-collapsible-card";
 import { GlobalBrainPreviewCard } from "@/components/brain-global-preview-card";
 import { getGlobalBrain, getBrainStatus } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { GlobalBrain } from "@openclaw-manager/types";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Brain · Global" };
 
 export default async function BrainAgentPage() {
+  await requirePermission("brain.global.read");
   let brain: GlobalBrain | null = null;
   let enabled = false;
   let bridgeError = false;

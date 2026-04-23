@@ -1,6 +1,9 @@
 import express, { type Express } from "express";
 import { config } from "./config.js";
 import { bearerAuth } from "./auth.js";
+import { actorAssertionAuth } from "./auth-middleware.js";
+import { createAuthService } from "./services/auth/service.js";
+import { createPublicAuthRouter, createAuthRouter } from "./routes/auth.js";
 import overviewRouter from "./routes/overview.js";
 import conversationsRouter from "./routes/conversations.js";
 import messagesRouter from "./routes/messages.js";
@@ -33,11 +36,30 @@ import { attachWebSocket } from "./ws.js";
 const app: Express = express();
 app.use(express.json());
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true, uptime: process.uptime() });
+const authService = await createAuthService({
+  usersPath: config.authUsersPath,
+  rolesPath: config.authRolesPath,
+  linksPath: config.authOidcLinksPath,
+  bootstrapPath: config.authBootstrapPath,
+  sessionsDir: config.authSessionsDir,
+  auditPath: config.authAuditPath,
+  sessionTtlMs: config.authSessionTtlMs,
+  lastSeenThrottleMs: config.authSessionLastSeenThrottleMs,
+  wsTicketTtlMs: config.authWsTicketTtlMs,
 });
+await authService.ensureSystemRoles();
 
+app.get("/health", (_req, res) => { res.json({ ok: true, uptime: process.uptime() }); });
+
+// Public /auth/* requires service bearer only.
 app.use(bearerAuth);
+app.use(createPublicAuthRouter(authService));
+
+// Everything below requires actor assertion. strict:false in P1 so clients
+// without the header can still hit existing routes; flipped in P3.
+app.use(actorAssertionAuth(authService, { strict: true }));
+app.use(createAuthRouter(authService));
+
 app.use(overviewRouter);
 app.use(conversationsRouter);
 app.use(messagesRouter);
@@ -61,25 +83,22 @@ app.use(youtubeRouter);
 app.use(youtubeChatRouter);
 app.use(youtubeRebuildRouter);
 app.use(claudeCodeRouter);
-app.use(
-  createTelemetryRouter({
-    dir: config.telemetryDir,
-    retentionDays: config.telemetryRetentionDays,
-    maxDiskMB: config.telemetryMaxDiskMB,
-  })
-);
+app.use(createTelemetryRouter({
+  dir: config.telemetryDir,
+  retentionDays: config.telemetryRetentionDays,
+  maxDiskMB: config.telemetryMaxDiskMB,
+}));
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
 });
-
-attachWebSocket(server);
+attachWebSocket(server, authService);
 
 void (async () => {
   try { await repairOnStartup(); } catch (e) { console.warn("reviewer repair failed:", e); }
   try { await scanProjects(); } catch (e) { console.warn("reviewer scan failed:", e); }
   try { await repairYoutubeOnStartup(); } catch (e) { console.warn("youtube repair failed:", e); }
-  // TODO: chat-worker startup repair — no hook yet
+  try { await authService.sessions.sweep(); } catch (e) { console.warn("session sweep failed:", e); }
 })();
 
-export { app, server };
+export { app, server, authService };

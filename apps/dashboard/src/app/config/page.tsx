@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { ConfigEditor } from "@/components/config-editor";
 import { getGatewayConfig, getGatewayConfigSchema } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { GatewayConfigSnapshot } from "@openclaw-manager/types";
 
 export const metadata = { title: "Configuration" };
@@ -8,6 +9,7 @@ export const metadata = { title: "Configuration" };
 type RawSchemaResponse = { schema?: Record<string, unknown> } & Record<string, unknown>;
 
 export default async function ConfigPage() {
+  await requirePermission("config.raw.read");
   let schema: Record<string, unknown> = { type: "object", properties: {} };
   let values: Record<string, unknown> = {};
   let baseHash = "";

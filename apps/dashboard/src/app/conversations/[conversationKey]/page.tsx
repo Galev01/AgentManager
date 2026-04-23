@@ -6,6 +6,7 @@ import { ConversationTabs } from "@/components/conversation-tabs";
 import { getConversation, getMessages } from "@/lib/bridge-client";
 import { EmptyState, PageHeader, Button } from "@/components/ui";
 import { timeAgo } from "@/lib/format";
+import { requirePermission } from "@/lib/auth/current-user";
 import Link from "next/link";
 import type { ConversationEvent } from "@openclaw-manager/types";
 
@@ -16,6 +17,7 @@ export default async function ConversationDetailPage({
 }: {
   params: Promise<{ conversationKey: string }>;
 }) {
+  await requirePermission("conversations.view");
   const { conversationKey } = await params;
   const decodedKey = decodeURIComponent(conversationKey);
   let conversation = null;

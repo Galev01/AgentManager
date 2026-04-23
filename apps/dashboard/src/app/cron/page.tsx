@@ -1,11 +1,13 @@
 import { AppShell } from "@/components/app-shell";
 import { CronTable } from "@/components/cron-table";
 import { listCronJobs } from "@/lib/bridge-client";
+import { requirePermission } from "@/lib/auth/current-user";
 import type { CronJob } from "@openclaw-manager/types";
 
 export const metadata = { title: "Cron Jobs" };
 
 export default async function CronPage() {
+  await requirePermission("cron.view");
   let jobs: CronJob[] = [];
   try {
     jobs = await listCronJobs();
