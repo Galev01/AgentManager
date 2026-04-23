@@ -6,14 +6,6 @@ import { mergeToolDoc, type EnrichedTool } from "@/lib/tool-docs";
 
 type Tab = "catalog" | "effective" | "skills";
 
-function formatLabel(key: string): string {
-  return key
-    .replace(/([A-Z])/g, " $1")
-    .replace(/[_-]/g, " ")
-    .replace(/^\w/, (c) => c.toUpperCase())
-    .trim();
-}
-
 function CategoryBadge({ category }: { category?: string }) {
   if (!category) return null;
   return (
@@ -67,6 +59,7 @@ function CatalogTab({ tools }: { tools: Tool[] }) {
     <div className="space-y-4">
       <input
         type="text"
+        aria-label="Search tools"
         placeholder="Search tools, descriptions, or when-to-use…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -102,6 +95,7 @@ function CatalogTab({ tools }: { tools: Tool[] }) {
                 {tool.parameters && tool.parameters.length > 0 && (
                   <button
                     className="btn btn-sm"
+                    aria-expanded={isOpen}
                     onClick={() => setExpanded(isOpen ? null : tool.name)}
                   >
                     {isOpen
