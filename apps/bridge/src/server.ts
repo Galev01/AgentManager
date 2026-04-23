@@ -28,6 +28,9 @@ import youtubeChatRouter from "./routes/youtube-chat.js";
 import youtubeRebuildRouter from "./routes/youtube-rebuild.js";
 import claudeCodeRouter from "./routes/claude-code.js";
 import { createTelemetryRouter } from "./routes/telemetry.js";
+import { createRuntimeRegistry } from "./services/runtimes/registry.js";
+import { realFactories } from "./services/runtimes/factories.js";
+import { createRuntimesRouter } from "./routes/runtimes.js";
 import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
 import { scanProjects } from "./services/codebase-reviewer/discovery.js";
 import { repairOnStartup as repairYoutubeOnStartup } from "./services/youtube-worker.js";
@@ -91,6 +94,19 @@ app.use(createTelemetryRouter({
   dir: config.telemetryDir,
   retentionDays: config.telemetryRetentionDays,
   maxDiskMB: config.telemetryMaxDiskMB,
+}));
+
+// Multi-runtime control plane. Mounted AFTER strict actor-assertion so
+// req.auth is populated before the router's requirePerm gate runs, and so the
+// bridge can stamp humanActorUserId from req.auth.user.id instead of trusting
+// the request body.
+const runtimeRegistry = await createRuntimeRegistry({
+  configPath: config.runtimesConfigPath,
+  factories: realFactories,
+});
+app.use(createRuntimesRouter({
+  registry: runtimeRegistry,
+  managerServiceId: process.env.BRIDGE_SERVICE_ID ?? "bridge-primary",
 }));
 
 const server = app.listen(config.port, config.host, () => {
