@@ -1,7 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "node:http";
-import crypto from "node:crypto";
-import { config } from "./config.js";
 import type { AuthService } from "./services/auth/service.js";
 import { getConversations } from "./services/openclaw-state.js";
 import { readSettings } from "./services/runtime-settings.js";
@@ -17,17 +15,9 @@ export function attachWebSocket(server: Server, authService: AuthService): void 
   wss.on("connection", async (ws, req) => {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
     const ticket = url.searchParams.get("ticket") || "";
-    const bearer = url.searchParams.get("token") || "";
-    if (ticket) {
-      const claim = await authService.consumeWsTicket(ticket);
-      if (!claim) { ws.close(4001, "Unauthorized"); return; }
-    } else if (bearer) {
-      const a = Buffer.from(bearer), b = Buffer.from(config.token);
-      if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-        ws.close(4001, "Unauthorized");
-        return;
-      }
-    } else { ws.close(4001, "Unauthorized"); return; }
+    if (!ticket) { ws.close(4001, "Unauthorized"); return; }
+    const claim = await authService.consumeWsTicket(ticket);
+    if (!claim) { ws.close(4001, "Unauthorized"); return; }
     const msg: WsMessage = { type: "connected", payload: { ts: Date.now() } };
     ws.send(JSON.stringify(msg));
   });

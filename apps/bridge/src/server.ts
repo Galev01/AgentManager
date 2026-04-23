@@ -55,8 +55,7 @@ app.get("/health", (_req, res) => { res.json({ ok: true, uptime: process.uptime(
 app.use(bearerAuth);
 app.use(createPublicAuthRouter(authService));
 
-// Everything below requires actor assertion. strict:false in P1 so clients
-// without the header can still hit existing routes; flipped in P3.
+// Strict actor assertion required for authenticated routes.
 app.use(actorAssertionAuth(authService, { strict: true }));
 app.use(createAuthRouter(authService));
 

@@ -166,10 +166,15 @@ The bridge dynamically imports the globally-installed OpenClaw SDK to call gatew
 ### Dashboard
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
-| `ADMIN_PASSWORD` | Yes | — | Login password |
+| `AUTH_ASSERTION_SECRET` | Yes | — | ≥32 random chars; shared with bridge. Signs auth assertions exchanged between dashboard and bridge. |
+| `AUTH_BOOTSTRAP_TOKEN` | Yes (first run) | — | One-shot secret consumed at `/bootstrap` to create the first admin. Remove after first login. |
+| `AUTH_OIDC_ISSUER` / `AUTH_OIDC_CLIENT_ID` / `AUTH_OIDC_CLIENT_SECRET` / `AUTH_OIDC_REDIRECT_URI` | No | — | Optional OIDC provider for SSO login. |
 | `SESSION_SECRET` | Yes | — | HMAC key for cookie signing |
 | `OPENCLAW_BRIDGE_URL` | No | `http://localhost:3100` | Bridge API URL |
 | `OPENCLAW_BRIDGE_TOKEN` | Yes | — | Bridge bearer token |
+| `ADMIN_PASSWORD` | No (legacy) | — | Tolerated only as a one-shot migration path from legacy single-password installs when `users.json` is empty. Remove after first real user exists. |
+
+See [`docs/AUTH.md`](docs/AUTH.md) for the full auth setup flow (bootstrap, OIDC, session model, rotation).
 
 ## Bridge API Reference
 

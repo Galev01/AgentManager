@@ -28,7 +28,7 @@ systemctl stop    openclaw-dashboard
 systemctl start   openclaw-dashboard
 ```
 
-**URL:** `http://192.168.0.240` — login with the admin password.
+**URL:** `http://192.168.0.240` — login with your username + password (or OIDC, if configured). First run redirects to `/bootstrap`; see §4.3.
 
 **Files on the server:**
 - Working tree: `/opt/openclaw-manager` (owned `openclaw:openclaw`)
@@ -125,21 +125,27 @@ curl -sS --max-time 5 http://192.168.0.148:3100/health
 
 ### 4.3 End-to-end through the dashboard
 
+**First-run (no users yet):** the dashboard redirects anonymous requests to `/bootstrap`. The operator supplies `AUTH_BOOTSTRAP_TOKEN` + a chosen username + password to create the first admin. The token is single-use and should be removed from the env after the first admin exists.
+
+**Returning users:** `/login` accepts a username + password form, or (if `AUTH_OIDC_*` is configured) an OIDC button that delegates to the upstream IdP.
+
+Sessions are opaque, server-side, and tracked by the bridge. The browser only sees an `ocm_sid` cookie (32-byte base64url, no HMAC payload).
+
 ```bash
 # Login and grab the session cookie
 COOKIE=$(curl -sS -i -X POST \
   -H "Content-Type: application/json" \
-  -d '{"password":"<ADMIN_PASSWORD>"}' \
+  -d '{"username":"<USERNAME>","password":"<PASSWORD>"}' \
   http://192.168.0.240/api/auth/login \
-  | grep -i set-cookie | sed 's/.*ocm_session=\([^;]*\).*/\1/')
+  | grep -i set-cookie | sed 's/.*ocm_sid=\([^;]*\).*/\1/')
 
 # Bridge is reachable through the dashboard proxy
-curl -sS -H "Cookie: ocm_session=$COOKIE" http://192.168.0.240/api/gateway-status
+curl -sS -H "Cookie: ocm_sid=$COOKIE" http://192.168.0.240/api/gateway-status
 # expected: {"status":"online"}   (says "offline" if bridge can't reach OpenClaw Gateway)
 
 # Authed home page
 curl -sS -o /dev/null -w "%{http_code}\n" \
-  -H "Cookie: ocm_session=$COOKIE" http://192.168.0.240/
+  -H "Cookie: ocm_sid=$COOKIE" http://192.168.0.240/
 # expected: 200
 ```
 
@@ -174,10 +180,16 @@ Look for these lines in `bridge.out.log` to confirm a healthy boot:
 
 ## 6. Secrets & env
 
-The dashboard `.env` on the server holds four secrets:
+The dashboard `.env` on the server holds the auth + bridge secrets:
 
 ```
-ADMIN_PASSWORD=...
+AUTH_ASSERTION_SECRET=...            # ≥32 random chars; MUST match the bridge's value
+AUTH_BOOTSTRAP_TOKEN=...             # one-shot, used at /bootstrap for first admin; remove after
+# Optional OIDC (set all four to enable the SSO button on /login)
+AUTH_OIDC_ISSUER=...
+AUTH_OIDC_CLIENT_ID=...
+AUTH_OIDC_CLIENT_SECRET=...
+AUTH_OIDC_REDIRECT_URI=...
 SESSION_SECRET=...
 OPENCLAW_BRIDGE_URL=http://192.168.0.148:3100
 OPENCLAW_BRIDGE_TOKEN=...            # must match BRIDGE_TOKEN in Windows .env
@@ -185,6 +197,16 @@ COOKIE_SECURE=false                  # required for plain-HTTP LAN deploy
 NODE_ENV=production
 PORT=3000
 HOSTNAME=127.0.0.1
+# ADMIN_PASSWORD=...                 # legacy; tolerated only as a one-shot migration from the old
+                                     # single-password install when users.json is empty. Remove
+                                     # once a real user has been created.
 ```
+
+- **`AUTH_ASSERTION_SECRET`** — signs the short-lived assertions the dashboard presents to the bridge on every proxied call. Must be byte-identical on both sides. Rotate by generating a new value, deploying it to the bridge and dashboard in lockstep, then restarting both services; existing sessions are invalidated.
+- **`AUTH_BOOTSTRAP_TOKEN`** — single-use secret the operator types into `/bootstrap` to mint the first admin. Remove it from both envs after that admin exists; keeping it around is a standing footgun.
+- **`AUTH_OIDC_*`** — optional. If all four are set, `/login` shows the SSO button and accepts IdP callbacks; unset to disable.
+- **`ADMIN_PASSWORD`** — legacy. The bridge still reads it, but only to seed a single admin when `users.json` is empty. Once any user exists it's ignored; remove it after first login.
+
+See [`docs/AUTH.md`](AUTH.md) for the authoritative auth model (session cookie, assertion exchange, user store, OIDC flow).
 
 To rotate `BRIDGE_TOKEN`: update both `apps/bridge/.env` on Windows (then `nssm restart OpenClaw-Bridge`) **and** `/opt/openclaw-manager/apps/dashboard/.env` on the server (then `systemctl restart openclaw-dashboard`). They must stay in sync.
