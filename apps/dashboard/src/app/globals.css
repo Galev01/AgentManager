@@ -1565,4 +1565,19 @@ html.compact {
 }
 .tools-table tbody tr:last-child td { border-bottom: none; }
 .tools-table tbody tr:hover { background: var(--bg-hover); }
+
+.settings-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  transition: border-color 120ms ease;
+}
+.settings-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 .tools-table .tools-table-dim { color: var(--text-dim); }

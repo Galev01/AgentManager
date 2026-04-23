@@ -1,27 +1,53 @@
 import { AppShell } from "@/components/app-shell";
-import { SettingsForm } from "@/components/settings-form";
 import { DegradedBanner } from "@/components/degraded-banner";
-import { getSettings } from "@/lib/bridge-client";
+import { SettingsView } from "@/components/settings/settings-view";
 import { requirePermission } from "@/lib/auth/current-user";
-import type { RuntimeSettings } from "@openclaw-manager/types";
+import {
+  getSettings,
+  getRelayRecipients,
+  getRoutingRules,
+  getChannels,
+} from "@/lib/bridge-client";
+import type {
+  RuntimeSettingsV2,
+  RelayRecipient,
+  RoutingRule,
+  Channel,
+} from "@openclaw-manager/types";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   await requirePermission("settings.read");
-  let settings: RuntimeSettings | null = null;
+  let settings: RuntimeSettingsV2 | null = null;
+  let recipients: RelayRecipient[] = [];
+  let rules: RoutingRule[] = [];
+  let channels: Channel[] = [];
   let bridgeError = false;
-  try { settings = await getSettings(); } catch { bridgeError = true; }
+
+  try {
+    [settings, recipients, rules, channels] = await Promise.all([
+      getSettings(),
+      getRelayRecipients(),
+      getRoutingRules(),
+      getChannels().catch(() => []),
+    ]);
+  } catch {
+    bridgeError = true;
+  }
 
   return (
     <AppShell title="Settings">
       {bridgeError && <DegradedBanner />}
-      {settings ? (
-        <div className="max-w-2xl rounded bg-dark-card p-8 shadow-card-dark">
-          <h2 className="mb-6 text-lg font-semibold">Runtime Settings</h2>
-          <SettingsForm settings={settings} />
-        </div>
-      ) : !bridgeError && <p className="text-text-muted">Loading settings...</p>}
+      {settings && (
+        <SettingsView
+          initialSettings={settings}
+          initialRecipients={recipients}
+          initialRules={rules}
+          initialChannels={channels}
+        />
+      )}
     </AppShell>
   );
 }
