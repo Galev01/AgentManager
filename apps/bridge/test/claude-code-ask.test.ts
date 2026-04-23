@@ -30,13 +30,17 @@ function makePaths(dir: string) {
   };
 }
 
-// Stateful gateway stub that mimics sessions.send/get async flow:
+// Stateful gateway stub that mimics sessions.create/send/get async flow:
+// sessions.create is idempotent (matches real gateway behavior);
 // sessions.send appends the user message and schedules an assistant reply;
 // sessions.get returns the current message array.
 function makeGatewayStub(reply: string, replyDelayMs: number = 10) {
   const messages: Array<{ role: string; content: Array<{ type: string; text: string }> }> = [];
   const sentMessages: string[] = [];
   const callGateway = async (method: string, params?: Record<string, unknown>): Promise<unknown> => {
+    if (method === "sessions.create") {
+      return { key: String(params?.key ?? ""), created: true };
+    }
     if (method === "sessions.get") {
       return { messages: [...messages] };
     }
