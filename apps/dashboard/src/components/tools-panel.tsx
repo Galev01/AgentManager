@@ -246,6 +246,44 @@ function SkillsTab({ skills: initialSkills }: { skills: Skill[] }) {
   );
 }
 
+function AddCapabilitiesBanner({
+  availableCount,
+  onGoToSkills,
+}: {
+  availableCount: number;
+  onGoToSkills: () => void;
+}) {
+  const ctaLabel =
+    availableCount > 0
+      ? `Browse ${availableCount} available skill${availableCount !== 1 ? "s" : ""} →`
+      : "Browse available skills →";
+  return (
+    <div className="add-caps-banner">
+      <div className="add-caps-main">
+        <div className="add-caps-eyebrow">
+          <span className="dot" />
+          Add capabilities
+        </div>
+        <div className="add-caps-title">
+          Install skills to add new tools and workflows
+        </div>
+        <div className="add-caps-desc">
+          Skills are bundles of tools and workflows your agents can use. Install one and its tools will
+          appear in the catalog below.
+        </div>
+        <div className="add-caps-actions">
+          <button type="button" className="btn btn-pri" onClick={onGoToSkills}>
+            {ctaLabel}
+          </button>
+        </div>
+        <div className="muted-note">
+          Need a custom tool? Custom tool creation needs gateway support and isn't available in the dashboard yet.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ToolsPanel({
   catalog,
   effective,
@@ -257,6 +295,8 @@ export function ToolsPanel({
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("catalog");
 
+  const availableCount = skills.filter((s) => s.status === "available").length;
+
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: "catalog", label: "Catalog", count: catalog.length },
     { id: "effective", label: "Effective", count: effective.length },
@@ -265,6 +305,7 @@ export function ToolsPanel({
 
   return (
     <div className="space-y-6">
+      <AddCapabilitiesBanner availableCount={availableCount} onGoToSkills={() => setActiveTab("skills")} />
       {/* Tab bar */}
       <div className="tools-tabbar">
         {tabs.map((tab) => (

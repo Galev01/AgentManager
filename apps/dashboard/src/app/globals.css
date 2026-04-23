@@ -1482,3 +1482,59 @@ html.compact {
   background: color-mix(in oklch, var(--accent-fg) 18%, transparent);
   color: var(--accent-fg);
 }
+
+.add-caps-banner {
+  position: relative;
+  display: flex;
+  gap: 20px;
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--accent-dim), transparent 55%), var(--panel);
+  overflow: hidden;
+}
+.add-caps-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
+}
+.add-caps-main { flex: 1; min-width: 0; }
+.add-caps-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.add-caps-eyebrow .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.add-caps-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.add-caps-desc {
+  color: var(--text-dim);
+  max-width: 60ch;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.add-caps-actions { display: flex; gap: 10px; margin-bottom: 12px; }
+.muted-note {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
