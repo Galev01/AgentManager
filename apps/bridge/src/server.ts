@@ -57,7 +57,7 @@ app.use(createPublicAuthRouter(authService));
 
 // Everything below requires actor assertion. strict:false in P1 so clients
 // without the header can still hit existing routes; flipped in P3.
-app.use(actorAssertionAuth(authService, { strict: false }));
+app.use(actorAssertionAuth(authService, { strict: true }));
 app.use(createAuthRouter(authService));
 
 app.use(overviewRouter);
