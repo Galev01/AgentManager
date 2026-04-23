@@ -6,6 +6,13 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function requireAuthAssertionSecret(): void {
+  if (!process.env.AUTH_ASSERTION_SECRET || process.env.AUTH_ASSERTION_SECRET.length < 32) {
+    throw new Error("AUTH_ASSERTION_SECRET must be set and >= 32 chars");
+  }
+}
+requireAuthAssertionSecret();
+
 export const config = {
   host: process.env.BRIDGE_HOST || "127.0.0.1",
   port: Number(process.env.BRIDGE_PORT) || 3100,
@@ -93,4 +100,26 @@ export const config = {
   get telemetryDir() {
     return path.join(this.managementDir, "telemetry");
   },
+  // --- Auth ---
+  authAssertionSecret: process.env.AUTH_ASSERTION_SECRET || "",
+  authBootstrapToken: process.env.AUTH_BOOTSTRAP_TOKEN || "",
+  authSessionTtlMs: Number(process.env.AUTH_SESSION_TTL_MS) || 7 * 24 * 60 * 60 * 1000,
+  authSessionLastSeenThrottleMs: Number(process.env.AUTH_SESSION_LASTSEEN_THROTTLE_MS) || 60 * 1000,
+  authWsTicketTtlMs: Number(process.env.AUTH_WS_TICKET_TTL_MS) || 60 * 1000,
+  authLegacyAdminPassword: process.env.ADMIN_PASSWORD || "",
+  oidcIssuerUrl: process.env.AUTH_OIDC_ISSUER_URL || "",
+  oidcClientId: process.env.AUTH_OIDC_CLIENT_ID || "",
+  oidcClientSecret: process.env.AUTH_OIDC_CLIENT_SECRET || "",
+  oidcRedirectUri: process.env.AUTH_OIDC_REDIRECT_URI || "",
+  oidcScopes: (process.env.AUTH_OIDC_SCOPES || "openid email profile").split(/\s+/).filter(Boolean),
+  oidcProviderName: process.env.AUTH_OIDC_PROVIDER_NAME || "Single Sign-On",
+  oidcProviderKey: process.env.AUTH_OIDC_PROVIDER_KEY || "default",
+  oidcAutoProvision: process.env.AUTH_OIDC_AUTO_PROVISION === "true",
+  get authDir():        string { return path.join(this.managementDir, "auth"); },
+  get authUsersPath():  string { return path.join(this.managementDir, "auth", "users.json"); },
+  get authRolesPath():  string { return path.join(this.managementDir, "auth", "roles.json"); },
+  get authOidcLinksPath(): string { return path.join(this.managementDir, "auth", "oidc-links.json"); },
+  get authBootstrapPath(): string { return path.join(this.managementDir, "auth", "bootstrap.json"); },
+  get authSessionsDir(): string { return path.join(this.managementDir, "auth", "sessions"); },
+  get authAuditPath():  string { return path.join(this.managementDir, "auth", "audit.jsonl"); },
 } as const;
