@@ -266,25 +266,18 @@ export function ToolsPanel({
   return (
     <div className="space-y-6">
       {/* Tab bar */}
-      <div className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800/50 p-1 w-fit">
+      <div className="tools-tabbar" role="tablist" aria-label="Tools sections">
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-medium transition ${
-              activeTab === tab.id
-                ? "bg-blue-600 text-white"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50"
-            }`}
+            className={`tools-tab ${activeTab === tab.id ? "active" : ""}`}
           >
-            {tab.label}
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                activeTab === tab.id ? "bg-blue-500/50 text-white" : "bg-zinc-700 text-zinc-400"
-              }`}
-            >
-              {tab.count}
-            </span>
+            <span>{tab.label}</span>
+            <span className="badge mute">{tab.count}</span>
           </button>
         ))}
       </div>

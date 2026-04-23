@@ -26,15 +26,15 @@ export default async function ToolsPage() {
 
   return (
     <AppShell title="Tools & Skills">
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="page-h">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-100">Tools &amp; Skills</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Browse the tool catalog, view effective tool assignments, and manage installed skills.
-          </p>
+          <div className="page-title">Tools &amp; Skills</div>
+          <div className="page-sub">
+            Browse the tool catalog, see what is active, and install new skills to extend your agents.
+          </div>
         </div>
-        <ToolsPanel catalog={catalog} effective={effective} skills={skills} />
       </div>
+      <ToolsPanel catalog={catalog} effective={effective} skills={skills} />
     </AppShell>
   );
 }
