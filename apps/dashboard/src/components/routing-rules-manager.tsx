@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -184,6 +185,8 @@ function ConversationCombobox({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const listboxId = useId();
+  const optionId = (i: number) => `${listboxId}-opt-${i}`;
 
   // Reflect `value` (e.g., URL prefill) into the visible input text.
   useEffect(() => {
@@ -204,6 +207,11 @@ function ConversationCombobox({
       .slice(0, 50);
   }, [conversations, query]);
 
+  // Clamp highlight when the filtered list shrinks below the current index.
+  useEffect(() => {
+    setHighlight((h) => Math.min(h, Math.max(filtered.length - 1, 0)));
+  }, [filtered.length]);
+
   // Close when clicking outside.
   useEffect(() => {
     function handler(ev: MouseEvent) {
@@ -223,6 +231,11 @@ function ConversationCombobox({
   }
 
   function handleKey(ev: KeyboardEvent<HTMLInputElement>) {
+    // IME guard: during East Asian input composition, the browser fires
+    // synthetic Enter (keyCode 229) to commit. Don't steal those for combobox.
+    if (ev.nativeEvent.isComposing === true || ev.keyCode === 229) {
+      return;
+    }
     if (!open && (ev.key === "ArrowDown" || ev.key === "Enter")) {
       setOpen(true);
       return;
@@ -239,6 +252,12 @@ function ConversationCombobox({
         commit(highlight);
       } else if (query.trim()) {
         onFallbackToCustom(query.trim());
+      }
+    } else if (ev.key === "Tab") {
+      // Commit the current highlight on Tab (don't preventDefault so focus
+      // still moves naturally to the next field).
+      if (open && filtered.length > 0) {
+        commit(highlight);
       }
     } else if (ev.key === "Escape") {
       setOpen(false);
@@ -259,12 +278,18 @@ function ConversationCombobox({
         onFocus={() => setOpen(true)}
         onKeyDown={handleKey}
         style={INPUT_STYLE}
+        role="combobox"
         aria-autocomplete="list"
         aria-expanded={open}
+        aria-controls={listboxId}
+        aria-activedescendant={
+          open && filtered.length > 0 ? optionId(highlight) : undefined
+        }
       />
       {open && (
         <div
           role="listbox"
+          id={listboxId}
           style={{
             position: "absolute",
             top: "calc(100% + 4px)",
@@ -305,6 +330,7 @@ function ConversationCombobox({
               return (
                 <div
                   key={row.conversationKey}
+                  id={optionId(i)}
                   role="option"
                   aria-selected={isOn}
                   onMouseEnter={() => setHighlight(i)}
@@ -612,12 +638,15 @@ export function RoutingRulesManager({
   async function handleRefresh() {
     try {
       const res = await fetch("/api/routing");
-      if (res.ok) {
-        setRules((await res.json()) as RoutingRule[]);
-        setError(null);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to refresh routing rules");
       }
-    } catch {
-      // ignore — keep current state
+      setRules((await res.json()) as RoutingRule[]);
+      setError(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
     }
   }
 
@@ -849,27 +878,46 @@ export function RoutingRulesManager({
           </CardHeader>
           <CardBody style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Mode toggle */}
-            <div style={{ display: "inline-flex", gap: 4 }}>
-              <Button
-                variant={form.mode === "specific" ? "primary" : "ghost"}
-                onClick={() =>
-                  setForm((f) => ({ ...f, mode: "specific" }))
-                }
-                disabled={!!editingId}
-                size="sm"
-              >
-                Specific route
-              </Button>
-              <Button
-                variant={form.mode === "default" ? "primary" : "ghost"}
-                onClick={() =>
-                  setForm((f) => ({ ...f, mode: "default" }))
-                }
-                disabled={!!editingId}
-                size="sm"
-              >
-                Default route
-              </Button>
+            <div>
+              <div style={{ display: "inline-flex", gap: 4 }}>
+                <Button
+                  variant={form.mode === "specific" ? "primary" : "ghost"}
+                  onClick={() =>
+                    setForm((f) => ({ ...f, mode: "specific" }))
+                  }
+                  disabled={!!editingId}
+                  title={
+                    editingId ? "Cancel edit to switch route type" : undefined
+                  }
+                  size="sm"
+                >
+                  Specific route
+                </Button>
+                <Button
+                  variant={form.mode === "default" ? "primary" : "ghost"}
+                  onClick={() =>
+                    setForm((f) => ({ ...f, mode: "default" }))
+                  }
+                  disabled={!!editingId}
+                  title={
+                    editingId ? "Cancel edit to switch route type" : undefined
+                  }
+                  size="sm"
+                >
+                  Default route
+                </Button>
+              </div>
+              {editingId && (
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 11.5,
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Cancel edit to switch route type.
+                </div>
+              )}
             </div>
 
             {form.mode === "default" ? (
