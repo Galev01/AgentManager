@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { AuthUserPublic } from "@openclaw-manager/types";
 import { Icons, type IconName } from "./icons";
+import { UserMenu } from "./user-menu";
 
 interface NavItem {
   id: string;
@@ -56,7 +58,13 @@ const NAV: NavSection[] = [
   },
 ];
 
-export function Sidebar({ badges = {} }: { badges?: Record<string, number> }) {
+export function Sidebar({
+  badges = {},
+  currentUser,
+}: {
+  badges?: Record<string, number>;
+  currentUser?: AuthUserPublic | null;
+}) {
   const pathname = usePathname();
 
   return (
@@ -111,11 +119,17 @@ export function Sidebar({ badges = {} }: { badges?: Record<string, number> }) {
 
       {/* Footer */}
       <div className="sb-foot">
-        <div className="sb-foot-avatar">OC</div>
-        <div className="sb-foot-text">
-          <div className="n">OpenClaw</div>
-          <div className="s mono">local · :7321</div>
-        </div>
+        {currentUser ? (
+          <UserMenu username={currentUser.username} displayName={currentUser.displayName} />
+        ) : (
+          <>
+            <div className="sb-foot-avatar">OC</div>
+            <div className="sb-foot-text">
+              <div className="n">OpenClaw</div>
+              <div className="s mono">local · :7321</div>
+            </div>
+          </>
+        )}
       </div>
     </aside>
   );

@@ -1,9 +1,13 @@
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { getClaudeCodeEscalationCount } from "@/lib/bridge-client";
+import { getCurrentUser } from "@/lib/auth/current-user";
 
 export async function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
-  const decisionCount = await getClaudeCodeEscalationCount().catch(() => 0);
+  const [decisionCount, currentUser] = await Promise.all([
+    getClaudeCodeEscalationCount().catch(() => 0),
+    getCurrentUser().catch(() => null),
+  ]);
   const badges: Record<string, number> =
     decisionCount > 0 ? { claude_code: decisionCount } : {};
   return (
@@ -15,7 +19,7 @@ export async function AppShell({ title, children }: { title: string; children: R
         minHeight: "100vh",
       }}
     >
-      <Sidebar badges={badges} />
+      <Sidebar badges={badges} currentUser={currentUser} />
       <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
         <Header title={title} />
         <main style={{ flex: 1 }}>{children}</main>
