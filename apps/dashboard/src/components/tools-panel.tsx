@@ -8,38 +8,19 @@ type Tab = "catalog" | "effective" | "skills";
 
 function CategoryBadge({ category }: { category?: string }) {
   if (!category) return null;
-  return (
-    <span className="inline-block rounded-full bg-blue-900/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-300">
-      {category}
-    </span>
-  );
+  return <span className="badge acc">{category}</span>;
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    installed: "bg-green-900/40 text-green-300",
-    available: "bg-blue-900/40 text-blue-300",
-    error: "bg-red-900/40 text-red-300",
+  const kindMap: Record<string, string> = {
+    installed: "ok",
+    available: "info",
+    error: "err",
   };
-  const cls = colors[status] ?? "bg-zinc-700 text-zinc-300";
-  return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${cls}`}>
-      {status}
-    </span>
-  );
+  const kind = kindMap[status] ?? "mute";
+  return <span className={`badge ${kind}`}>{status}</span>;
 }
 
-function EnabledBadge({ enabled }: { enabled?: boolean }) {
-  return enabled ? (
-    <span className="inline-block rounded-full bg-green-900/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-green-300">
-      Enabled
-    </span>
-  ) : (
-    <span className="inline-block rounded-full bg-zinc-700/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-      Disabled
-    </span>
-  );
-}
 
 function CatalogTab({ tools }: { tools: Tool[] }) {
   const [search, setSearch] = useState("");
@@ -125,34 +106,37 @@ function CatalogTab({ tools }: { tools: Tool[] }) {
 }
 
 function EffectiveTab({ tools }: { tools: EffectiveTool[] }) {
+  if (tools.length === 0) {
+    return (
+      <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--text-muted)" }}>
+        No tools are currently assigned.
+      </div>
+    );
+  }
   return (
-    <div className="overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
-      {tools.length === 0 ? (
-        <div className="px-6 py-10 text-center text-sm text-zinc-400">
-          No effective tools found.
-        </div>
-      ) : (
-        <table className="w-full text-sm text-zinc-100">
-          <thead>
-            <tr className="border-b border-zinc-700 bg-zinc-900/50 text-left text-xs uppercase tracking-wider text-zinc-400">
-              <th className="px-4 py-3">Tool Name</th>
-              <th className="px-4 py-3">Enabled</th>
-              <th className="px-4 py-3">Assigned To</th>
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <table className="tools-table">
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>Enabled</th>
+            <th>Assigned to</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tools.map((t) => (
+            <tr key={t.name}>
+              <td className="mono">{t.name}</td>
+              <td>
+                <span className={`badge ${t.enabled ? "ok" : "mute"}`}>
+                  {t.enabled ? "Enabled" : "Disabled"}
+                </span>
+              </td>
+              <td>{t.assignedTo ?? "—"}</td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-700">
-            {tools.map((t) => (
-              <tr key={t.name} className="transition hover:bg-zinc-700/30">
-                <td className="px-4 py-3 font-medium">{t.name}</td>
-                <td className="px-4 py-3">
-                  <EnabledBadge enabled={t.enabled} />
-                </td>
-                <td className="px-4 py-3 text-zinc-400">{t.assignedTo ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
