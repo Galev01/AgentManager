@@ -1581,3 +1581,103 @@ html.compact {
   border-color: var(--accent);
 }
 .tools-table .tools-table-dim { color: var(--text-dim); }
+
+/* ---------- Generic input ---------- */
+.input {
+  width: 100%;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+.input::placeholder { color: var(--text-faint); }
+.input:hover { border-color: var(--border-strong); }
+.input:focus { border-color: var(--accent); background: var(--bg-elev); }
+.input.mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12.5px;
+  font-feature-settings: "zero";
+}
+textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
+
+/* ---------- Right-side drawer ---------- */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: oklch(from var(--bg) l c h / 0.55);
+  backdrop-filter: blur(3px);
+  animation: drawer-fade 0.14s ease;
+}
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 41;
+  width: min(520px, 100vw);
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  box-shadow: -24px 0 48px -12px oklch(0 0 0 / 0.45);
+  display: flex;
+  flex-direction: column;
+  animation: drawer-slide 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.drawer-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-t {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+}
+.drawer-close {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.drawer-close:hover { background: var(--bg-hover); color: var(--text); }
+.drawer-b {
+  padding: 18px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.drawer-f {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+@keyframes drawer-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes drawer-slide {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
