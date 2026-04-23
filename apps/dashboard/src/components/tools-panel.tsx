@@ -2,101 +2,103 @@
 
 import { useState } from "react";
 import type { Tool, EffectiveTool, Skill } from "@openclaw-manager/types";
+import { mergeToolDoc, type EnrichedTool } from "@/lib/tool-docs";
 
 type Tab = "catalog" | "effective" | "skills";
 
-function formatLabel(key: string): string {
-  return key
-    .replace(/([A-Z])/g, " $1")
-    .replace(/[_-]/g, " ")
-    .replace(/^\w/, (c) => c.toUpperCase())
-    .trim();
-}
-
 function CategoryBadge({ category }: { category?: string }) {
   if (!category) return null;
-  return (
-    <span className="inline-block rounded-full bg-blue-900/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-300">
-      {category}
-    </span>
-  );
+  return <span className="badge acc">{category}</span>;
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    installed: "bg-green-900/40 text-green-300",
-    available: "bg-blue-900/40 text-blue-300",
-    error: "bg-red-900/40 text-red-300",
+  const kindMap: Record<string, string> = {
+    installed: "ok",
+    available: "info",
+    error: "err",
   };
-  const cls = colors[status] ?? "bg-zinc-700 text-zinc-300";
-  return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${cls}`}>
-      {status}
-    </span>
-  );
+  const kind = kindMap[status] ?? "mute";
+  return <span className={`badge ${kind}`}>{status}</span>;
 }
 
-function EnabledBadge({ enabled }: { enabled?: boolean }) {
-  return enabled ? (
-    <span className="inline-block rounded-full bg-green-900/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-green-300">
-      Enabled
-    </span>
-  ) : (
-    <span className="inline-block rounded-full bg-zinc-700/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-      Disabled
-    </span>
-  );
-}
 
 function CatalogTab({ tools }: { tools: Tool[] }) {
   const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  const filtered = tools.filter((t) => {
+  const enriched: EnrichedTool[] = tools.map(mergeToolDoc);
+
+  const filtered = enriched.filter((t) => {
     const q = search.toLowerCase();
-    return (
-      t.name.toLowerCase().includes(q) ||
-      (t.description ?? "").toLowerCase().includes(q)
-    );
+    const hay = [t.name, t.description ?? "", t.doc?.summary ?? "", t.doc?.whenToUse ?? ""]
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
   });
 
   return (
     <div className="space-y-4">
       <input
         type="text"
-        placeholder="Search tools…"
+        aria-label="Search tools"
+        placeholder="Search tools, descriptions, or when-to-use…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full max-w-sm rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+        className="w-full max-w-md rounded border border-[color:var(--border)] bg-[color:var(--bg-sunken)] px-3 py-2 text-sm text-[color:var(--text)] placeholder-[color:var(--text-muted)] focus:border-[color:var(--accent)] focus:outline-none"
       />
-      {filtered.length === 0 ? (
-        <div className="rounded-lg border border-zinc-700 bg-zinc-800 px-6 py-10 text-center text-sm text-zinc-400">
-          No tools found.
+      {tools.length === 0 ? (
+        <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--text-muted)" }}>
+          No tools in the catalog yet.
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--text-muted)" }}>
+          No tools match that search.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((tool) => (
-            <div
-              key={tool.name}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 p-4 space-y-2"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="font-semibold text-zinc-100 text-sm leading-tight">
-                  {tool.name}
-                </span>
-                <CategoryBadge category={tool.category} />
+        <div className="tools-grid">
+          {filtered.map((tool) => {
+            const summary = tool.doc?.summary ?? tool.description ?? "No description available.";
+            const whenToUse = tool.doc?.whenToUse;
+            const isOpen = expanded === tool.name;
+            return (
+              <div key={tool.name} className="card tool-card">
+                <div className="tool-card-h">
+                  <span className="tool-card-n">{tool.name}</span>
+                  <CategoryBadge category={tool.category} />
+                </div>
+                <p className="tool-card-desc">{summary}</p>
+                {whenToUse && (
+                  <div className="tool-card-section">
+                    <div className="tool-card-label">When to use</div>
+                    <p>{whenToUse}</p>
+                  </div>
+                )}
+                {tool.parameters && tool.parameters.length > 0 && (
+                  <button
+                    className="btn btn-sm"
+                    aria-expanded={isOpen}
+                    onClick={() => setExpanded(isOpen ? null : tool.name)}
+                  >
+                    {isOpen
+                      ? "Hide parameters"
+                      : `Show ${tool.parameters.length} parameter${tool.parameters.length !== 1 ? "s" : ""}`}
+                  </button>
+                )}
+                {isOpen && tool.parameters && (
+                  <ul className="tool-card-params">
+                    {tool.parameters.map((p) => (
+                      <li key={p.name}>
+                        <span className="mono">{p.name}</span>
+                        <span className="tool-card-ptype mono">{p.type}</span>
+                        {p.required && <span className="badge warn">required</span>}
+                        {p.description && <span className="tool-card-pdesc">{p.description}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              {tool.description && (
-                <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">
-                  {tool.description}
-                </p>
-              )}
-              {tool.parameters && tool.parameters.length > 0 && (
-                <p className="text-[11px] text-zinc-500">
-                  {tool.parameters.length} parameter{tool.parameters.length !== 1 ? "s" : ""}
-                </p>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -104,34 +106,37 @@ function CatalogTab({ tools }: { tools: Tool[] }) {
 }
 
 function EffectiveTab({ tools }: { tools: EffectiveTool[] }) {
+  if (tools.length === 0) {
+    return (
+      <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--text-muted)" }}>
+        No tools are currently assigned.
+      </div>
+    );
+  }
   return (
-    <div className="overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
-      {tools.length === 0 ? (
-        <div className="px-6 py-10 text-center text-sm text-zinc-400">
-          No effective tools found.
-        </div>
-      ) : (
-        <table className="w-full text-sm text-zinc-100">
-          <thead>
-            <tr className="border-b border-zinc-700 bg-zinc-900/50 text-left text-xs uppercase tracking-wider text-zinc-400">
-              <th className="px-4 py-3">Tool Name</th>
-              <th className="px-4 py-3">Enabled</th>
-              <th className="px-4 py-3">Assigned To</th>
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <table className="tools-table">
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>Enabled</th>
+            <th>Assigned to</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tools.map((t) => (
+            <tr key={t.name}>
+              <td className="mono">{t.name}</td>
+              <td>
+                <span className={`badge ${t.enabled ? "ok" : "mute"}`}>
+                  {t.enabled ? "Enabled" : "Disabled"}
+                </span>
+              </td>
+              <td>{t.assignedTo ?? "—"}</td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-700">
-            {tools.map((t) => (
-              <tr key={t.name} className="transition hover:bg-zinc-700/30">
-                <td className="px-4 py-3 font-medium">{t.name}</td>
-                <td className="px-4 py-3">
-                  <EnabledBadge enabled={t.enabled} />
-                </td>
-                <td className="px-4 py-3 text-zinc-400">{t.assignedTo ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -167,49 +172,56 @@ function SkillsTab({ skills: initialSkills }: { skills: Skill[] }) {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="rounded border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-300">
-          {error}
-          <button
-            onClick={() => setError(null)}
-            className="ml-3 text-red-400 hover:text-red-200"
-          >
+        <div
+          className="card"
+          style={{
+            padding: "12px 14px",
+            borderColor: "var(--err)",
+            background: "var(--err-dim)",
+            color: "var(--err)",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <span>{error}</span>
+          <button type="button" className="btn btn-sm" onClick={() => setError(null)}>
             Dismiss
           </button>
         </div>
       )}
-      <div className="overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
-        {skills.length === 0 ? (
-          <div className="px-6 py-10 text-center text-sm text-zinc-400">
-            No skills found.
-          </div>
-        ) : (
-          <table className="w-full text-sm text-zinc-100">
+      {skills.length === 0 ? (
+        <div className="card" style={{ padding: 28, textAlign: "center", color: "var(--text-muted)" }}>
+          No skills available.
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <table className="tools-table">
             <thead>
-              <tr className="border-b border-zinc-700 bg-zinc-900/50 text-left text-xs uppercase tracking-wider text-zinc-400">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Version</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3"></th>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Version</th>
+                <th>Description</th>
+                <th></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-700">
+            <tbody>
               {skills.map((s) => (
-                <tr key={s.name} className="transition hover:bg-zinc-700/30">
-                  <td className="px-4 py-3 font-medium">{s.name}</td>
-                  <td className="px-4 py-3">
+                <tr key={s.name}>
+                  <td className="mono">{s.name}</td>
+                  <td>
                     <StatusBadge status={s.status} />
                   </td>
-                  <td className="px-4 py-3 text-zinc-400">{s.version ?? "—"}</td>
-                  <td className="px-4 py-3 text-zinc-400 max-w-xs truncate">
-                    {s.description ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="tools-table-dim">{s.version ?? "—"}</td>
+                  <td className="tools-table-dim">{s.description ?? "—"}</td>
+                  <td style={{ textAlign: "right" }}>
                     {s.status === "available" && (
                       <button
+                        type="button"
+                        className="btn btn-pri btn-sm"
                         onClick={() => handleInstall(s.name)}
                         disabled={installing === s.name}
-                        className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
                       >
                         {installing === s.name ? "Installing…" : "Install"}
                       </button>
@@ -219,7 +231,45 @@ function SkillsTab({ skills: initialSkills }: { skills: Skill[] }) {
               ))}
             </tbody>
           </table>
-        )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddCapabilitiesBanner({
+  availableCount,
+  onGoToSkills,
+}: {
+  availableCount: number;
+  onGoToSkills: () => void;
+}) {
+  const ctaLabel =
+    availableCount > 0
+      ? `Browse ${availableCount} available skill${availableCount !== 1 ? "s" : ""} →`
+      : "Browse available skills →";
+  return (
+    <div className="add-caps-banner">
+      <div className="add-caps-main">
+        <div className="add-caps-eyebrow">
+          <span className="dot" />
+          Add capabilities
+        </div>
+        <div className="add-caps-title">
+          Install skills to add new tools and workflows
+        </div>
+        <div className="add-caps-desc">
+          Skills are bundles of tools and workflows your agents can use. Install one and its tools will
+          appear in the catalog below.
+        </div>
+        <div className="add-caps-actions">
+          <button type="button" className="btn btn-pri" onClick={onGoToSkills}>
+            {ctaLabel}
+          </button>
+        </div>
+        <div className="muted-note">
+          Need a custom tool? Custom tool creation needs gateway support and isn't available in the dashboard yet.
+        </div>
       </div>
     </div>
   );
@@ -236,6 +286,8 @@ export function ToolsPanel({
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("catalog");
 
+  const availableCount = skills.filter((s) => s.status === "available").length;
+
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: "catalog", label: "Catalog", count: catalog.length },
     { id: "effective", label: "Effective", count: effective.length },
@@ -244,26 +296,19 @@ export function ToolsPanel({
 
   return (
     <div className="space-y-6">
+      <AddCapabilitiesBanner availableCount={availableCount} onGoToSkills={() => setActiveTab("skills")} />
       {/* Tab bar */}
-      <div className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800/50 p-1 w-fit">
+      <div className="tools-tabbar">
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            type="button"
+            aria-pressed={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 rounded px-4 py-2 text-sm font-medium transition ${
-              activeTab === tab.id
-                ? "bg-blue-600 text-white"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50"
-            }`}
+            className={`tools-tab ${activeTab === tab.id ? "active" : ""}`}
           >
-            {tab.label}
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                activeTab === tab.id ? "bg-blue-500/50 text-white" : "bg-zinc-700 text-zinc-400"
-              }`}
-            >
-              {tab.count}
-            </span>
+            <span>{tab.label}</span>
+            <span className="badge mute">{tab.count}</span>
           </button>
         ))}
       </div>

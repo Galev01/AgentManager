@@ -1370,3 +1370,199 @@ html.compact {
   0%, 80%, 100% { opacity: 0.3; }
   40%           { opacity: 1; }
 }
+
+/* ---------- Tools page primitives ---------- */
+.tools-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.tool-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+.tool-card-h {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tool-card-n {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  word-break: break-word;
+}
+.tool-card-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.tool-card-section {
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+}
+.tool-card-section p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.tool-card-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+.tool-card-params {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tool-card-params li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.tool-card-ptype {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.tool-card-pdesc {
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  padding-left: 2px;
+}
+.tools-tabbar {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-sunken);
+  width: fit-content;
+}
+.tools-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+.tools-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.tools-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tools-tab.active {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.tools-tab.active .badge.mute {
+  background: color-mix(in oklch, var(--accent-fg) 18%, transparent);
+  color: var(--accent-fg);
+}
+
+.add-caps-banner {
+  position: relative;
+  display: flex;
+  gap: 20px;
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--accent-dim), transparent 55%), var(--panel);
+  overflow: hidden;
+}
+.add-caps-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
+}
+.add-caps-main { flex: 1; min-width: 0; }
+.add-caps-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.add-caps-eyebrow .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.add-caps-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.add-caps-desc {
+  color: var(--text-dim);
+  max-width: 60ch;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.add-caps-actions { display: flex; gap: 10px; margin-bottom: 12px; }
+.muted-note {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.tools-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.tools-table thead tr {
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+}
+.tools-table th {
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--border);
+}
+.tools-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+.tools-table tbody tr:last-child td { border-bottom: none; }
+.tools-table tbody tr:hover { background: var(--bg-hover); }
+.tools-table .tools-table-dim { color: var(--text-dim); }
