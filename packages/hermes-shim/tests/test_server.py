@@ -39,3 +39,32 @@ def test_capabilities_shape(client):
     assert "unsupported" in body
     assert "sessions.list" in body["supported"]
     assert any(p["id"] == "logs.tail" for p in body["partial"])
+
+
+def test_sessions_list_requires_auth(client):
+    r = client.get("/v1/sessions")
+    assert r.status_code == 401
+
+
+def test_sessions_list_returns_array(client, monkeypatch):
+    monkeypatch.setattr(
+        "hermes_shim.server._run_hermes_json",
+        lambda args: [{"id": "s1", "name": "demo", "lastActivityAt": 0}],
+    )
+    r = client.get("/v1/sessions", headers={"authorization": "Bearer secret"})
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body, list)
+    assert body[0]["id"] == "s1"
+
+
+def test_session_detail_returns_object(client, monkeypatch):
+    monkeypatch.setattr(
+        "hermes_shim.server._run_hermes_json",
+        lambda args: {"id": "s1", "transcript": [{"role": "user", "text": "hi"}]},
+    )
+    r = client.get("/v1/sessions/s1", headers={"authorization": "Bearer secret"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == "s1"
+    assert body["transcript"][0]["text"] == "hi"
