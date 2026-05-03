@@ -8,11 +8,13 @@ import {
   getRoutingRules,
   getChannels,
 } from "@/lib/bridge-client";
+import { getRuntimeConfig } from "@/lib/runtime-config-client";
 import type {
   RuntimeSettingsV2,
   RelayRecipient,
   RoutingRule,
   Channel,
+  RuntimeConfigSnapshot,
 } from "@openclaw-manager/types";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +26,7 @@ export default async function SettingsPage() {
   let recipients: RelayRecipient[] = [];
   let rules: RoutingRule[] = [];
   let channels: Channel[] = [];
+  let runtimeConfig: RuntimeConfigSnapshot | null = null;
   let bridgeError = false;
 
   try {
@@ -37,6 +40,12 @@ export default async function SettingsPage() {
     bridgeError = true;
   }
 
+  try {
+    runtimeConfig = await getRuntimeConfig();
+  } catch {
+    // bridge unreachable for runtime config — render section in degraded state
+  }
+
   return (
     <AppShell title="Settings">
       {bridgeError && <DegradedBanner />}
@@ -46,6 +55,7 @@ export default async function SettingsPage() {
           initialRecipients={recipients}
           initialRules={rules}
           initialChannels={channels}
+          initialRuntimeConfig={runtimeConfig}
         />
       )}
     </AppShell>
