@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenClaw-Manager Hermes shim
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.hermes/shim.env
+ExecStart=%h/.local/bin/hermes-shim
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=default.target
