@@ -74,3 +74,71 @@ test("disabled runtime has status disabled, probe NOT called", async () => {
   assert.equal(s.runtimes.find((r) => r.id === "hermes-remote")!.status.state, "disabled");
   assert.equal(probeCalls, 1); // only oc-main
 });
+
+test("PATCH toggles enabled; idempotent", async () => {
+  const p = await tempConfig({
+    runtimes: [
+      { id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "x", transport: "sdk", authMode: "token-env", enabled: true },
+      { id: "hermes-remote", kind: "hermes", displayName: "H", endpoint: "y", transport: "http", authMode: "bearer", enabled: false },
+    ],
+  });
+  const svc = createRuntimeConfigService({ configPath: p, probeStatus: probe });
+  const after = await svc.patch({ enabled: { "hermes-remote": true } });
+  assert.equal(after.runtimes.find((r) => r.id === "hermes-remote")!.enabled, true);
+  const again = await svc.patch({ enabled: { "hermes-remote": true } });
+  assert.equal(again.runtimes.find((r) => r.id === "hermes-remote")!.enabled, true);
+});
+
+test("PATCH rejects unknown id with code unknown_runtime_id", async () => {
+  const p = await tempConfig({
+    runtimes: [{ id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "x", transport: "sdk", authMode: "token-env", enabled: true }],
+  });
+  const svc = createRuntimeConfigService({ configPath: p, probeStatus: probe });
+  await assert.rejects(
+    svc.patch({ enabled: { "ghost": true } }),
+    (e: any) => e.code === "unknown_runtime_id",
+  );
+});
+
+test("PATCH rejects disabling all runtimes with code cannot_disable_all", async () => {
+  const p = await tempConfig({
+    runtimes: [{ id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "x", transport: "sdk", authMode: "token-env", enabled: true }],
+  });
+  const svc = createRuntimeConfigService({ configPath: p, probeStatus: probe });
+  await assert.rejects(
+    svc.patch({ enabled: { "oc-main": false } }),
+    (e: any) => e.code === "cannot_disable_all",
+  );
+});
+
+test("PATCH allows configured primary pointing at disabled runtime; fallback applies", async () => {
+  const p = await tempConfig({
+    runtimes: [
+      { id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "x", transport: "sdk", authMode: "token-env", enabled: true },
+      { id: "hermes-remote", kind: "hermes", displayName: "H", endpoint: "y", transport: "http", authMode: "bearer", enabled: false },
+    ],
+  });
+  const svc = createRuntimeConfigService({ configPath: p, probeStatus: probe });
+  const after = await svc.patch({ configuredPrimaryRuntimeId: "hermes-remote" });
+  assert.equal(after.configuredPrimaryRuntimeId, "hermes-remote");
+  assert.equal(after.effectivePrimaryRuntimeId, "oc-main");
+  assert.equal(after.fallbackReason, "configured_primary_disabled");
+});
+
+test("PATCH atomic: change primary AND disable old primary in one call", async () => {
+  const p = await tempConfig({
+    configuredPrimaryRuntimeId: "oc-main",
+    runtimes: [
+      { id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "x", transport: "sdk", authMode: "token-env", enabled: true },
+      { id: "hermes-remote", kind: "hermes", displayName: "H", endpoint: "y", transport: "http", authMode: "bearer", enabled: true },
+    ],
+  });
+  const svc = createRuntimeConfigService({ configPath: p, probeStatus: probe });
+  const after = await svc.patch({
+    configuredPrimaryRuntimeId: "hermes-remote",
+    enabled: { "oc-main": false },
+  });
+  assert.equal(after.configuredPrimaryRuntimeId, "hermes-remote");
+  assert.equal(after.effectivePrimaryRuntimeId, "hermes-remote");
+  assert.equal(after.runtimes.find((r) => r.id === "oc-main")!.enabled, false);
+});
