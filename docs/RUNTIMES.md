@@ -36,6 +36,42 @@ Per-runtime env vars:
 | zeroclaw | `ZEROCLAW_TOKEN` | Bearer for ZeroClaw HTTP API |
 | nanobot | — | MCP-stdio transport; the endpoint `mcp:stdio:<cmd>` is the spawn command |
 
+## runtimes.json — extended schema
+
+The registry now supports selective runtime enablement and configured primary runtime selection:
+
+```json
+{
+  "configuredPrimaryRuntimeId": "oc-main",
+  "runtimes": [
+    { "id": "oc-main", "kind": "openclaw", "displayName": "OpenClaw (local)",
+      "endpoint": "http://127.0.0.1:18789", "transport": "sdk", "authMode": "token-env",
+      "enabled": true },
+    { "id": "hermes-remote", "kind": "hermes", "displayName": "Hermes (192.168.0.10)",
+      "endpoint": "http://127.0.0.1:19119", "transport": "http", "authMode": "bearer",
+      "enabled": false }
+  ]
+}
+```
+
+**`enabled: boolean`** (per runtime, default true if absent — backward compatible) — The bridge queries only enabled runtimes. Useful for staging a runtime offline before full activation.
+
+**`configuredPrimaryRuntimeId: string`** (top-level) — Explicitly designates the primary runtime ID. Validated against existing runtime ids at load time. Falls back to `effectivePrimaryRuntimeId` (computed field) if the configured ID is disabled or missing.
+
+### Deployment: SSH tunnel for Hermes shim
+
+When proxying a remote Hermes instance via SSH tunnel:
+
+```bash
+bridge-host$ ssh -L 19119:127.0.0.1:9119 gal@192.168.0.10
+```
+
+The descriptor's `endpoint` should point at the tunnel entry point: `http://127.0.0.1:19119`.
+
+### Full specification
+
+See `docs/superpowers/specs/2026-05-04-hermes-runtime-integration-design.md` for complete design and validation rules. Shim install/run: `packages/hermes-shim/README.md`.
+
 ## Phase 1 scope vs. Phase 2
 
 Phase 1 (shipped) — full OpenClaw coverage, honest health + describe + capabilities stubs for the other three, one-way action dispatch through `/runtimes/:id/actions`, and a dashboard runtime list + detail view.

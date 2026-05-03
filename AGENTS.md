@@ -322,6 +322,8 @@ OpenClaw-Manager acts as a control plane over multiple local agent runtimes. Pha
 
 Full guide: [`docs/RUNTIMES.md`](docs/RUNTIMES.md).
 
+- Runtime registry now supports `enabled: boolean` per descriptor and a top-level `configuredPrimaryRuntimeId`. See `docs/RUNTIMES.md` and `docs/superpowers/specs/2026-05-04-hermes-runtime-integration-design.md`.
+
 ## Adding a New Feature — Checklist
 
 1. **Types first:** Add any new types to `packages/types/src/index.ts`
