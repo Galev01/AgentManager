@@ -4,6 +4,7 @@ import type {
   RuntimeStatus, FallbackReason, RuntimeConfigPatch,
 } from "@openclaw-manager/types";
 import { assertDescriptor } from "./runtimes/registry.js";
+import type { RuntimeRegistry } from "./runtimes/registry.js";
 
 export class RuntimeConfigError extends Error {
   constructor(public code: "unknown_runtime_id" | "cannot_disable_all", message: string) {
@@ -128,4 +129,19 @@ export function createRuntimeConfigService(deps: RuntimeConfigServiceDeps): Runt
   };
 
   return { read, patch };
+}
+
+export function probeFromRegistry(registry: RuntimeRegistry) {
+  return async (id: string): Promise<RuntimeStatus> => {
+    const a = await registry.adapter(id);
+    if (!a) return { state: "unhealthy", detail: "adapter unavailable" };
+    try {
+      const h = await a.health();
+      return h.ok
+        ? { state: "healthy", detail: h.detail }
+        : { state: "unhealthy", detail: h.detail ?? "unhealthy" };
+    } catch (e) {
+      return { state: "unhealthy", detail: (e as Error).message };
+    }
+  };
 }
