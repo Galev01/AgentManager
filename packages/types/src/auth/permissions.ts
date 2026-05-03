@@ -81,6 +81,7 @@ export const PERMISSION_REGISTRY = {
   "auth.audit.read":            { category: "auth",           label: "Read audit",                description: "View audit log." },
   "runtimes.view":              { category: "runtimes",       label: "View runtimes",             description: "List runtimes + capability snapshots + activity." },
   "runtimes.invoke":            { category: "runtimes",       label: "Invoke runtime actions",    description: "Send actions to a runtime adapter." },
+  "runtimes.config":            { category: "runtimes",       label: "Configure runtimes",        description: "Toggle runtime enable + select primary runtime." },
 } as const satisfies Record<string, Omit<PermissionMeta, "id">>;
 
 export type PermissionId = keyof typeof PERMISSION_REGISTRY;
