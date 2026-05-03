@@ -95,3 +95,19 @@ def sessions_list(_: None = Depends(require_bearer)) -> Any:
 @app.get("/v1/sessions/{session_id}")
 def session_detail(session_id: str, _: None = Depends(require_bearer)) -> Any:
     return _run_hermes_json(["sessions", "show", session_id, "--json"])
+
+
+@app.get("/v1/skills")
+def skills_list(_: None = Depends(require_bearer)) -> Any:
+    return _run_hermes_json(["skills", "list", "--json"])
+
+
+@app.get("/v1/activity")
+def activity(since: int | None = None, limit: int | None = None,
+             _: None = Depends(require_bearer)) -> Any:
+    args = ["logs", "tail", "--json"]
+    if since is not None:
+        args.extend(["--since", str(since)])
+    if limit is not None:
+        args.extend(["--limit", str(limit)])
+    return _run_hermes_json(args)

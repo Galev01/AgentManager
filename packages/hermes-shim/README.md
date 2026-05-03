@@ -82,18 +82,33 @@ chmod 600 ~/.hermes/shim.env
 
 ## API surface
 
-Endpoints are wired in C2-C4. The planned surface is:
-
-- `GET  /v1/health`
-- `GET  /v1/version`
-- `GET  /v1/capabilities`
-- `GET  /v1/sessions`
-- `GET  /v1/sessions/{id}`
-- `GET  /v1/skills`
-- `GET  /v1/activity`
-
 All endpoints require `Authorization: Bearer <HERMES_SHIM_TOKEN>`.
-See C2-C4 commits and the spec doc for details.
+
+| Method | Path                    | Description                                      |
+|--------|-------------------------|--------------------------------------------------|
+| GET    | `/v1/health`            | Liveness check; includes hermes version string   |
+| GET    | `/v1/version`           | Shim version + hermes version                    |
+| GET    | `/v1/capabilities`      | Supported / partial / unsupported feature matrix |
+| GET    | `/v1/sessions`          | List all sessions (`hermes sessions list --json`) |
+| GET    | `/v1/sessions/{id}`     | Session detail + transcript (`hermes sessions show {id} --json`) |
+| GET    | `/v1/skills`            | Installed skills (`hermes skills list --json`)   |
+| GET    | `/v1/activity`          | Recent activity log (`hermes logs tail --json [--since N] [--limit N]`) |
+
+Query parameters for `/v1/activity`:
+
+| Parameter | Type | Description                          |
+|-----------|------|--------------------------------------|
+| `since`   | int  | Return events after this timestamp   |
+| `limit`   | int  | Maximum number of events to return   |
+
+## Hermes CLI flag verification
+
+The CLI flags used by this shim (`sessions list --json`, `sessions show <id> --json`,
+`skills list --json`, `logs tail --json --since <n> --limit <n>`) are derived from
+the integration spec and **have not been validated against the live `hermes` binary**.
+Before deploying to the remote host, run `hermes sessions --help`, `hermes skills --help`,
+and `hermes logs tail --help` to confirm flag names — for example `--json` may be
+`--format=json`, and `--since` may be `--since-ms`.
 
 ## References
 

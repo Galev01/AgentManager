@@ -68,3 +68,25 @@ def test_session_detail_returns_object(client, monkeypatch):
     body = r.json()
     assert body["id"] == "s1"
     assert body["transcript"][0]["text"] == "hi"
+
+
+def test_skills_list(client, monkeypatch):
+    monkeypatch.setattr(
+        "hermes_shim.server._run_hermes_json",
+        lambda args: [{"id": "skill1", "name": "ping", "version": "1.0"}],
+    )
+    r = client.get("/v1/skills", headers={"authorization": "Bearer secret"})
+    assert r.status_code == 200
+    assert r.json()[0]["id"] == "skill1"
+
+
+def test_activity_query_params(client, monkeypatch):
+    captured = {}
+    def fake(args):
+        captured["args"] = args
+        return [{"kind": "message_in", "at": 1, "text": "hello"}]
+    monkeypatch.setattr("hermes_shim.server._run_hermes_json", fake)
+    r = client.get("/v1/activity?since=100&limit=5", headers={"authorization": "Bearer secret"})
+    assert r.status_code == 200
+    assert "100" in captured["args"]
+    assert "5" in captured["args"]
