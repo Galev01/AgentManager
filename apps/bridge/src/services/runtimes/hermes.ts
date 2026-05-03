@@ -49,6 +49,8 @@ export function createHermesAdapter(cfg: AdapterConfig): RuntimeAdapter {
           "agents.read", "sessions.read",
         ],
         version: ADAPTER_CONTRACT_VERSION,
+        source: "static-adapter",
+        stale: false,
       };
     },
     async listEntities(_kind: RuntimeEntityKind): Promise<RuntimeEntity[]> { return []; },

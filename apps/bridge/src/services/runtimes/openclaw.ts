@@ -26,7 +26,7 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
   return {
     async describeRuntime() { return descriptor; },
     async getCapabilities(): Promise<CapabilitySnapshot> {
-      return { supported, partial: [], unsupported: ["memory.query", "memory.write"], version: ADAPTER_CONTRACT_VERSION };
+      return { supported, partial: [], unsupported: ["memory.query", "memory.write"], version: ADAPTER_CONTRACT_VERSION, source: "runtime-reported", stale: false };
     },
     async listEntities(kind: RuntimeEntityKind): Promise<RuntimeEntity[]> {
       if (kind === "agent") {

@@ -64,6 +64,8 @@ export function createNanobotAdapter(cfg: AdapterConfig, deps: NanobotAdapterDep
           "logs.tail", "config.get", "config.set",
         ],
         version: ADAPTER_CONTRACT_VERSION,
+        source: "runtime-reported",
+        stale: false,
       };
     },
     async listEntities(kind: RuntimeEntityKind): Promise<RuntimeEntity[]> {
