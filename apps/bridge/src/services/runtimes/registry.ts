@@ -9,7 +9,7 @@ type RegistryInternal = {
   adapters: Map<string, RuntimeAdapter>;
 };
 
-function assertDescriptor(d: unknown): asserts d is RuntimeDescriptor {
+export function assertDescriptor(d: unknown): asserts d is RuntimeDescriptor {
   const o = d as Record<string, unknown>;
   if (!o || typeof o.id !== "string" || typeof o.kind !== "string"
     || typeof o.displayName !== "string" || typeof o.endpoint !== "string"

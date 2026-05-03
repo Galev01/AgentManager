@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
 import type {
   RuntimeDescriptor, RuntimeConfigSnapshot, RuntimeConfigDescriptor,
-  RuntimeStatus, FallbackReason, RuntimeKind,
+  RuntimeStatus, FallbackReason,
 } from "@openclaw-manager/types";
+import { assertDescriptor } from "./runtimes/registry.js";
 
 type FileShape = {
   configuredPrimaryRuntimeId?: string | null;
@@ -17,18 +18,6 @@ export type RuntimeConfigServiceDeps = {
 export type RuntimeConfigService = {
   read(): Promise<RuntimeConfigSnapshot>;
 };
-
-function assertDescriptor(d: unknown): asserts d is RuntimeDescriptor {
-  const o = d as Record<string, unknown>;
-  if (!o || typeof o.id !== "string" || typeof o.kind !== "string"
-    || typeof o.displayName !== "string" || typeof o.endpoint !== "string"
-    || typeof o.transport !== "string" || typeof o.authMode !== "string") {
-    throw new Error("invalid runtime config: missing required descriptor field");
-  }
-  if (!["openclaw", "hermes", "zeroclaw", "nanobot"].includes(o.kind as RuntimeKind)) {
-    throw new Error(`invalid runtime config: unknown kind '${o.kind}'`);
-  }
-}
 
 async function loadFile(configPath: string): Promise<FileShape> {
   let raw: string;
@@ -47,11 +36,13 @@ async function loadFile(configPath: string): Promise<FileShape> {
   };
 }
 
+type NormalizedDescriptor = RuntimeDescriptor & { enabled: boolean };
+
 function computeEffective(
-  descriptors: RuntimeDescriptor[],
+  descriptors: NormalizedDescriptor[],
   configured: string | null | undefined,
 ): { effective: string | null; reason: FallbackReason | null } {
-  const enabled = descriptors.filter((d) => (d.enabled ?? true));
+  const enabled = descriptors.filter((d) => d.enabled);
   const fallbackPick = () => {
     const oc = enabled.find((d) => d.kind === "openclaw");
     return oc?.id ?? enabled[0]?.id ?? null;
@@ -63,7 +54,7 @@ function computeEffective(
   if (!target) {
     return { effective: fallbackPick(), reason: "configured_primary_missing" };
   }
-  if (!(target.enabled ?? true)) {
+  if (!target.enabled) {
     return { effective: fallbackPick(), reason: "configured_primary_disabled" };
   }
   return { effective: target.id, reason: null };
@@ -83,7 +74,7 @@ export function createRuntimeConfigService(deps: RuntimeConfigServiceDeps): Runt
         }),
       );
 
-      const { effective, reason } = computeEffective(descriptors, file.configuredPrimaryRuntimeId ?? null);
+      const { effective, reason } = computeEffective(descriptors, file.configuredPrimaryRuntimeId);
       return {
         configuredPrimaryRuntimeId: file.configuredPrimaryRuntimeId ?? null,
         effectivePrimaryRuntimeId: effective,
