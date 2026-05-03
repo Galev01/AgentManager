@@ -1,4 +1,5 @@
 """FastAPI app for the Hermes shim. Endpoints are wired in C2-C4."""
+import json
 import os
 import shutil
 import subprocess
@@ -60,9 +61,6 @@ def capabilities(_: None = Depends(require_bearer)) -> dict[str, Any]:
             "config.get", "config.set", "agents.list", "agents.read",
         ],
     }
-
-
-import json
 
 
 # TODO(verify): exact `hermes` subcommand flags below are based on the spec/plan

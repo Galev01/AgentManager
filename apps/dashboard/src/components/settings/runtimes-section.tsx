@@ -23,7 +23,23 @@ export function RuntimesSection({ snapshot }: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const text = await res.text();
+        let friendly: string;
+        try {
+          const body = JSON.parse(text) as { error?: string; detail?: string };
+          if (body.error === "cannot_disable_all") {
+            friendly = "At least one runtime must remain enabled.";
+          } else if (body.error === "unknown_runtime_id") {
+            friendly = body.detail ? `Unknown runtime id: ${body.detail}` : "Unknown runtime id.";
+          } else {
+            friendly = text;
+          }
+        } catch {
+          friendly = text;
+        }
+        throw new Error(friendly);
+      }
       const next: RuntimeConfigSnapshot = await res.json();
       setLocal(next);
       startTransition(() => router.refresh());

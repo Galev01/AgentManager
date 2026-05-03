@@ -75,7 +75,7 @@ export function createRuntimeConfigService(deps: RuntimeConfigServiceDeps): Runt
 
     const probed: RuntimeConfigDescriptor[] = await Promise.all(
       descriptors.map(async (d) => {
-        if (!d.enabled) return { ...d, status: { state: "disabled" } as RuntimeStatus };
+        if (!d.enabled) return { ...d, status: { state: "disabled" } };
         const status = await deps.probeStatus(d.id);
         return { ...d, status };
       }),

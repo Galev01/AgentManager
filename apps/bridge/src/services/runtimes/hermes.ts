@@ -50,7 +50,8 @@ export function createHermesAdapter(cfg: AdapterConfig): RuntimeAdapter {
           source: "runtime-reported",
           stale: false,
         };
-      } catch {
+      } catch (e) {
+        console.warn("hermes: capabilities shim unreachable, using static fallback:", (e as Error).message);
         return {
           supported: [...STATIC_CAPS.supported],
           partial: [...STATIC_CAPS.partial],

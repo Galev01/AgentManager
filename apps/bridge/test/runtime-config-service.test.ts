@@ -125,6 +125,19 @@ test("PATCH allows configured primary pointing at disabled runtime; fallback app
   assert.equal(after.fallbackReason, "configured_primary_disabled");
 });
 
+test("PATCH on legacy file (no enabled fields) — disabling last truly-enabled descriptor is rejected", async () => {
+  const p = await tempConfig({
+    runtimes: [
+      { id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "x", transport: "sdk", authMode: "token-env" },
+    ],
+  });
+  const svc = createRuntimeConfigService({ configPath: p, probeStatus: probe });
+  await assert.rejects(
+    svc.patch({ enabled: { "oc-main": false } }),
+    (e: any) => e.code === "cannot_disable_all",
+  );
+});
+
 test("PATCH atomic: change primary AND disable old primary in one call", async () => {
   const p = await tempConfig({
     configuredPrimaryRuntimeId: "oc-main",
