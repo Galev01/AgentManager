@@ -31,6 +31,8 @@ import { createTelemetryRouter } from "./routes/telemetry.js";
 import { createRuntimeRegistry } from "./services/runtimes/registry.js";
 import { realFactories } from "./services/runtimes/factories.js";
 import { createRuntimesRouter } from "./routes/runtimes.js";
+import { createRuntimeConfigRouter } from "./routes/runtime-config.js";
+import { createRuntimeConfigService, probeFromRegistry } from "./services/runtime-config.js";
 import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
 import { scanProjects } from "./services/codebase-reviewer/discovery.js";
 import { repairOnStartup as repairYoutubeOnStartup } from "./services/youtube-worker.js";
@@ -108,6 +110,12 @@ app.use(createRuntimesRouter({
   registry: runtimeRegistry,
   managerServiceId: process.env.BRIDGE_SERVICE_ID ?? "bridge-primary",
 }));
+
+const runtimeConfigService = createRuntimeConfigService({
+  configPath: config.runtimesConfigPath,
+  probeStatus: probeFromRegistry(runtimeRegistry),
+});
+app.use(createRuntimeConfigRouter({ service: runtimeConfigService }));
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
