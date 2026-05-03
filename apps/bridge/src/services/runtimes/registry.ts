@@ -38,7 +38,10 @@ export async function createRuntimeRegistry(cfg: RegistryConfig): Promise<Runtim
 
   if (!parsed.runtimes || !Array.isArray(parsed.runtimes)) throw new Error("invalid runtime config: runtimes array missing");
   parsed.runtimes.forEach(assertDescriptor);
-  const descriptors = parsed.runtimes as RuntimeDescriptor[];
+  const descriptors: RuntimeDescriptor[] = (parsed.runtimes as RuntimeDescriptor[]).map((d) => ({
+    ...d,
+    enabled: d.enabled ?? true,
+  }));
 
   const state: RegistryInternal = { descriptors, adapters: new Map() };
   const factories = cfg.factories ?? {};

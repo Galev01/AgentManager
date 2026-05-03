@@ -25,6 +25,22 @@ test("registry loads config + lists descriptors", async () => {
   assert.equal(await reg.get("missing"), null);
 });
 
+async function tempJsonFile(data: unknown): Promise<string> {
+  const dir = await mkdtemp(path.join(tmpdir(), "reg-"));
+  const file = path.join(dir, "runtimes.json");
+  await writeFile(file, JSON.stringify(data));
+  return file;
+}
+
+test("registry treats missing enabled as true", async () => {
+  const p = await tempJsonFile({
+    runtimes: [{ id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "x", transport: "sdk", authMode: "token-env" }],
+  });
+  const r = await createRuntimeRegistry({ configPath: p });
+  const list = await r.list();
+  assert.equal(list[0].enabled, true);
+});
+
 test("registry rejects malformed config", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "reg-"));
   const cfg = path.join(dir, "runtimes.json");
