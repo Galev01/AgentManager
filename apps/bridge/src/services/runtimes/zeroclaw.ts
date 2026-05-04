@@ -44,6 +44,8 @@ export function createZeroclawAdapter(cfg: AdapterConfig): RuntimeAdapter {
           "agents.read", "sessions.read", "sessions.list", "config.get",
         ],
         version: ADAPTER_CONTRACT_VERSION,
+        source: "static-adapter",
+        stale: false,
       };
     },
     async listEntities(_kind: RuntimeEntityKind): Promise<RuntimeEntity[]> { return []; },

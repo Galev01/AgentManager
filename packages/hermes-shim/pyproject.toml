@@ -1,0 +1,20 @@
+[project]
+name = "openclaw-hermes-shim"
+version = "0.1.0"
+description = "HTTP shim exposing a curated subset of Hermes Agent CLI for OpenClaw-Manager."
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "pydantic>=2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+hermes-shim = "hermes_shim.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hermes_shim*"]

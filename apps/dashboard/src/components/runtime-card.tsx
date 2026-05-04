@@ -4,9 +4,11 @@ import type { RuntimeDescriptor } from "@openclaw-manager/types";
 export function RuntimeCard({
   descriptor,
   healthy,
+  isPrimary,
 }: {
   descriptor: RuntimeDescriptor;
   healthy: boolean | null;
+  isPrimary?: boolean;
 }) {
   const dot =
     healthy === true
@@ -24,8 +26,11 @@ export function RuntimeCard({
           <div className="text-sm uppercase tracking-wide text-neutral-400">
             {descriptor.kind}
           </div>
-          <div className="text-lg font-semibold text-neutral-100">
+          <div className="flex items-center gap-2 text-lg font-semibold text-neutral-100">
             {descriptor.displayName}
+            {isPrimary && (
+              <span className="ml-2 rounded bg-emerald-700/30 border border-emerald-700/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">primary</span>
+            )}
           </div>
           <div className="text-xs text-neutral-500 mt-1">{descriptor.endpoint}</div>
         </div>

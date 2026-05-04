@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { RuntimeCard } from "@/components/runtime-card";
-import { listRuntimes, getRuntime } from "@/lib/runtime-client";
+import { RuntimeFallbackBanner } from "@/components/runtime-fallback-banner";
+import { getRuntimeConfig } from "@/lib/runtime-config-client";
 import { requirePermission } from "@/lib/auth/current-user";
 
 export const metadata = { title: "Runtimes" };
@@ -8,16 +9,12 @@ export const dynamic = "force-dynamic";
 
 export default async function RuntimesPage() {
   await requirePermission("runtimes.view");
-  const descriptors = await listRuntimes();
-  const withHealth = await Promise.all(
-    descriptors.map(async (d) => {
-      try {
-        const r = await getRuntime(d.id);
-        return { d, healthy: r.health.ok as boolean | null };
-      } catch {
-        return { d, healthy: null as boolean | null };
-      }
-    }),
+  const cfg = await getRuntimeConfig();
+  const enabled = cfg.runtimes.filter((r) => r.enabled);
+  // primary first
+  enabled.sort((a, b) =>
+    a.id === cfg.effectivePrimaryRuntimeId ? -1 :
+    b.id === cfg.effectivePrimaryRuntimeId ? 1 : 0,
   );
 
   return (
@@ -25,18 +22,26 @@ export default async function RuntimesPage() {
       <div className="p-6 space-y-4">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-100">Runtimes</h1>
-          <p className="text-sm text-neutral-400">
-            Local agent runtimes wired into this manager.
-          </p>
+          <p className="text-sm text-neutral-400">Local agent runtimes wired into this manager.</p>
         </div>
-        {withHealth.length === 0 ? (
+        <RuntimeFallbackBanner
+          reason={cfg.fallbackReason}
+          configured={cfg.configuredPrimaryRuntimeId}
+          effective={cfg.effectivePrimaryRuntimeId}
+        />
+        {enabled.length === 0 ? (
           <div className="text-neutral-400 text-sm">
-            No runtimes configured. Edit <code>runtimes.json</code> on the bridge host.
+            No enabled runtimes. Enable one in <a href="/settings" className="underline">Settings</a>.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {withHealth.map(({ d, healthy }) => (
-              <RuntimeCard key={d.id} descriptor={d} healthy={healthy} />
+            {enabled.map((r) => (
+              <RuntimeCard
+                key={r.id}
+                descriptor={r}
+                healthy={r.status.state === "healthy" ? true : r.status.state === "unhealthy" ? false : null}
+                isPrimary={r.id === cfg.effectivePrimaryRuntimeId}
+              />
             ))}
           </div>
         )}

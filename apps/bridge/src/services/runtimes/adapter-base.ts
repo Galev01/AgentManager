@@ -40,7 +40,7 @@ export type AdapterConfig = {
 export const ADAPTER_CONTRACT_VERSION = "1.0.0";
 
 export function emptyCapabilities(): CapabilitySnapshot {
-  return { supported: [], partial: [], unsupported: [], version: ADAPTER_CONTRACT_VERSION };
+  return { supported: [], partial: [], unsupported: [], version: ADAPTER_CONTRACT_VERSION, source: "static-adapter", stale: false };
 }
 
 export type AdapterFactory = (cfg: AdapterConfig) => RuntimeAdapter;

@@ -1,52 +1,92 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHermesAdapter } from "../src/services/runtimes/hermes.js";
-import type { RuntimeDescriptor, JsonValue } from "@openclaw-manager/types";
 import type { HttpClient } from "../src/services/runtimes/adapter-base.js";
+import type { RuntimeDescriptor } from "@openclaw-manager/types";
 
 const desc: RuntimeDescriptor = {
-  id: "hermes-dev", kind: "hermes", displayName: "Hermes",
-  endpoint: "http://fake:1", transport: "http", authMode: "bearer",
+  id: "hermes-remote",
+  kind: "hermes",
+  displayName: "Hermes",
+  endpoint: "http://127.0.0.1:19119",
+  transport: "http",
+  authMode: "bearer",
 };
 
-function http(handler: (url: string, init: any) => Promise<JsonValue>): HttpClient {
-  return { json: (url, init) => handler(url, init) };
+function fakeHttp(routes: Record<string, unknown>): HttpClient {
+  return {
+    async json(url, _req) {
+      const path = url.replace(/^https?:\/\/[^/]+/, "");
+      if (!(path in routes)) throw new Error(`no fake for ${path}`);
+      return routes[path] as any;
+    },
+  };
 }
 
-test("hermes adapter health OK when probe returns 2xx", async () => {
+test("getCapabilities reports runtime-reported on success", async () => {
   const a = createHermesAdapter({
-    descriptor: desc, bearer: "tok",
-    http: http(async (url) => { if (/\/health$/.test(url)) return { ok: true }; throw new Error("unexpected"); }),
+    descriptor: desc,
+    bearer: "tok",
+    http: fakeHttp({
+      "/v1/capabilities": {
+        supported: ["sessions.list", "sessions.read", "skills.list"],
+        partial: [{ id: "logs.tail", reason: "lossy", projectionMode: "inferred", lossiness: "lossy" }],
+        unsupported: [],
+      },
+    }),
   });
-  assert.equal((await a.health()).ok, true);
+  const caps = await a.getCapabilities();
+  assert.equal(caps.source, "runtime-reported");
+  assert.equal(caps.stale, false);
 });
 
-test("hermes adapter health surfaces error detail when probe fails", async () => {
+test("getCapabilities returns static-adapter snapshot when shim down", async () => {
   const a = createHermesAdapter({
-    descriptor: desc, bearer: "tok",
-    http: http(async () => { throw new Error("502: upstream"); }),
+    descriptor: desc,
+    bearer: "tok",
+    http: { json: async () => { throw new Error("network down"); } },
   });
-  const h = await a.health();
-  assert.equal(h.ok, false);
-  assert.match(h.detail ?? "", /502/);
+  const caps = await a.getCapabilities();
+  assert.equal(caps.source, "static-adapter");
+  assert.equal(caps.stale, true);
+  assert.ok(caps.supported.includes("sessions.list"));
 });
 
-test("hermes adapter respects healthPath override (empty string disables probe)", async () => {
+test("listEntities('session') hits /v1/sessions", async () => {
   const a = createHermesAdapter({
-    descriptor: { ...desc, healthPath: "" }, bearer: "tok",
-    http: http(async () => { throw new Error("should not be called"); }),
+    descriptor: desc,
+    bearer: "tok",
+    http: fakeHttp({
+      "/v1/sessions": [{ id: "s1", name: "demo", lastActivityAt: 1 }],
+    }),
+  });
+  const ents = await a.listEntities("session");
+  assert.equal(ents[0].entityId, "s1");
+  assert.equal(ents[0].entityKind, "session");
+  assert.equal(ents[0].runtimeKind, "hermes");
+});
+
+test("listEntities('agent') returns []", async () => {
+  const a = createHermesAdapter({ descriptor: desc, bearer: "tok", http: fakeHttp({}) });
+  assert.deepEqual(await a.listEntities("agent"), []);
+});
+
+test("invokeAction always returns ok:false in Phase 1", async () => {
+  const a = createHermesAdapter({ descriptor: desc, bearer: "tok", http: fakeHttp({}) });
+  const r = await a.invokeAction({
+    action: "sessions.send",
+    payload: {},
+    actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" },
+  });
+  assert.equal(r.ok, false);
+});
+
+test("health hits /v1/health", async () => {
+  const a = createHermesAdapter({
+    descriptor: desc,
+    bearer: "tok",
+    http: fakeHttp({ "/v1/health": { ok: true, hermes_version: "1.0" } }),
   });
   const h = await a.health();
   assert.equal(h.ok, true);
-  assert.match(h.detail ?? "", /probe disabled/);
-});
-
-test("hermes adapter reports honest stub capabilities with reasons", async () => {
-  const a = createHermesAdapter({ descriptor: desc, bearer: "tok" });
-  const caps = await a.getCapabilities();
-  assert.ok(caps.unsupported.includes("sessions.send"), "Phase 1 must not claim write support");
-  const part = caps.partial.find((p) => p.id === "agents.list");
-  assert.ok(part);
-  assert.match(part!.reason, /stub/i);
-  assert.equal(part!.lossiness, "lossy");
 });

@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { CapabilityBadges } from "@/components/capability-badges";
 import { RuntimeActivityList } from "@/components/runtime-activity-list";
 import { getRuntime, getCapabilities, listActivity } from "@/lib/runtime-client";
+import { getRuntimeConfig } from "@/lib/runtime-config-client";
 import { requirePermission } from "@/lib/auth/current-user";
 import type {
   CapabilitySnapshot,
@@ -28,6 +29,31 @@ export default async function RuntimeDetail({
 }) {
   await requirePermission("runtimes.view");
   const { runtimeId } = await params;
+
+  let isDisabled = false;
+  try {
+    const cfg = await getRuntimeConfig();
+    const desc = cfg.runtimes.find((r) => r.id === runtimeId);
+    isDisabled = desc ? !desc.enabled : false;
+  } catch {
+    // bridge unreachable — fall back to existing behavior
+  }
+
+  if (isDisabled) {
+    return (
+      <AppShell title={`Runtime: ${runtimeId}`}>
+        <div className="p-6 space-y-4">
+          <div className="rounded border border-neutral-700 bg-neutral-900 p-3 text-sm text-neutral-300">
+            This runtime is disabled in{" "}
+            <a href="/settings" className="underline">
+              Settings
+            </a>
+            . Probes are skipped.
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   let info: { descriptor: RuntimeDescriptor; health: { ok: boolean; detail?: string } };
   try {

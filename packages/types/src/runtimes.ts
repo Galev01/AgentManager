@@ -20,6 +20,7 @@ export type RuntimeDescriptor = {
   authMode: "bearer" | "token-env" | "mcp-none";
   healthPath?: string;           // override default "/health" when the runtime uses a different probe path
   notes?: string;
+  enabled?: boolean;             // missing = true (back-compat)
 };
 
 export type CapabilityId =
@@ -44,12 +45,40 @@ export type PartialCapability = {
   lossiness: Lossiness;
 };
 
+export type RuntimeStatus =
+  | { state: "disabled" }
+  | { state: "healthy"; detail?: string }
+  | { state: "unhealthy"; detail: string };
+
 export type CapabilitySnapshot = {
   supported: CapabilityId[];
   partial: PartialCapability[];
   unsupported: CapabilityId[];
   version: string;                 // adapter contract version
   runtimeVersion?: string;         // reported by the runtime if available
+  source: "runtime-reported" | "static-adapter";
+  stale: boolean;
+};
+
+export type FallbackReason =
+  | "configured_primary_disabled"
+  | "configured_primary_missing";
+
+export type RuntimeConfigDescriptor = RuntimeDescriptor & {
+  enabled: boolean;             // resolved (defaulted) by registry/service
+  status: RuntimeStatus;
+};
+
+export type RuntimeConfigSnapshot = {
+  configuredPrimaryRuntimeId: string | null;
+  effectivePrimaryRuntimeId: string | null;
+  fallbackReason: FallbackReason | null;
+  runtimes: RuntimeConfigDescriptor[];
+};
+
+export type RuntimeConfigPatch = {
+  configuredPrimaryRuntimeId?: string;
+  enabled?: { [runtimeId: string]: boolean };
 };
 
 export type RuntimeEntityKind =
