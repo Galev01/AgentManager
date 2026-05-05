@@ -1,4 +1,3 @@
-import os
 import pytest
 from fastapi.testclient import TestClient
 
@@ -6,7 +5,6 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("HERMES_SHIM_TOKEN", "secret")
-    # late import so env is in place
     from hermes_shim.server import app
     return TestClient(app)
 
@@ -46,47 +44,30 @@ def test_sessions_list_requires_auth(client):
     assert r.status_code == 401
 
 
-def test_sessions_list_returns_array(client, monkeypatch):
-    monkeypatch.setattr(
-        "hermes_shim.server._run_hermes_json",
-        lambda args: [{"id": "s1", "name": "demo", "lastActivityAt": 0}],
-    )
+def test_sessions_list_phase1_stub_returns_empty(client):
     r = client.get("/v1/sessions", headers={"authorization": "Bearer secret"})
     assert r.status_code == 200
-    body = r.json()
-    assert isinstance(body, list)
-    assert body[0]["id"] == "s1"
+    assert r.json() == []
 
 
-def test_session_detail_returns_object(client, monkeypatch):
-    monkeypatch.setattr(
-        "hermes_shim.server._run_hermes_json",
-        lambda args: {"id": "s1", "transcript": [{"role": "user", "text": "hi"}]},
-    )
-    r = client.get("/v1/sessions/s1", headers={"authorization": "Bearer secret"})
-    assert r.status_code == 200
-    body = r.json()
-    assert body["id"] == "s1"
-    assert body["transcript"][0]["text"] == "hi"
+def test_session_detail_phase1_stub_returns_404(client):
+    r = client.get("/v1/sessions/anything", headers={"authorization": "Bearer secret"})
+    assert r.status_code == 404
 
 
-def test_skills_list(client, monkeypatch):
-    monkeypatch.setattr(
-        "hermes_shim.server._run_hermes_json",
-        lambda args: [{"id": "skill1", "name": "ping", "version": "1.0"}],
-    )
+def test_skills_list_phase1_stub_returns_empty(client):
     r = client.get("/v1/skills", headers={"authorization": "Bearer secret"})
     assert r.status_code == 200
-    assert r.json()[0]["id"] == "skill1"
+    assert r.json() == []
 
 
-def test_activity_query_params(client, monkeypatch):
-    captured = {}
-    def fake(args):
-        captured["args"] = args
-        return [{"kind": "message_in", "at": 1, "text": "hello"}]
-    monkeypatch.setattr("hermes_shim.server._run_hermes_json", fake)
+def test_activity_phase1_stub_returns_empty(client):
+    r = client.get("/v1/activity", headers={"authorization": "Bearer secret"})
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_activity_accepts_query_params(client):
     r = client.get("/v1/activity?since=100&limit=5", headers={"authorization": "Bearer secret"})
     assert r.status_code == 200
-    assert "100" in captured["args"]
-    assert "5" in captured["args"]
+    assert r.json() == []

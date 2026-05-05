@@ -84,31 +84,38 @@ chmod 600 ~/.hermes/shim.env
 
 All endpoints require `Authorization: Bearer <HERMES_SHIM_TOKEN>`.
 
-| Method | Path                    | Description                                      |
+| Method | Path                    | Phase 1 behavior                                 |
 |--------|-------------------------|--------------------------------------------------|
 | GET    | `/v1/health`            | Liveness check; includes hermes version string   |
 | GET    | `/v1/version`           | Shim version + hermes version                    |
 | GET    | `/v1/capabilities`      | Supported / partial / unsupported feature matrix |
-| GET    | `/v1/sessions`          | List all sessions (`hermes sessions list --json`) |
-| GET    | `/v1/sessions/{id}`     | Session detail + transcript (`hermes sessions show {id} --json`) |
-| GET    | `/v1/skills`            | Installed skills (`hermes skills list --json`)   |
-| GET    | `/v1/activity`          | Recent activity log (`hermes logs tail --json [--since N] [--limit N]`) |
+| GET    | `/v1/sessions`          | Stub: returns `[]`                               |
+| GET    | `/v1/sessions/{id}`     | Stub: returns 404                                |
+| GET    | `/v1/skills`            | Stub: returns `[]`                               |
+| GET    | `/v1/activity`          | Stub: returns `[]` (accepts `since` + `limit`)   |
 
 Query parameters for `/v1/activity`:
 
 | Parameter | Type | Description                          |
 |-----------|------|--------------------------------------|
-| `since`   | int  | Return events after this timestamp   |
-| `limit`   | int  | Maximum number of events to return   |
+| `since`   | int  | Reserved for Phase 2; currently ignored |
+| `limit`   | int  | Reserved for Phase 2; currently ignored |
 
-## Hermes CLI flag verification
+## Phase 1 vs Phase 2 — entity endpoints are stubbed
 
-The CLI flags used by this shim (`sessions list --json`, `sessions show <id> --json`,
-`skills list --json`, `logs tail --json --since <n> --limit <n>`) are derived from
-the integration spec and **have not been validated against the live `hermes` binary**.
-Before deploying to the remote host, run `hermes sessions --help`, `hermes skills --help`,
-and `hermes logs tail --help` to confirm flag names — for example `--json` may be
-`--format=json`, and `--since` may be `--since-ms`.
+Live verification of the Hermes CLI on 2026-05-06 showed:
+
+- No `--json` flag on `sessions list`, `skills list`, or `logs tail`.
+- No `sessions show` subcommand at all (the available actions are `list`, `export`,
+  `delete`, `prune`, `stats`, `rename`, `browse`).
+
+Until the entity endpoints are reimplemented against native data sources
+(`~/.hermes/sessions/*.json`, `hermes sessions export <out> --session-id <id>`,
+`~/.hermes/state.db`, or `~/.hermes/logs/*.log`), the sessions / skills /
+activity endpoints return empty results. The runtime adapter declares the
+matching capabilities at the *contract* level (`sessions.list`, `sessions.read`,
+`skills.list` supported; `logs.tail` partial) so a Phase-2 swap is a
+shim-internal change with no contract break.
 
 ## References
 

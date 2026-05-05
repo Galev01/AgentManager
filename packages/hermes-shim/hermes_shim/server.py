@@ -1,5 +1,15 @@
-"""FastAPI app for the Hermes shim. Endpoints are wired in C2-C4."""
-import json
+"""FastAPI app for the Hermes shim.
+
+Live verification (2026-05-06) showed the Hermes CLI does not expose a `--json`
+flag on `sessions list`, `skills list`, or `logs tail`, and there is no
+`sessions show` subcommand at all. Until those endpoints are reimplemented to
+read native sources (e.g. `~/.hermes/sessions/*.json`, `hermes sessions export`,
+`~/.hermes/logs/*.log`, or a SQLite query against `~/.hermes/state.db`), the
+sessions / skills / activity endpoints return empty arrays. This is honest
+Phase-1 behavior — the runtime adapter already declares these capabilities as
+`supported` (sessions) / `partial` (logs.tail) at the *contract* level, but
+real entity data is Phase 2.
+"""
 import os
 import shutil
 import subprocess
@@ -63,49 +73,23 @@ def capabilities(_: None = Depends(require_bearer)) -> dict[str, Any]:
     }
 
 
-# TODO(verify): exact `hermes` subcommand flags below are based on the spec/plan
-# and have not been validated against the live `hermes --help` output. Before
-# deploying, run `hermes sessions --help` / `hermes skills --help` / `hermes
-# logs tail --help` on the remote host and adjust the arg lists if needed
-# (e.g. `--json` may be `--format=json`, `--since` may be `--since-ms`, etc.).
-def _hermes_bin() -> str:
-    return shutil.which("hermes") or os.path.expanduser("~/.local/bin/hermes")
-
-
-def _run_hermes_json(args: list[str]) -> Any:
-    """Run hermes CLI and parse JSON stdout. Override in tests via monkeypatch."""
-    out = subprocess.run(
-        [_hermes_bin(), *args], capture_output=True, text=True, timeout=15,
-    )
-    if out.returncode != 0:
-        raise HTTPException(status_code=502, detail=f"hermes CLI failed: {out.stderr.strip()[:300]}")
-    try:
-        return json.loads(out.stdout) if out.stdout.strip() else []
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=502, detail=f"hermes CLI returned non-JSON: {e}")
-
-
+# Phase-1 stubs — return empty results. See module docstring for the Phase-2 plan.
 @app.get("/v1/sessions")
-def sessions_list(_: None = Depends(require_bearer)) -> Any:
-    return _run_hermes_json(["sessions", "list", "--json"])
+def sessions_list(_: None = Depends(require_bearer)) -> list[Any]:
+    return []
 
 
 @app.get("/v1/sessions/{session_id}")
-def session_detail(session_id: str, _: None = Depends(require_bearer)) -> Any:
-    return _run_hermes_json(["sessions", "show", session_id, "--json"])
+def session_detail(session_id: str, _: None = Depends(require_bearer)) -> dict[str, Any]:
+    raise HTTPException(status_code=404, detail="session not found (Phase-1 stub)")
 
 
 @app.get("/v1/skills")
-def skills_list(_: None = Depends(require_bearer)) -> Any:
-    return _run_hermes_json(["skills", "list", "--json"])
+def skills_list(_: None = Depends(require_bearer)) -> list[Any]:
+    return []
 
 
 @app.get("/v1/activity")
 def activity(since: int | None = None, limit: int | None = None,
-             _: None = Depends(require_bearer)) -> Any:
-    args = ["logs", "tail", "--json"]
-    if since is not None:
-        args.extend(["--since", str(since)])
-    if limit is not None:
-        args.extend(["--limit", str(limit)])
-    return _run_hermes_json(args)
+             _: None = Depends(require_bearer)) -> list[Any]:
+    return []
