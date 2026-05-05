@@ -3,6 +3,7 @@ import { Header } from "./header";
 import { PermissionProvider } from "./permission-gate";
 import { getClaudeCodeEscalationCount } from "@/lib/bridge-client";
 import { getCurrentUser, getEffectivePermissions } from "@/lib/auth/current-user";
+import { CopilotLauncher } from "@/components/copilot/launcher";
 
 export async function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
   const [decisionCount, currentUser, permissions] = await Promise.all([
@@ -28,6 +29,7 @@ export async function AppShell({ title, children }: { title: string; children: R
           <PermissionProvider permissions={permissions}>{children}</PermissionProvider>
         </main>
       </div>
+      <CopilotLauncher defaultBackend={currentUser?.preferences?.copilot?.defaultBackend ?? "openclaw"} />
     </div>
   );
 }

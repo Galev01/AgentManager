@@ -1,6 +1,14 @@
 import type { PermissionId } from "./permissions.js";
 
 export type AuthUserStatus = "active" | "disabled";
+
+export type CopilotUserPreferences = {
+  defaultBackend?: "openclaw" | "hermes";
+};
+
+export type UserPreferences = {
+  copilot?: CopilotUserPreferences;
+};
 export type AuthGrantKind = "allow" | "deny";
 export type AuthGrant = { permissionId: PermissionId; kind: AuthGrantKind };
 
@@ -29,6 +37,7 @@ export type AuthUser = {
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string;
+  preferences?: UserPreferences;
 };
 
 export type AuthUserPublic = Omit<AuthUser, "local" | "usernameKey"> & {
@@ -64,6 +73,7 @@ export type AuthUserUpdateInput = {
   status?: AuthUserStatus;
   roleIds?: string[];
   grants?: AuthGrant[];
+  preferences?: UserPreferences;
 };
 
 export type AuthRoleCreateInput = { name: string; description?: string; grants?: PermissionId[] };

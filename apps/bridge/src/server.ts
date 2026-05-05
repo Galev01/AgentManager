@@ -33,6 +33,13 @@ import { realFactories } from "./services/runtimes/factories.js";
 import { createRuntimesRouter } from "./routes/runtimes.js";
 import { createRuntimeConfigRouter } from "./routes/runtime-config.js";
 import { createRuntimeConfigService, probeFromRegistry } from "./services/runtime-config.js";
+import { createCopilotRouter } from "./routes/copilot.js";
+import { createCopilotStore } from "./services/copilot/store.js";
+import { createCopilotOrchestrator } from "./services/copilot/orchestrator.js";
+import { createOpenclawChatBackend } from "./services/copilot/backends/openclaw.js";
+import { createHermesChatBackend } from "./services/copilot/backends/hermes.js";
+import { callGateway } from "./services/gateway.js";
+import path from "node:path";
 import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
 import { scanProjects } from "./services/codebase-reviewer/discovery.js";
 import { repairOnStartup as repairYoutubeOnStartup } from "./services/youtube-worker.js";
@@ -117,6 +124,24 @@ const runtimeConfigService = createRuntimeConfigService({
 });
 app.use(createRuntimeConfigRouter({ service: runtimeConfigService }));
 
+const copilotRoot = path.join(config.managementDir, "copilot");
+const copilotStore = createCopilotStore({ rootDir: copilotRoot });
+const openclawChatBackend = createOpenclawChatBackend({ callGateway });
+const hermesChatBackend = createHermesChatBackend();
+const copilotOrchestrator = createCopilotOrchestrator({
+  store: copilotStore,
+  backendFor: (kind) => (kind === "openclaw" ? openclawChatBackend : hermesChatBackend),
+  onAudit: ({ event, data }) => console.log(`copilot.${event}`, JSON.stringify(data)),
+});
+app.use(createCopilotRouter({
+  store: copilotStore,
+  orchestrator: copilotOrchestrator,
+  backendCreator: async (sessionId, ownerUserId, backend) => {
+    const adapter = backend === "openclaw" ? openclawChatBackend : hermesChatBackend;
+    return adapter.createSession({ sessionId, ownerUserId });
+  },
+}));
+
 const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
 });
@@ -127,6 +152,7 @@ void (async () => {
   try { await scanProjects(); } catch (e) { console.warn("reviewer scan failed:", e); }
   try { await repairYoutubeOnStartup(); } catch (e) { console.warn("youtube repair failed:", e); }
   try { await authService.sessions.sweep(); } catch (e) { console.warn("session sweep failed:", e); }
+  try { await copilotOrchestrator.recoverOnBoot(); } catch (e) { console.warn("copilot recover failed:", e); }
 })();
 
 export { app, server, authService };
