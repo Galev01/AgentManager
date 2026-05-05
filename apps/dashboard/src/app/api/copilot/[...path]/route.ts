@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
+import { actorHeaders } from "@/lib/auth/bridge-actor";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
 const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";
 
 async function bridgeFetch(path: string, init: RequestInit): Promise<Response> {
+  const actor = await actorHeaders();
   return fetch(`${BRIDGE_URL}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${BRIDGE_TOKEN}`,
+      ...actor,
       ...(init.headers as Record<string, string> | undefined),
     },
   });

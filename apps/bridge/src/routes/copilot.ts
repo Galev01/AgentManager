@@ -4,13 +4,13 @@ import type { CopilotOrchestrator } from "../services/copilot/orchestrator.js";
 import { TurnInProgressError } from "../services/copilot/orchestrator.js";
 import type {
   PermissionId, CopilotSessionCreateInput, CopilotTurnSubmitInput,
-  CopilotSessionSnapshot, CopilotMessage, CopilotPendingTurn,
+  CopilotSessionSnapshot, CopilotMessage, CopilotPendingTurn, BackendKind,
 } from "@openclaw-manager/types";
 
 export type CopilotRouterDeps = {
   store: CopilotStore;
   orchestrator: CopilotOrchestrator;
-  backendCreator?: (sessionId: string, ownerUserId: string, backend: "openclaw" | "hermes") => Promise<{ openclawSessionKey?: string }>;
+  backendCreator?: (sessionId: string, ownerUserId: string, backend: BackendKind) => Promise<{ openclawSessionKey?: string }>;
   log?: (event: string, data: Record<string, unknown>) => void;
 };
 

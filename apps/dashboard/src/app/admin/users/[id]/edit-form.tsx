@@ -145,8 +145,20 @@ export function EditForm({
               OpenClaw
             </label>
             <label className="flex items-center gap-1 text-neutral-500" title="available in next phase">
-              <input type="radio" name="copilotBackend" value="hermes" disabled />
-              Hermes
+              <input
+                type="radio"
+                name="copilotBackend"
+                value="hermes"
+                checked={(state.preferences?.copilot?.defaultBackend ?? "openclaw") === "hermes"}
+                disabled={disabled}
+                onChange={() =>
+                  setState({
+                    ...state,
+                    preferences: { ...state.preferences, copilot: { defaultBackend: "hermes" } },
+                  })
+                }
+              />
+              Hermes (coming soon)
             </label>
           </div>
         </div>

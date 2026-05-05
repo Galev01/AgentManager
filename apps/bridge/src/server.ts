@@ -131,6 +131,7 @@ const hermesChatBackend = createHermesChatBackend();
 const copilotOrchestrator = createCopilotOrchestrator({
   store: copilotStore,
   backendFor: (kind) => (kind === "openclaw" ? openclawChatBackend : hermesChatBackend),
+  onAudit: ({ event, data }) => console.log(`copilot.${event}`, JSON.stringify(data)),
 });
 app.use(createCopilotRouter({
   store: copilotStore,
