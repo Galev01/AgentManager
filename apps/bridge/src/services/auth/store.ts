@@ -82,6 +82,7 @@ export function createAuthStore(cfg: AuthStoreConfig) {
           status: patch.status ?? u.status,
           roleIds: patch.roleIds ?? u.roleIds,
           grants: patch.grants ?? u.grants,
+          preferences: patch.preferences !== undefined ? patch.preferences : u.preferences,
           updatedAt: new Date().toISOString(),
         };
         f.users[id] = next;

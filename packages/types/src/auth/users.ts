@@ -73,6 +73,7 @@ export type AuthUserUpdateInput = {
   status?: AuthUserStatus;
   roleIds?: string[];
   grants?: AuthGrant[];
+  preferences?: UserPreferences;
 };
 
 export type AuthRoleCreateInput = { name: string; description?: string; grants?: PermissionId[] };
