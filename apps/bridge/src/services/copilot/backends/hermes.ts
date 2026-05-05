@@ -1,17 +1,54 @@
-import type { ChatBackendAdapter, ChatTurnRequest, ChatTurnResult, SessionBootstrap } from "../backend.js";
-
 /**
- * Phase-A1 stub. The route layer rejects backend="hermes" at create time so
- * this adapter is never reached in production. It exists so Phase A2 is a
- * single-file replacement with no contract change.
+ * Hermes chat backend — Phase A2.
+ *
+ * Talks to the local hermes-shim over HTTP+bearer (same shim used for runtime
+ * health/capabilities). Each turn dispatches `POST /v1/chat` with the bridge
+ * session id; the shim runs `hermes -z <message> --continue <session_id>`,
+ * which gives Hermes durable session memory in `~/.hermes/state.db`.
  */
-export function createHermesChatBackend(): ChatBackendAdapter {
+import type {
+  ChatBackendAdapter, ChatTurnRequest, ChatTurnResult, SessionBootstrap,
+} from "../backend.js";
+import { defaultHttp, type HttpClient } from "../../runtimes/adapter-base.js";
+
+export type HermesChatBackendDeps = {
+  endpoint: string;             // e.g. http://192.168.0.10:9119
+  bearer: string;               // HERMES_TOKEN
+  http?: HttpClient;
+  timeoutMs?: number;           // default 200_000 (slightly above shim's 180s)
+};
+
+function deriveKey(sessionId: string): string { return `copilot-${sessionId}`; }
+
+export function createHermesChatBackend(deps: HermesChatBackendDeps): ChatBackendAdapter {
+  const http = deps.http ?? defaultHttp;
+  const base = deps.endpoint.replace(/\/$/, "");
+  const headers: Record<string, string> = { Authorization: `Bearer ${deps.bearer}` };
+  const timeoutMs = deps.timeoutMs ?? 200_000;
+
   return {
-    async createSession(): Promise<SessionBootstrap> {
-      return {};
+    async createSession({ sessionId }): Promise<SessionBootstrap> {
+      // No backend-side bootstrap needed: Hermes lazily creates the named
+      // session on first `--continue <name>` call. The bridge's session id
+      // (with "copilot-" prefix to namespace) is what Hermes will track.
+      return { openclawSessionKey: deriveKey(sessionId) };
     },
-    async sendTurn(_req: ChatTurnRequest): Promise<ChatTurnResult> {
-      return { ok: false, error: "hermes backend not yet implemented (Phase A2)" };
+    async sendTurn(req: ChatTurnRequest): Promise<ChatTurnResult> {
+      const key = req.session.openclawSessionKey ?? deriveKey(req.session.id);
+      try {
+        const result = (await http.json(`${base}/v1/chat`, {
+          method: "POST",
+          headers: { ...headers, "content-type": "application/json" },
+          body: { session_id: key, message: req.userMessageText },
+          timeoutMs,
+        })) as { ok?: boolean; assistant_text?: string; error?: string };
+        if (!result?.ok || typeof result.assistant_text !== "string") {
+          return { ok: false, error: result?.error ?? "hermes shim returned no assistant text" };
+        }
+        return { ok: true, assistantText: result.assistant_text };
+      } catch (e) {
+        return { ok: false, error: (e as Error).message };
+      }
     },
   };
 }

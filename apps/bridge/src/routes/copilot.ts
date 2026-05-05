@@ -57,10 +57,6 @@ export function createCopilotRouter(deps: CopilotRouterDeps): ExpressRouter {
       res.status(400).json({ error: "invalid_backend" });
       return;
     }
-    if (body.backend === "hermes") {
-      res.status(400).json({ error: "backend_not_supported", detail: "Hermes backend lands in Phase A2" });
-      return;
-    }
     const meta = await deps.store.createSession({
       ownerUserId: owner, backend: body.backend, title: body.title,
     });

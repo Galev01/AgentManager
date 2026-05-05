@@ -44,15 +44,27 @@ test("POST /copilot/sessions creates with backend openclaw", async () => {
   a.close();
 });
 
-test("POST /copilot/sessions rejects backend hermes with 400", async () => {
+test("POST /copilot/sessions accepts backend hermes (Phase A2)", async () => {
   const a = await bootApp(["copilot.chat"]);
   const r = await fetch(`${a.url}/copilot/sessions`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ backend: "hermes" }),
   });
   const body = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(body.backend, "hermes");
+  a.close();
+});
+
+test("POST /copilot/sessions rejects unknown backend with 400", async () => {
+  const a = await bootApp(["copilot.chat"]);
+  const r = await fetch(`${a.url}/copilot/sessions`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ backend: "ghost" }),
+  });
+  const body = await r.json();
   assert.equal(r.status, 400);
-  assert.equal(body.error, "backend_not_supported");
+  assert.equal(body.error, "invalid_backend");
   a.close();
 });
 
