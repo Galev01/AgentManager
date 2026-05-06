@@ -1,18 +1,8 @@
-import { Router, type Router as ExpressRouter, type Request, type Response, type NextFunction, type RequestHandler } from "express";
-import type { PermissionId } from "@openclaw-manager/types";
+import { Router, type Router as ExpressRouter, type Request, type Response } from "express";
+import { requirePerm } from "../auth-middleware.js";
 import { createAgentModelsService, type CallGateway } from "../services/agent-models.js";
 
 export type AgentsRouterDeps = { callGateway: CallGateway };
-
-function requirePerm(...perms: PermissionId[]): RequestHandler<any> {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const eff = (req as any).auth?.permissions ?? [];
-    for (const p of perms) {
-      if (!eff.includes(p)) { res.status(403).json({ error: "forbidden", missing: p }); return; }
-    }
-    next();
-  };
-}
 
 export function createAgentsRouter(deps: AgentsRouterDeps): ExpressRouter {
   const router: ExpressRouter = Router();
