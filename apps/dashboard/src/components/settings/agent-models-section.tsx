@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { AgentModelsSnapshot, ModelDescriptor } from "@openclaw-manager/types";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui";
@@ -29,6 +29,11 @@ export function AgentModelsSection({ snapshot }: Props) {
   const [pending, startTransition] = useTransition();
   const [local, setLocal] = useState(snapshot);
   const [rowPending, setRowPending] = useState<string | null>(null);
+
+  // Reconcile local state when the parent passes a fresh snapshot, e.g. after
+  // router.refresh(). Without this, useState only honors `snapshot` on first
+  // mount and the UI silently goes stale when other clients change a model.
+  useEffect(() => { setLocal(snapshot); }, [snapshot]);
 
   const grouped = useMemo(() => buildGroupedCatalog(local.catalog), [local.catalog]);
   const catalogIds = useMemo(() => new Set(local.catalog.map((m) => m.id)), [local.catalog]);
