@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenClaw-Manager MCP Hermes facade
+After=network.target hermes-shim.service
+Wants=hermes-shim.service
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.mcp-hermes/env
+ExecStart=/usr/bin/node %h/.local/lib/mcp-hermes/dist/server.js
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=default.target
