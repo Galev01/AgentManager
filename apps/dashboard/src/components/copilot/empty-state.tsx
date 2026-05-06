@@ -32,11 +32,10 @@ export function CopilotEmptyState({
                    checked={backend === "openclaw"} onChange={() => setBackend("openclaw")} />
             OpenClaw
           </label>
-          <label className="flex items-center gap-2 text-neutral-500" title="available in next phase">
+          <label className="flex items-center gap-2">
             <input type="radio" name="backend" value="hermes"
-                   checked={backend === "hermes"} onChange={() => setBackend("hermes")}
-                   disabled />
-            Hermes (coming soon)
+                   checked={backend === "hermes"} onChange={() => setBackend("hermes")} />
+            Hermes
           </label>
         </div>
         <input
@@ -48,7 +47,7 @@ export function CopilotEmptyState({
         />
         <button
           onClick={start}
-          disabled={pending || backend === "hermes"}
+          disabled={pending}
           className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
         >
           {pending ? "Starting…" : "Start"}
