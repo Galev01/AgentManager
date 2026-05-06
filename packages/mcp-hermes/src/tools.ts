@@ -56,3 +56,17 @@ export async function handleHermesSessionInfo(ctx: ToolHandlerCtx): Promise<Tool
     started_at: entry.startedAt,
   }, null, 2) };
 }
+
+export async function handleHermesConclude(ctx: ToolHandlerCtx): Promise<ToolTextResult> {
+  const summary = typeof ctx.args.summary === "string" ? ctx.args.summary : undefined;
+  const requestedId = typeof ctx.args.session_id === "string" ? ctx.args.session_id : undefined;
+  const target = requestedId
+    ? ctx.store.get(ctx.clientId, requestedId)
+    : ctx.store.getMostRecent(ctx.clientId);
+  if (!target) return { text: "no session to conclude" };
+  ctx.store.conclude(ctx.clientId, target.sessionId, summary);
+  return { text: JSON.stringify({
+    session_id: target.sessionId,
+    status: "concluded",
+  }, null, 2) };
+}
