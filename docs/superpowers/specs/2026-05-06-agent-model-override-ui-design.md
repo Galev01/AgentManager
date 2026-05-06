@@ -132,7 +132,7 @@ Pure proxy of `models.list`. On gateway error, the bridge returns `502` with `st
 
 ### `PATCH /agents/:name`
 
-Authenticated **and** requires the new `agents.config` permission.
+Authenticated **and** requires the new `agents.manage` permission.
 
 Request: existing shape, with the model field validated:
 
@@ -158,7 +158,7 @@ Other fields (`name`, `workspace`, etc.) pass through unchanged. The permission 
 Failure responses:
 
 - `400 invalid model id` — model not in catalog.
-- `403` — caller lacks `agents.config`.
+- `403` — caller lacks `agents.manage`.
 - `404` — agent not found.
 - `502` — gateway returned an error (e.g. allowed-list rejected the model server-side anyway). Body includes the gateway error string.
 - `503 model catalog unavailable` — gateway returned an error from `models.list` and the request included a model field.
@@ -180,11 +180,13 @@ A true clear would require either a new gateway RPC that calls `pruneAgentConfig
 
 ## Permission
 
-New permission: `agents.config`.
+Reuse the existing permission `agents.manage` (already in `packages/types/src/auth/permissions.ts` with description "Create/update/delete" in category `agents`).
 
-- Granted to the existing `admin` role by default.
+- The permission ID already exists in the registry and is part of the standard admin grant. No registry or migration change is needed.
 - Required by `PATCH /agents/:name` for any field, not only `model`. This is intentional: the existing route had no gate, and "model only" is a weaker stance than "all mutating agent fields." The route is small enough that scoping the gate to one field would invent a per-field permission system that has no other use in the codebase.
-- Read endpoints (`GET /agents`, `GET /agent-models`, `GET /models`) do not require `agents.config`. Readers see the model assignments; only mutators need the permission.
+- Read endpoints (`GET /agents`, `GET /agent-models`, `GET /models`) do not require `agents.manage`; reading uses `agents.view`. Only mutators need the manage permission.
+
+If a finer-grained "model-only" permission is ever needed, that is a deliberate broader auth design pass, not a one-off exception on this feature.
 
 ## UI
 
@@ -256,7 +258,7 @@ Note on policy asymmetry: the gateway is permissive at write time (any string ac
 
 ## Integration points
 
-- `apps/bridge/src/routes/agents.ts` — add `agents.config` permission middleware to the existing `PATCH /agents/:name`. Add pre-write `models.list` validation when `model` is in the body. The existing best-effort `agents.update` after `agents.create` (line 38-50) is **left untouched** — its create-path partial-success semantics (`warning` on response when model-set fails) are out of scope for this spec; tightening them would change agent-creation contract and warrants a separate change.
+- `apps/bridge/src/routes/agents.ts` — add `agents.manage` permission middleware to the existing `PATCH /agents/:name`. Add pre-write `models.list` validation when `model` is in the body. The existing best-effort `agents.update` after `agents.create` (line 38-50) is **left untouched** — its create-path partial-success semantics (`warning` on response when model-set fails) are out of scope for this spec; tightening them would change agent-creation contract and warrants a separate change.
 - `apps/bridge/src/routes/` — add `agent-models.ts` (composes `agents.list`, `agents.identity` per agent, `models.list`).
 - `apps/bridge/src/routes/` — add `models.ts` (proxies `models.list`).
 - `apps/bridge/src/server.ts` — register the two new routers.
@@ -264,7 +266,7 @@ Note on policy asymmetry: the gateway is permissive at write time (any string ac
 - `apps/dashboard/src/components/settings/agent-models-section.tsx` — new component.
 - `apps/dashboard/src/components/settings/index.tsx` (or wherever Runtimes lives) — register the new section.
 - `apps/dashboard/src/app/api/agent-models/route.ts` and `apps/dashboard/src/app/api/models/route.ts` — Next.js proxy routes that forward to the bridge with the dashboard's existing bridge-token auth pattern.
-- Permission catalog wherever `runtimes.config` is registered — add `agents.config` and grant to admin.
+- Permission registry — no change needed. `agents.manage` already exists in `packages/types/src/auth/permissions.ts` and is part of the standard admin grant.
 
 ## Testing
 
@@ -274,7 +276,7 @@ Note on policy asymmetry: the gateway is permissive at write time (any string ac
   - `PATCH /agents/:name` with valid model — proxied to `agents.update`.
   - `PATCH /agents/:name` with model not in catalog — `400`.
   - `PATCH /agents/:name` with `models.list` unavailable + model in body — `503`.
-  - `PATCH /agents/:name` without `agents.config` permission — `403`.
+  - `PATCH /agents/:name` without `agents.manage` permission — `403`.
 - **Dashboard component tests**: `<AgentModelsSection>` renders catalog + override badge; selection triggers PATCH; error states render.
 - **Manual end-to-end**: change `claude-code` agent model in the dashboard; observe `~/.openclaw/openclaw.json` updated; run the agent; observe new model used in session.
 
@@ -300,13 +302,14 @@ If verification 1 or 2 produces a worse-than-expected gateway shape, the spec de
 
 ## Security notes
 
-- The new permission gate on `PATCH /agents/:name` closes an existing ungated mutation surface. Any caller previously able to hit the route (by virtue of the bridge token) keeps working only if granted `agents.config`. The default admin role gets the permission; document the change in the deploy notes.
+- The new permission gate on `PATCH /agents/:name` closes an existing ungated mutation surface. Any caller previously able to hit the route (by virtue of the bridge token) keeps working only if granted `agents.manage`. The default admin role gets the permission; document the change in the deploy notes.
 - Pre-write catalog validation is a defense against a privilege-narrow caller persisting a model that the runtime allows-list rejects. It is not a replacement for the runtime check; both are required.
 - The bridge does not log full request bodies for PATCH; model id is short and uninteresting from an auditing standpoint, but the server's existing access log captures path + method + status.
 
-### Rollout impact of the new permission gate
+### Rollout impact of the permission gate
 
-- **Compat impact:** any non-admin role that currently hits `PATCH /agents/:name` (only via the bridge token, since the dashboard's role system is the only consumer) will receive `403` after deploy until granted `agents.config`. The dashboard's existing admin role gains the permission automatically as part of this change.
-- **Deploy step required:** update the role/permission mapping wherever `runtimes.config` is granted. This is a small mapping change in the same file.
+- **Compat impact:** any role that currently hits `PATCH /agents/:name` (only via the bridge token, since the dashboard's role system is the only consumer) will receive `403` after deploy unless it has `agents.manage`. The admin role already has this permission; non-admin roles that depend on the route will need it granted (or, more likely, the route was simply not in use because the dashboard had no UI for it).
+- **Deploy step:** verify the admin role already grants `agents.manage`. No registry change is required.
 - **Rollback:** if the gate blocks legitimate automation that we did not foresee, the permission can be temporarily granted to a lower role without code revert. If broader rollback is needed, drop the middleware on the route — the rest of the feature (catalog read, validation, UI) functions correctly without the permission gate.
+- **Compatibility nuance:** this is a case of newly *enforcing* an existing-but-unused permission on a previously ungated route. The permission itself is not new, but the enforcement is. Watch for any non-dashboard caller (scripts, ad-hoc tooling) that hits the route with a bearer that lacks `agents.manage` after deploy.
 - The `POST /agents` create path still runs its internal best-effort `agents.update` without bridge-side model validation; the catalog check applies only to the new PATCH-driven flow. Tightening the create path is deliberately deferred to avoid changing agent-creation contract in this spec.
