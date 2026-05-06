@@ -26,7 +26,7 @@ export async function GET() {
     const t = await bridgeIssueWsTicket(session.user.id, session.sid);
     ticket = t.ticket;
   } catch (err) {
-    console.warn("[sse] ws-ticket failed:", (err as Error).message);
+    console.warn("[sse] ws-ticket failed (bridge /auth/ws-ticket):", (err as Error).message);
     return new Response("bad gateway", { status: 502 });
   }
 
@@ -57,8 +57,8 @@ export async function GET() {
         }
       });
 
-      ws.on("error", () => {
-        console.warn("[sse] bridge ws error");
+      ws.on("error", (err) => {
+        console.warn("[sse] bridge ws error:", (err as Error).message);
         try {
           controller.close();
         } catch {
