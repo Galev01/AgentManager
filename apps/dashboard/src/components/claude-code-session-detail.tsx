@@ -80,27 +80,19 @@ export function ClaudeCodeSessionDetail({
   const lastSummaryEventCountRef = useRef(llmSummary ? initialEvents.length : 0);
 
   useBridgeEvents((msg) => {
-    const p = msg.payload as {
-      sessionId?: string;
-      id?: string;
-      event?: ClaudeCodeTranscriptEvent;
-    } | undefined;
-    if (
-      msg.type === "claude_code_transcript_appended" &&
-      p?.sessionId === session.id &&
-      p.event !== undefined
-    ) {
-      setEvents((prev) => [...prev, p.event!]);
-    } else if (
-      msg.type === "claude_code_pending_upserted" &&
-      p?.sessionId === session.id
-    ) {
-      setPending((prev) => [
-        ...prev.filter((item) => item.id !== p.id),
-        msg.payload as ClaudeCodePendingItem,
-      ]);
+    if (msg.type === "claude_code_transcript_appended") {
+      const data = msg.payload as { sessionId?: string; event?: ClaudeCodeTranscriptEvent };
+      if (data.sessionId === session.id && data.event !== undefined) {
+        const event = data.event;
+        setEvents((prev) => [...prev, event]);
+      }
+    } else if (msg.type === "claude_code_pending_upserted") {
+      const item = msg.payload as ClaudeCodePendingItem;
+      if (item.sessionId !== session.id) return;
+      setPending((prev) => [...prev.filter((p) => p.id !== item.id), item]);
     } else if (msg.type === "claude_code_pending_resolved") {
-      setPending((prev) => prev.filter((item) => item.id !== p?.id));
+      const data = msg.payload as { id: string };
+      setPending((prev) => prev.filter((item) => item.id !== data.id));
     } else if (msg.type === "claude_code_session_upserted") {
       router.refresh();
     }
