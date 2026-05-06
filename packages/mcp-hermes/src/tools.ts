@@ -29,3 +29,30 @@ export async function handleHermesSay(ctx: ToolHandlerCtx): Promise<ToolTextResu
     }, null, 2),
   };
 }
+
+export async function handleHermesSessionInfo(ctx: ToolHandlerCtx): Promise<ToolTextResult> {
+  const requestedId = typeof ctx.args.session_id === "string" ? ctx.args.session_id : undefined;
+  if (!requestedId) {
+    const recent = ctx.store.getMostRecent(ctx.clientId);
+    if (!recent) return { text: "no session yet" };
+    return { text: JSON.stringify({
+      session_id: recent.sessionId,
+      message_count: recent.messageCount,
+      status: recent.status,
+      started_at: recent.startedAt,
+    }, null, 2) };
+  }
+  const entry = ctx.store.get(ctx.clientId, requestedId);
+  if (!entry) return { text: JSON.stringify({
+    session_id: requestedId,
+    message_count: 0,
+    status: "unknown",
+    started_at: 0,
+  }, null, 2) };
+  return { text: JSON.stringify({
+    session_id: entry.sessionId,
+    message_count: entry.messageCount,
+    status: entry.status,
+    started_at: entry.startedAt,
+  }, null, 2) };
+}
