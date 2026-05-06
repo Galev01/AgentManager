@@ -5,7 +5,6 @@ import {
   getClaudeCodeTranscript,
   getClaudeCodePending,
   callGatewayMethod,
-  summarizeClaudeCodeSession,
 } from "@/lib/bridge-client";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/current-user";
@@ -190,9 +189,6 @@ export default async function ClaudeCodeSessionPage({
     configuredModel ??
     defaultsModel;
 
-  // Fetch LLM-generated summary (don't block page render on failure)
-  const llmSummary = await summarizeClaudeCodeSession(id).catch(() => null);
-
   return (
     <AppShell title={`Claude Code · ${session.displayName}`}>
       <div className="content">
@@ -200,7 +196,7 @@ export default async function ClaudeCodeSessionPage({
           session={session}
           initialEvents={events}
           initialPending={sessionPending}
-          llmSummary={llmSummary}
+          llmSummary={null}
           intel={{
             openclawModel: resolvedModel,
             openclawTokens: {
