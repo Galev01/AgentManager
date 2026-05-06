@@ -21,12 +21,33 @@ type GatewayModelEntry = {
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
 };
 
+// Gateway may return `model` as either a bare string ("openai-codex/gpt-5.4")
+// or as a structured object like `{ primary: "openai-codex/gpt-5.4-mini" }`.
+// Both forms appear in `~/.openclaw/openclaw.json`: per-agent overrides are
+// usually strings, but `agents.defaults.model` is typically an object. The
+// gateway's `agents.list` reflects whichever form is on disk for the matched
+// entry, so we must normalize to a string before sending to the dashboard or
+// React will throw error #31 trying to render the object.
+type GatewayModelRef = string | { primary?: string };
+
 type GatewayAgentSummary = {
   id: string;
   name?: string;
-  model?: string;
+  model?: GatewayModelRef;
   isDefault?: boolean;
 };
+
+function normalizeModelRef(raw: unknown): string | null {
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    return trimmed || null;
+  }
+  if (raw && typeof raw === "object") {
+    const p = (raw as { primary?: unknown }).primary;
+    if (typeof p === "string" && p.trim()) return p.trim();
+  }
+  return null;
+}
 
 function projectModel(raw: GatewayModelEntry): ModelDescriptor | null {
   const id = raw.id ?? raw.key;
@@ -72,10 +93,10 @@ export function createAgentModelsService(deps: { callGateway: CallGateway }): Ag
     const summaries: AgentModelSummary[] = agents.map((a) => ({
       agentId: a.id,
       agentName: a.name,
-      effectiveModelId: typeof a.model === "string" && a.model.trim() ? a.model : null,
+      effectiveModelId: normalizeModelRef(a.model),
     }));
     const defaultEntry = agents.find((a) => a.isDefault) ?? agents.find((a) => a.id === "main");
-    const globalDefaultModelId = defaultEntry?.model ?? null;
+    const globalDefaultModelId = normalizeModelRef(defaultEntry?.model);
     return {
       catalog: catalogResult.models,
       agents: summaries,
