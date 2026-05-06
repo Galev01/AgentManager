@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import express from "express";
 import http from "node:http";
 import { createModelsRouter } from "../src/routes/models.js";
-// TODO Task 4: uncomment when agent-models route is implemented
-// import { createAgentModelsRouter } from "../src/routes/agent-models.js";
+import { createAgentModelsRouter } from "../src/routes/agent-models.js";
 
 type StubCalls = Array<{ method: string; params: unknown }>;
 
@@ -25,8 +24,7 @@ function bootApp(opts: {
     next();
   });
   app.use(createModelsRouter({ callGateway }));
-  // TODO Task 4: uncomment when agent-models route is implemented
-  // app.use(createAgentModelsRouter({ callGateway }));
+  app.use(createAgentModelsRouter({ callGateway }));
   const server = http.createServer(app).listen(0);
   const addr = server.address() as { port: number };
   return { url: `http://127.0.0.1:${addr.port}`, calls, close: () => server.close() };
@@ -67,5 +65,52 @@ test("GET /models returns status 'unavailable' on gateway error", async () => {
   const body = await r.json();
   assert.equal(body.status, "unavailable");
   assert.deepEqual(body.models, []);
+  a.close();
+});
+
+test("GET /agent-models composes catalog + agents + global default", async () => {
+  const a = bootApp({
+    perms: [],
+    gatewayHandler: (method) => {
+      if (method === "models.list") {
+        return { models: [{ id: "openai-codex/gpt-5.4", provider: "openai-codex" }] };
+      }
+      if (method === "agents.list") {
+        return {
+          agents: [
+            { id: "main", name: "main", model: "openai-codex/gpt-5.4-mini", isDefault: true },
+            { id: "claude-code", name: "claude-code", model: "openai-codex/gpt-5.4" },
+          ],
+        };
+      }
+      throw new Error("unexpected");
+    },
+  });
+  const r = await fetch(`${a.url}/agent-models`);
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.equal(body.catalogStatus, "ok");
+  assert.equal(body.globalDefaultModelId, "openai-codex/gpt-5.4-mini");
+  assert.equal(body.agents.length, 2);
+  assert.equal(body.agents.find((x: any) => x.agentId === "claude-code").effectiveModelId, "openai-codex/gpt-5.4");
+  assert.equal(body.agents[0].hasExplicitOverride, undefined);
+  a.close();
+});
+
+test("GET /agent-models survives catalog outage", async () => {
+  const a = bootApp({
+    perms: [],
+    gatewayHandler: (method) => {
+      if (method === "models.list") throw new Error("gateway");
+      if (method === "agents.list") return { agents: [{ id: "main", model: "x" }] };
+      throw new Error("unexpected");
+    },
+  });
+  const r = await fetch(`${a.url}/agent-models`);
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.equal(body.catalogStatus, "unavailable");
+  assert.deepEqual(body.catalog, []);
+  assert.equal(body.agents.length, 1);
   a.close();
 });
