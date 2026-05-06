@@ -1,11 +1,11 @@
-import { requirePermissionApi, AuthFailure } from "@/lib/auth/current-user";
+import { requirePermissionApi, AuthFailure, resolveCurrentSession } from "@/lib/auth/current-user";
+import { bridgeIssueWsTicket } from "@/lib/auth/bridge-auth-client";
 import { WebSocket } from "ws";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
-const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";
 
-function getBridgeWsUrl(): string {
-  return BRIDGE_URL.replace(/^http/, "ws") + `/ws?token=${encodeURIComponent(BRIDGE_TOKEN)}`;
+function getBridgeWsUrl(ticket: string): string {
+  return BRIDGE_URL.replace(/^http/, "ws") + `/ws?ticket=${encodeURIComponent(ticket)}`;
 }
 
 export async function GET() {
@@ -18,13 +18,25 @@ export async function GET() {
     throw err;
   }
 
+  const session = await resolveCurrentSession();
+  if (!session) return new Response("unauthorized", { status: 401 });
+
+  let ticket: string;
+  try {
+    const t = await bridgeIssueWsTicket(session.user.id, session.sid);
+    ticket = t.ticket;
+  } catch (err) {
+    console.warn("[sse] ws-ticket failed:", (err as Error).message);
+    return new Response("bad gateway", { status: 502 });
+  }
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
-      const wsUrl = getBridgeWsUrl();
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(getBridgeWsUrl(ticket));
 
       ws.on("open", () => {
+        console.log("[sse] bridge ws attached");
         controller.enqueue(encoder.encode(`data: {"type":"connected","payload":{"ts":${Date.now()}}}\n\n`));
       });
 
@@ -46,6 +58,7 @@ export async function GET() {
       });
 
       ws.on("error", () => {
+        console.warn("[sse] bridge ws error");
         try {
           controller.close();
         } catch {
