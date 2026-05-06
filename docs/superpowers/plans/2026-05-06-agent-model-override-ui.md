@@ -795,6 +795,11 @@ test("PATCH /agents/:name without model field skips validation and passes throug
 });
 
 test("PATCH /agents/:name 400 when model is empty string", async () => {
+  // Empty string is intentionally rejected: the gateway's `applyAgentConfig`
+  // ignores empty/null model values (`...params.model ? { model } : {}`),
+  // so passing one is ambiguous "clear-like" input that the bridge will not
+  // proxy. Clearing is not supported in Phase 1; the UI uses "Set to current
+  // default" instead. See spec § "Set to current default".
   const a = bootApp({
     perms: ["agents.manage"],
     gatewayHandler: () => { throw new Error("should not reach gateway"); },
@@ -805,6 +810,20 @@ test("PATCH /agents/:name 400 when model is empty string", async () => {
     body: JSON.stringify({ model: "" }),
   });
   assert.equal(r.status, 400);
+  a.close();
+});
+
+test("PATCH /agents/:name 403 even when body has no model field", async () => {
+  // Permission is required for any PATCH; the gate is on the route, not just
+  // on the model branch. Confirms the gate is not accidentally bypassed when
+  // body is, e.g., a name-only update.
+  const a = bootApp({ perms: [] });
+  const r = await fetch(`${a.url}/agents/claude-code`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "renamed" }),
+  });
+  assert.equal(r.status, 403);
   a.close();
 });
 ```
