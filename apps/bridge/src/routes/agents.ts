@@ -99,7 +99,7 @@ export function createAgentsRouter(deps: AgentsRouterDeps): ExpressRouter {
     }
   });
 
-  router.delete("/agents/:name", async (req: Request, res: Response) => {
+  router.delete("/agents/:name", requirePerm("agents.manage"), async (req: Request, res: Response) => {
     try {
       const name = req.params.name as string;
       const result = await callGateway("agents.delete", { name });

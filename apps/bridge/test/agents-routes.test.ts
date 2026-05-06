@@ -159,3 +159,28 @@ test("PATCH /agents/:name 403 even when body has no model field", async () => {
   assert.equal(r.status, 403);
   a.close();
 });
+
+test("DELETE /agents/:name returns 403 without agents.manage", async () => {
+  const a = bootApp({ perms: [] });
+  const r = await fetch(`${a.url}/agents/claude-code`, { method: "DELETE" });
+  assert.equal(r.status, 403);
+  a.close();
+});
+
+test("DELETE /agents/:name with agents.manage proxies to gateway", async () => {
+  const a = bootApp({
+    perms: ["agents.manage"],
+    gatewayHandler: (method, params) => {
+      if (method === "agents.delete") {
+        assert.equal((params as any).name, "claude-code");
+        return { ok: true };
+      }
+      throw new Error(`unexpected: ${method}`);
+    },
+  });
+  const r = await fetch(`${a.url}/agents/claude-code`, { method: "DELETE" });
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.equal(body.ok, true);
+  a.close();
+});
