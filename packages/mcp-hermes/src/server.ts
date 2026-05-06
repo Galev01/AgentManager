@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import express from "express";
-import crypto from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
@@ -116,8 +115,15 @@ app.get("/health", (_req, res) => {
 
 app.use("/mcp", bearerAuth(MCP_TOKEN));
 
+// Phase-1: single-user deployment. All MCP requests share one session map.
+// Claude Code's HTTP MCP client does not send a stable per-conversation
+// header in stateless mode, so per-request randomization broke session
+// continuity for hermes_session_info / hermes_conclude. See
+// docs/superpowers/specs/2026-05-06-consult-hermes-design.md.
+const PHASE1_CLIENT_ID = "default";
+
 app.post("/mcp", async (req, res) => {
-  const clientId = String(req.headers["x-client-id"] ?? `unknown-${crypto.randomBytes(4).toString("hex")}`);
+  const clientId = PHASE1_CLIENT_ID;
   const server = buildServer(clientId);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on("close", () => { transport.close(); server.close(); });
