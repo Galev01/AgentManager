@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AuthUserPublic, AuthRole, AuthGrant, PermissionId } from "@openclaw-manager/types";
+import type { AuthUserPublic, AuthRole, AuthGrant, PermissionId, UserPreferences } from "@openclaw-manager/types";
 
 type Cat = { category: string; items: Array<{ id: string; label: string; description: string }> };
 
@@ -29,6 +29,7 @@ export function EditForm({
     status: user.status,
     roleIds: [...user.roleIds],
     grants: [...user.grants] as AuthGrant[],
+    preferences: (user.preferences ?? {}) as UserPreferences,
   });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -54,6 +55,7 @@ export function EditForm({
         status: state.status,
         roleIds: state.roleIds,
         grants: state.grants,
+        preferences: state.preferences,
       }),
     });
     setBusy(false);
@@ -122,6 +124,44 @@ export function EditForm({
             <option value="disabled">disabled</option>
           </select>
         </label>
+        {/* Copilot default backend */}
+        <div className="space-y-1">
+          <div className="text-sm font-medium">Copilot default backend</div>
+          <div className="flex items-center gap-3 text-sm">
+            <label className="flex items-center gap-1">
+              <input
+                type="radio"
+                name="copilotBackend"
+                value="openclaw"
+                checked={(state.preferences?.copilot?.defaultBackend ?? "openclaw") !== "hermes"}
+                disabled={disabled}
+                onChange={() =>
+                  setState({
+                    ...state,
+                    preferences: { ...state.preferences, copilot: { defaultBackend: "openclaw" } },
+                  })
+                }
+              />
+              OpenClaw
+            </label>
+            <label className="flex items-center gap-1 text-neutral-500" title="available in next phase">
+              <input
+                type="radio"
+                name="copilotBackend"
+                value="hermes"
+                checked={(state.preferences?.copilot?.defaultBackend ?? "openclaw") === "hermes"}
+                disabled={disabled}
+                onChange={() =>
+                  setState({
+                    ...state,
+                    preferences: { ...state.preferences, copilot: { defaultBackend: "hermes" } },
+                  })
+                }
+              />
+              Hermes (coming soon)
+            </label>
+          </div>
+        </div>
         <fieldset>
           <legend className="text-sm text-text-muted">Roles</legend>
           {roles.map((r) => (

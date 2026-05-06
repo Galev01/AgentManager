@@ -9,12 +9,14 @@ import {
   getChannels,
 } from "@/lib/bridge-client";
 import { getRuntimeConfig } from "@/lib/runtime-config-client";
+import { getAgentModelsSnapshot } from "@/lib/agent-models-client";
 import type {
   RuntimeSettingsV2,
   RelayRecipient,
   RoutingRule,
   Channel,
   RuntimeConfigSnapshot,
+  AgentModelsSnapshot,
 } from "@openclaw-manager/types";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +48,13 @@ export default async function SettingsPage() {
     // bridge unreachable for runtime config — render section in degraded state
   }
 
+  let agentModels: AgentModelsSnapshot | null = null;
+  try {
+    agentModels = await getAgentModelsSnapshot();
+  } catch {
+    // bridge unreachable for agent models — render section in degraded state
+  }
+
   return (
     <AppShell title="Settings">
       {bridgeError && <DegradedBanner />}
@@ -56,6 +65,7 @@ export default async function SettingsPage() {
           initialRules={rules}
           initialChannels={channels}
           initialRuntimeConfig={runtimeConfig}
+          initialAgentModels={agentModels}
         />
       )}
     </AppShell>

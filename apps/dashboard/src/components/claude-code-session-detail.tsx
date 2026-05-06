@@ -19,6 +19,7 @@ import { ClaudeCodePendingCard } from "./claude-code-pending-card";
 import { CCEnvelopeChips } from "./cc-envelope-chips";
 import { CCRefChips } from "./cc-ref-chips";
 import { CCEscalationCard } from "./cc-escalation-card";
+import { useBridgeEvents } from "@/lib/ws-client";
 
 type Intel = {
   openclawModel: string | null;
@@ -78,39 +79,24 @@ export function ClaudeCodeSessionDetail({
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastSummaryEventCountRef = useRef(llmSummary ? initialEvents.length : 0);
 
-  useEffect(() => {
-    const url = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/ws`;
-    let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(url);
-    } catch {
-      return;
+  useBridgeEvents((msg) => {
+    if (msg.type === "claude_code_transcript_appended") {
+      const data = msg.payload as { sessionId?: string; event?: ClaudeCodeTranscriptEvent };
+      if (data.sessionId === session.id && data.event !== undefined) {
+        const event = data.event;
+        setEvents((prev) => [...prev, event]);
+      }
+    } else if (msg.type === "claude_code_pending_upserted") {
+      const item = msg.payload as ClaudeCodePendingItem;
+      if (item.sessionId !== session.id) return;
+      setPending((prev) => [...prev.filter((p) => p.id !== item.id), item]);
+    } else if (msg.type === "claude_code_pending_resolved") {
+      const data = msg.payload as { id: string };
+      setPending((prev) => prev.filter((item) => item.id !== data.id));
+    } else if (msg.type === "claude_code_session_upserted") {
+      router.refresh();
     }
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        if (
-          message.type === "claude_code_transcript_appended" &&
-          message.payload?.sessionId === session.id
-        ) {
-          setEvents((prev) => [...prev, message.payload.event]);
-        } else if (
-          message.type === "claude_code_pending_upserted" &&
-          message.payload?.sessionId === session.id
-        ) {
-          setPending((prev) => [
-            ...prev.filter((item) => item.id !== message.payload.id),
-            message.payload,
-          ]);
-        } else if (message.type === "claude_code_pending_resolved") {
-          setPending((prev) => prev.filter((item) => item.id !== message.payload?.id));
-        } else if (message.type === "claude_code_session_upserted") {
-          router.refresh();
-        }
-      } catch {}
-    };
-    return () => ws?.close();
-  }, [router, session.id]);
+  });
 
   useEffect(() => {
     scrollRef.current?.scrollTo({

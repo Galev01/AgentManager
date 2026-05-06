@@ -14,7 +14,7 @@ import logsRouter from "./routes/logs.js";
 import relayRouter from "./routes/relay.js";
 import routingRouter from "./routes/routing.js";
 import composeRouter from "./routes/compose.js";
-import agentsRouter from "./routes/agents.js";
+import { createAgentsRouter } from "./routes/agents.js";
 import agentSessionsRouter from "./routes/agent-sessions.js";
 import cronRouter from "./routes/cron.js";
 import channelsRouter from "./routes/channels.js";
@@ -28,11 +28,20 @@ import youtubeChatRouter from "./routes/youtube-chat.js";
 import youtubeRebuildRouter from "./routes/youtube-rebuild.js";
 import claudeCodeRouter from "./routes/claude-code.js";
 import { createTelemetryRouter } from "./routes/telemetry.js";
+import { createModelsRouter } from "./routes/models.js";
+import { createAgentModelsRouter } from "./routes/agent-models.js";
 import { createRuntimeRegistry } from "./services/runtimes/registry.js";
 import { realFactories } from "./services/runtimes/factories.js";
 import { createRuntimesRouter } from "./routes/runtimes.js";
 import { createRuntimeConfigRouter } from "./routes/runtime-config.js";
 import { createRuntimeConfigService, probeFromRegistry } from "./services/runtime-config.js";
+import { createCopilotRouter } from "./routes/copilot.js";
+import { createCopilotStore } from "./services/copilot/store.js";
+import { createCopilotOrchestrator } from "./services/copilot/orchestrator.js";
+import { createOpenclawChatBackend } from "./services/copilot/backends/openclaw.js";
+import { createHermesChatBackend } from "./services/copilot/backends/hermes.js";
+import { callGateway } from "./services/gateway.js";
+import path from "node:path";
 import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
 import { scanProjects } from "./services/codebase-reviewer/discovery.js";
 import { repairOnStartup as repairYoutubeOnStartup } from "./services/youtube-worker.js";
@@ -80,7 +89,9 @@ app.use(logsRouter);
 app.use(relayRouter);
 app.use(routingRouter);
 app.use(composeRouter);
-app.use(agentsRouter);
+app.use(createAgentsRouter({ callGateway }));
+app.use(createModelsRouter({ callGateway }));
+app.use(createAgentModelsRouter({ callGateway }));
 app.use(agentSessionsRouter);
 app.use(cronRouter);
 app.use(channelsRouter);
@@ -117,6 +128,30 @@ const runtimeConfigService = createRuntimeConfigService({
 });
 app.use(createRuntimeConfigRouter({ service: runtimeConfigService }));
 
+const copilotRoot = path.join(config.managementDir, "copilot");
+const copilotStore = createCopilotStore({ rootDir: copilotRoot });
+const openclawChatBackend = createOpenclawChatBackend({ callGateway });
+const hermesShimEndpoint = process.env.HERMES_SHIM_URL
+  ?? (await runtimeRegistry.get("hermes-remote"))?.endpoint
+  ?? "http://192.168.0.10:9119";
+const hermesChatBackend = createHermesChatBackend({
+  endpoint: hermesShimEndpoint,
+  bearer: process.env.HERMES_TOKEN ?? "",
+});
+const copilotOrchestrator = createCopilotOrchestrator({
+  store: copilotStore,
+  backendFor: (kind) => (kind === "openclaw" ? openclawChatBackend : hermesChatBackend),
+  onAudit: ({ event, data }) => console.log(`copilot.${event}`, JSON.stringify(data)),
+});
+app.use(createCopilotRouter({
+  store: copilotStore,
+  orchestrator: copilotOrchestrator,
+  backendCreator: async (sessionId, ownerUserId, backend) => {
+    const adapter = backend === "openclaw" ? openclawChatBackend : hermesChatBackend;
+    return adapter.createSession({ sessionId, ownerUserId });
+  },
+}));
+
 const server = app.listen(config.port, config.host, () => {
   console.log(`Bridge listening on ${config.host}:${config.port}`);
 });
@@ -127,6 +162,7 @@ void (async () => {
   try { await scanProjects(); } catch (e) { console.warn("reviewer scan failed:", e); }
   try { await repairYoutubeOnStartup(); } catch (e) { console.warn("youtube repair failed:", e); }
   try { await authService.sessions.sweep(); } catch (e) { console.warn("session sweep failed:", e); }
+  try { await copilotOrchestrator.recoverOnBoot(); } catch (e) { console.warn("copilot recover failed:", e); }
 })();
 
 export { app, server, authService };

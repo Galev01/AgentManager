@@ -1,7 +1,7 @@
 export const PERMISSION_CATEGORIES = [
   "overview","conversations","claude_code","reviews","agents","agent_sessions",
   "youtube","cron","channels","tools","routing","relay","brain","capabilities",
-  "commands","config","settings","logs","telemetry","auth","runtimes",
+  "commands","config","settings","logs","telemetry","auth","runtimes","copilot",
 ] as const;
 
 export type PermissionCategory = (typeof PERMISSION_CATEGORIES)[number];
@@ -82,6 +82,7 @@ export const PERMISSION_REGISTRY = {
   "runtimes.view":              { category: "runtimes",       label: "View runtimes",             description: "List runtimes + capability snapshots + activity." },
   "runtimes.invoke":            { category: "runtimes",       label: "Invoke runtime actions",    description: "Send actions to a runtime adapter." },
   "runtimes.config":            { category: "runtimes",       label: "Configure runtimes",        description: "Toggle runtime enable + select primary runtime." },
+  "copilot.chat":               { category: "copilot",        label: "Use Copilot chat",          description: "Open the dashboard Copilot chat panel and create/use sessions." },
 } as const satisfies Record<string, Omit<PermissionMeta, "id">>;
 
 export type PermissionId = keyof typeof PERMISSION_REGISTRY;

@@ -8,6 +8,7 @@ import type {
   RoutingRule,
   Channel,
   RuntimeConfigSnapshot,
+  AgentModelsSnapshot,
 } from "@openclaw-manager/types";
 import { useBridgeEvents } from "@/lib/ws-client";
 import { Button, PageHeader } from "@/components/ui";
@@ -15,6 +16,7 @@ import { ToastProvider } from "./toast";
 import { useDirtySignal } from "./dirty-signal";
 import { RuntimeSection } from "./runtime-section";
 import { RuntimesSection } from "./runtimes-section";
+import { AgentModelsSection } from "./agent-models-section";
 import { RecipientsSection } from "./recipients-section";
 import { RoutingSection } from "./routing-section";
 import { ChannelsSection } from "./channels-section";
@@ -27,6 +29,7 @@ interface Props {
   initialRules: RoutingRule[];
   initialChannels: Channel[];
   initialRuntimeConfig: RuntimeConfigSnapshot | null;
+  initialAgentModels: AgentModelsSnapshot | null;
 }
 
 export function SettingsView({
@@ -35,6 +38,7 @@ export function SettingsView({
   initialRules,
   initialChannels,
   initialRuntimeConfig,
+  initialAgentModels,
 }: Props) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -93,6 +97,8 @@ export function SettingsView({
           <span>·</span>
           <a href="#runtimes">Runtimes</a>
           <span>·</span>
+          <a href="#agent-models">Agent Models</a>
+          <span>·</span>
           <a href="#recipients">Recipients</a>
           <span>·</span>
           <a href="#routing">Routing</a>
@@ -106,6 +112,9 @@ export function SettingsView({
         <div id="runtime"><RuntimeSection settings={initialSettings} onDirtyChange={dirtySignal.set} /></div>
         {initialRuntimeConfig && (
           <div id="runtimes"><RuntimesSection snapshot={initialRuntimeConfig} /></div>
+        )}
+        {initialAgentModels && (
+          <div id="agent-models"><AgentModelsSection snapshot={initialAgentModels} /></div>
         )}
         <div id="recipients"><RecipientsSection recipients={initialRecipients} defaultRelayTarget={initialSettings.relayTarget} /></div>
         <div id="routing"><RoutingSection rules={initialRules} recipients={initialRecipients} /></div>
