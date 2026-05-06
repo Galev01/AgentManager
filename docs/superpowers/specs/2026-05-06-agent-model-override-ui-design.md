@@ -184,6 +184,8 @@ Reuse the existing permission `agents.manage` (already in `packages/types/src/au
 
 - The permission ID already exists in the registry and is part of the standard admin grant. No registry or migration change is needed.
 - Required by `PATCH /agents/:name` for any field, not only `model`. This is intentional: the existing route had no gate, and "model only" is a weaker stance than "all mutating agent fields." The route is small enough that scoping the gate to one field would invent a per-field permission system that has no other use in the codebase.
+- Required by `DELETE /agents/:name`. The permission's existing description in the registry ("Create/update/delete") covers DELETE, and leaving it ungated while gating PATCH would be an inconsistent and weaker mutation surface. The gate is a one-line addition with no contract change.
+- `POST /agents` (create) is **not** gated by this spec. The create path's existing partial-success contract (best-effort `agents.update` after `agents.create`, returning a `warning` field on failure) is out of scope; tightening it would change agent-creation contract and warrants a separate change.
 - Read endpoints (`GET /agents`, `GET /agent-models`, `GET /models`) do not require `agents.manage`; reading uses `agents.view`. Only mutators need the manage permission.
 
 If a finer-grained "model-only" permission is ever needed, that is a deliberate broader auth design pass, not a one-off exception on this feature.
