@@ -2,7 +2,8 @@ node_modules/
 dist/
 .next/
 .env
-.env.local
+.env.*
+scratch*
 *.tsbuildinfo
 .openclaw-review/
 .claude/
