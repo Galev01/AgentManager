@@ -3,8 +3,10 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { AgentForm } from "@/components/agent-form";
 import { getAgent } from "@/lib/bridge-client";
+import { getModelsCatalog } from "@/lib/agent-models-client";
 import { requirePermission } from "@/lib/auth/current-user";
 import { PageHeader } from "@/components/ui";
+import type { ModelDescriptor } from "@openclaw-manager/types";
 
 export async function generateMetadata({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
@@ -24,6 +26,10 @@ export default async function AgentDetailPage({
   if (!agent) {
     notFound();
   }
+  const catalog = await getModelsCatalog().catch(() => ({
+    models: [] as ModelDescriptor[],
+    status: "unavailable" as const,
+  }));
 
   const parts: string[] = [];
   if (agent.createdAt) parts.push(`Created ${new Date(agent.createdAt).toLocaleString()}`);
@@ -44,9 +50,13 @@ export default async function AgentDetailPage({
         </div>
         <PageHeader
           title={agent.name}
-          sub={parts.length > 0 ? parts.join(" · ") : undefined}
+          sub={parts.length > 0 ? parts.join(" - ") : undefined}
         />
-        <AgentForm agent={agent} />
+        <AgentForm
+          agent={agent}
+          modelCatalog={catalog.models}
+          modelCatalogStatus={catalog.status}
+        />
       </div>
     </AppShell>
   );

@@ -39,6 +39,32 @@ test("PATCH /agents/:name returns 403 without agents.manage", async () => {
   a.close();
 });
 
+test("POST /agents validates requested model before creating", async () => {
+  const a = bootApp({
+    perms: ["agents.manage"],
+    gatewayHandler: (method) => {
+      if (method === "models.list") {
+        return { models: [{ id: "openai-codex/gpt-5.4", provider: "openai-codex" }] };
+      }
+      throw new Error(`unexpected: ${method}`);
+    },
+  });
+  const r = await fetch(`${a.url}/agents`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "new-agent",
+      workspace: "C:\\work",
+      model: "ollama/does-not-exist",
+    }),
+  });
+  assert.equal(r.status, 400);
+  const body = await r.json();
+  assert.equal(body.error, "invalid_model_id");
+  assert.equal(a.calls.find((c) => c.method === "agents.create"), undefined);
+  a.close();
+});
+
 test("PATCH /agents/:name 400 when model not in catalog", async () => {
   const a = bootApp({
     perms: ["agents.manage"],
@@ -132,7 +158,7 @@ test("PATCH /agents/:name 400 when model is empty string", async () => {
   // ignores empty/null model values (`...params.model ? { model } : {}`),
   // so passing one is ambiguous "clear-like" input that the bridge will not
   // proxy. Clearing is not supported in Phase 1; the UI uses "Set to current
-  // default" instead. See spec § "Set to current default".
+  // default" instead. See spec "Set to current default".
   const a = bootApp({
     perms: ["agents.manage"],
     gatewayHandler: () => { throw new Error("should not reach gateway"); },

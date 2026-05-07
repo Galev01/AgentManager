@@ -29,6 +29,18 @@ export function createAgentsRouter(deps: AgentsRouterDeps): ExpressRouter {
         res.status(400).json({ error: "workspace is required" });
         return;
       }
+      const requestedModel = typeof model === "string" ? model.trim() : "";
+      if (requestedModel) {
+        const validation = await modelsService.validateModelAgainstCatalog(requestedModel);
+        if (!validation.ok) {
+          if (validation.status === 503) {
+            res.status(503).json({ error: validation.reason, detail: "gateway models.list unavailable; cannot validate model id" });
+          } else {
+            res.status(400).json({ error: validation.reason, detail: `model "${requestedModel}" not in current allowed catalog` });
+          }
+          return;
+        }
+      }
       const createParams: Record<string, unknown> = {
         name: name.trim(),
         workspace: workspace.trim(),
@@ -41,11 +53,11 @@ export function createAgentsRouter(deps: AgentsRouterDeps): ExpressRouter {
         name?: string;
         workspace?: string;
       };
-      if (typeof model === "string" && model.trim() && created?.agentId) {
+      if (requestedModel && created?.agentId) {
         try {
           await callGateway("agents.update", {
             agentId: created.agentId,
-            model: model.trim(),
+            model: requestedModel,
           });
         } catch (updateErr: any) {
           res.status(201).json({

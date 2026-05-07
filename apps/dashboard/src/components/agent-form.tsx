@@ -2,13 +2,32 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Agent } from "@openclaw-manager/types";
+import type { Agent, ModelDescriptor } from "@openclaw-manager/types";
 import { useTelemetry } from "@/lib/telemetry";
+import { ModelSelect } from "@/components/model-select";
 
-export function AgentForm({ agent }: { agent: Agent }) {
+function getModelId(agent: Agent): string {
+  const raw = (agent as Agent & { model?: unknown }).model;
+  if (typeof raw === "string") return raw;
+  if (raw && typeof raw === "object") {
+    const primary = (raw as { primary?: unknown }).primary;
+    if (typeof primary === "string") return primary;
+  }
+  return "";
+}
+
+export function AgentForm({
+  agent,
+  modelCatalog,
+  modelCatalogStatus,
+}: {
+  agent: Agent;
+  modelCatalog: ModelDescriptor[];
+  modelCatalogStatus: "ok" | "unavailable";
+}) {
   const router = useRouter();
   const { trackOperation } = useTelemetry();
-  const [model, setModel] = useState(agent.model ?? "");
+  const [model, setModel] = useState(getModelId(agent));
   const [systemPrompt, setSystemPrompt] = useState(agent.systemPrompt ?? "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -31,7 +50,7 @@ export function AgentForm({ agent }: { agent: Agent }) {
           });
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));
-            throw new Error(data.error || "Failed to save agent");
+            throw new Error(data.detail || data.error || "Failed to save agent");
           }
         },
         { name: agent.name, length: systemPrompt?.length ?? 0 },
@@ -89,45 +108,47 @@ export function AgentForm({ agent }: { agent: Agent }) {
       )}
 
       <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-6 space-y-5">
-        {/* Model */}
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-zinc-300">Model</label>
-          <input
-            type="text"
-            placeholder="e.g. claude-3-5-sonnet-20241022"
+          <ModelSelect
+            catalog={modelCatalog}
+            status={modelCatalogStatus}
             value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="w-full rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+            onChange={setModel}
+            placeholder="Select a model"
+            style={{ width: "100%" }}
+            className="focus:border-blue-500 focus:outline-none"
           />
+          {modelCatalogStatus === "unavailable" && (
+            <p className="text-xs text-amber-300">Model catalog is unavailable from the runtime.</p>
+          )}
         </div>
 
-        {/* System Prompt */}
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-zinc-300">System Prompt</label>
           <textarea
             rows={6}
-            placeholder="Enter system prompt…"
+            placeholder="Enter system prompt..."
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
             className="w-full rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none resize-y"
           />
         </div>
 
-        {/* Actions */}
         <div className="flex items-center justify-between pt-2">
           <button
             onClick={handleSave}
             disabled={saving || deleting}
             className="rounded bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving..." : "Save"}
           </button>
           <button
             onClick={handleDelete}
             disabled={saving || deleting}
             className="rounded bg-red-700/40 px-5 py-2 text-sm font-semibold text-red-300 hover:bg-red-700/70 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
-            {deleting ? "Deleting…" : "Delete Agent"}
+            {deleting ? "Deleting..." : "Delete Agent"}
           </button>
         </div>
       </div>

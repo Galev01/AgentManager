@@ -2,26 +2,13 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { AgentModelsSnapshot, ModelDescriptor } from "@openclaw-manager/types";
+import type { AgentModelsSnapshot } from "@openclaw-manager/types";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui";
 import { PermissionGate } from "@/components/permission-gate";
+import { ModelSelect } from "@/components/model-select";
 import { useToast } from "./use-toast";
 
 interface Props { snapshot: AgentModelsSnapshot }
-
-function formatProviderLabel(provider: string): string {
-  return provider.replace(/-/g, " ");
-}
-
-function buildGroupedCatalog(catalog: ModelDescriptor[]): Map<string, ModelDescriptor[]> {
-  const map = new Map<string, ModelDescriptor[]>();
-  for (const m of catalog) {
-    const list = map.get(m.provider) ?? [];
-    list.push(m);
-    map.set(m.provider, list);
-  }
-  return map;
-}
 
 export function AgentModelsSection({ snapshot }: Props) {
   const router = useRouter();
@@ -30,12 +17,8 @@ export function AgentModelsSection({ snapshot }: Props) {
   const [local, setLocal] = useState(snapshot);
   const [rowPending, setRowPending] = useState<string | null>(null);
 
-  // Reconcile local state when the parent passes a fresh snapshot, e.g. after
-  // router.refresh(). Without this, useState only honors `snapshot` on first
-  // mount and the UI silently goes stale when other clients change a model.
   useEffect(() => { setLocal(snapshot); }, [snapshot]);
 
-  const grouped = useMemo(() => buildGroupedCatalog(local.catalog), [local.catalog]);
   const catalogIds = useMemo(() => new Set(local.catalog.map((m) => m.id)), [local.catalog]);
 
   async function patch(agentName: string, modelId: string) {
@@ -59,7 +42,6 @@ export function AgentModelsSection({ snapshot }: Props) {
         }
         throw new Error(friendly);
       }
-      // Optimistic local update
       setLocal((prev) => ({
         ...prev,
         agents: prev.agents.map((a) =>
@@ -92,7 +74,7 @@ export function AgentModelsSection({ snapshot }: Props) {
           )}
           <div className="text-xs text-neutral-400">
             Catalog source: OpenClaw runtime
-            {defaultModelId && <> · Default model: <span className="text-neutral-200">{defaultModelId}</span></>}
+            {defaultModelId && <> - Default model: <span className="text-neutral-200">{defaultModelId}</span></>}
           </div>
           <div className="grid gap-2">
             {local.agents.map((a) => {
@@ -110,30 +92,16 @@ export function AgentModelsSection({ snapshot }: Props) {
                     </div>
                   </div>
                   <PermissionGate perm="agents.manage">
-                    <select
-                      className="bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm text-neutral-100"
+                    <ModelSelect
+                      catalog={local.catalog}
+                      status={local.catalogStatus}
                       value={a.effectiveModelId ?? ""}
                       disabled={disabled}
-                      onChange={(e) => patch(a.agentId, e.target.value)}
-                    >
-                      <option value="" disabled>
-                        {a.effectiveModelId ? "" : "Select a model…"}
-                      </option>
-                      {Array.from(grouped.entries()).map(([provider, models]) => (
-                        <optgroup key={provider} label={formatProviderLabel(provider)}>
-                          {models.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.id}
-                              {m.contextWindow ? ` · ctx ${Math.round(m.contextWindow / 1000)}k` : ""}
-                              {typeof m.costInput === "number" ? ` · in $${m.costInput}/M` : ""}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                      {a.effectiveModelId && !inCatalog && (
-                        <option value={a.effectiveModelId}>{a.effectiveModelId} (not in catalog)</option>
-                      )}
-                    </select>
+                      placeholder={a.effectiveModelId ? "" : "Select a model"}
+                      className="text-neutral-100"
+                      style={{ minWidth: 300 }}
+                      onChange={(modelId) => patch(a.agentId, modelId)}
+                    />
                     <button
                       type="button"
                       className="rounded border border-neutral-700 px-2 py-1 text-sm text-neutral-200 disabled:opacity-50"
@@ -149,7 +117,7 @@ export function AgentModelsSection({ snapshot }: Props) {
             })}
           </div>
           <div className="text-xs text-neutral-500">
-            "Set to current default" saves the current default as this agent's model. It does not restore inheritance — future changes to the global default will not follow automatically.
+            "Set to current default" saves the current default as this agent's model. It does not restore inheritance; future changes to the global default will not follow automatically.
           </div>
         </div>
       </CardBody>
