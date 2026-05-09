@@ -1,4 +1,4 @@
-$target = "C:\Users\GalLe\Cursor projects\OpenClaw-manager\scripts\restart-bridge-service.ps1"
+$target = Join-Path $PSScriptRoot "restart-bridge-service.ps1"
 $transcript = "$env:TEMP\openclaw-bridge-restart.log"
 try {
     Start-Process -FilePath "powershell.exe" `

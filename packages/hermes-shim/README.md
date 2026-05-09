@@ -47,7 +47,7 @@ if `HERMES_SHIM_HOST` is anything other than `127.0.0.1` and
 than opening a LAN port:
 
 ```
-bridge-host$ ssh -L 19119:127.0.0.1:9119 gal@192.168.0.10
+bridge-host$ ssh -L 19119:127.0.0.1:9119 <user>@<hermes-host>
 ```
 
 The bridge runtime descriptor's `endpoint` then points at:

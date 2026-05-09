@@ -133,7 +133,7 @@ const copilotStore = createCopilotStore({ rootDir: copilotRoot });
 const openclawChatBackend = createOpenclawChatBackend({ callGateway });
 const hermesShimEndpoint = process.env.HERMES_SHIM_URL
   ?? (await runtimeRegistry.get("hermes-remote"))?.endpoint
-  ?? "http://192.168.0.10:9119";
+  ?? "http://127.0.0.1:9119";
 const hermesChatBackend = createHermesChatBackend({
   endpoint: hermesShimEndpoint,
   bearer: process.env.HERMES_TOKEN ?? "",

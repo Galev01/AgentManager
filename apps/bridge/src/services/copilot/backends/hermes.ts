@@ -12,7 +12,7 @@ import type {
 import { defaultHttp, type HttpClient } from "../../runtimes/adapter-base.js";
 
 export type HermesChatBackendDeps = {
-  endpoint: string;             // e.g. http://192.168.0.10:9119
+  endpoint: string;             // e.g. http://<hermes-host>:9119 (or http://127.0.0.1:9119 via SSH local-forward)
   bearer: string;               // HERMES_TOKEN
   http?: HttpClient;
   timeoutMs?: number;           // default 200_000 (slightly above shim's 180s)

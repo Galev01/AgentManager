@@ -1,4 +1,5 @@
 import path from "node:path";
+import os from "node:os";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -28,7 +29,7 @@ export const config = {
   reviewerScanRoots: (
     process.env.REVIEWER_SCAN_ROOTS ||
     process.env.REVIEWER_SCAN_ROOT ||
-    "C:\\Users\\GalLe\\Cursor projects"
+    path.join(os.homedir(), "Documents")
   )
     .split(/[;]/)
     .map((s) => s.trim())

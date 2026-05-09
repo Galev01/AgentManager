@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Deploy mcp-hermes to remote 192.168.0.10. Run from repo root.
+# Deploy mcp-hermes to a remote host. Run from repo root.
+# REMOTE_USER and REMOTE_HOST must be supplied via env (no defaults).
 set -euo pipefail
 
-REMOTE_USER="${REMOTE_USER:-gal}"
-REMOTE_HOST="${REMOTE_HOST:-192.168.0.10}"
+: "${REMOTE_USER:?REMOTE_USER must be set (e.g. REMOTE_USER=alice)}"
+: "${REMOTE_HOST:?REMOTE_HOST must be set (e.g. REMOTE_HOST=hermes.example.com)}"
 REMOTE_LIB="\$HOME/.local/lib/mcp-hermes"
 REMOTE_SYSTEMD="\$HOME/.config/systemd/user"
 REMOTE_ENV_DIR="\$HOME/.mcp-hermes"
