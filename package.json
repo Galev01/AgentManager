@@ -2,6 +2,9 @@
   "name": "openclaw-whatsapp-manager",
   "private": true,
   "scripts": {
+    "setup": "tsx scripts/setup.ts",
+    "doctor": "tsx scripts/doctor.ts",
+    "dev": "concurrently -n bridge,dashboard -c blue,green \"pnpm --filter bridge dev\" \"pnpm --filter dashboard dev\"",
     "dev:bridge": "pnpm --filter bridge dev",
     "dev:dashboard": "pnpm --filter dashboard dev",
     "build": "pnpm -r build",
@@ -9,5 +12,9 @@
     "build:bridge": "pnpm --filter bridge build",
     "smoke:youtube": "node scripts/smoke-youtube-v2.mjs",
     "smoke:runtimes": "node scripts/smoke-runtimes.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "tsx": "^4.21.0"
   }
 }
