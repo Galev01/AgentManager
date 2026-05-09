@@ -11,7 +11,11 @@
     "build:dashboard": "pnpm --filter dashboard build",
     "build:bridge": "pnpm --filter bridge build",
     "smoke:youtube": "node scripts/smoke-youtube-v2.mjs",
-    "smoke:runtimes": "node scripts/smoke-runtimes.mjs"
+    "smoke:runtimes": "node scripts/smoke-runtimes.mjs",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:restart": "pm2 restart ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs",
+    "pm2:logs": "pm2 logs --lines 200"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
