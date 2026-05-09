@@ -1,6 +1,21 @@
 {
-  "name": "openclaw-whatsapp-manager",
+  "name": "openclaw-manager",
+  "version": "0.1.0",
   "private": true,
+  "description": "Multi-runtime control plane and dashboard for collaborative AI agents (OpenClaw + optional Hermes).",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "keywords": [
+    "openclaw",
+    "ai-agents",
+    "control-plane",
+    "dashboard",
+    "hermes"
+  ],
   "scripts": {
     "bootstrap": "tsx scripts/setup.ts",
     "doctor": "tsx scripts/doctor.ts",
