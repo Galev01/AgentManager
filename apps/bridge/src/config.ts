@@ -1,52 +1,179 @@
 import path from "node:path";
 import os from "node:os";
+import { resolveSdkPath, type ResolveSource } from "./openclaw/resolve-sdk.js";
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required env var: ${name}`);
-  return value;
+// ---------------------------------------------------------------------------
+// Pure defaults computation. Exposed for tests; takes injectable env+homedir.
+// ---------------------------------------------------------------------------
+
+export interface ComputeDefaultsOptions {
+  env?: NodeJS.ProcessEnv;
+  homedir?: () => string;
 }
 
-function requireAuthAssertionSecret(): void {
-  if (!process.env.AUTH_ASSERTION_SECRET || process.env.AUTH_ASSERTION_SECRET.length < 32) {
-    throw new Error("AUTH_ASSERTION_SECRET must be set and >= 32 chars");
-  }
+export interface BridgeDefaults {
+  bridgeHost: string;
+  bridgePort: number;
+  openclawHome: string;
+  openclawStatePath: string;
+  managementDir: string;
+  sessionsDir: string;
+  brainVaultPath: string;
+  reviewerScanRoots: string[];
+  reviewerStateDir: string;
+  hermesEnabled: boolean;
+  hermesBaseUrl: string;
+  hermesToken: string;
 }
-requireAuthAssertionSecret();
 
-export const config = {
-  host: process.env.BRIDGE_HOST || "127.0.0.1",
-  port: Number(process.env.BRIDGE_PORT) || 3100,
-  token: requireEnv("BRIDGE_TOKEN"),
-  openclawStatePath: requireEnv("OPENCLAW_STATE_PATH"),
-  managementDir: requireEnv("MANAGEMENT_DIR"),
-  runtimesConfigPath: process.env.RUNTIMES_CONFIG_PATH
-    ?? `${process.env.MANAGEMENT_DIR}/runtimes.json`,
-  gatewayUrl: process.env.OPENCLAW_GATEWAY_URL || "http://127.0.0.1:18789",
-  gatewayToken: requireEnv("OPENCLAW_GATEWAY_TOKEN"),
-  sessionsDir: process.env.OPENCLAW_SESSIONS_DIR || "",
-  brainVaultPath: process.env.BRAIN_VAULT_PATH || "",
-  reviewerScanRoots: (
-    process.env.REVIEWER_SCAN_ROOTS ||
-    process.env.REVIEWER_SCAN_ROOT ||
-    path.join(os.homedir(), "Documents")
-  )
+export function computeDefaults(opts: ComputeDefaultsOptions = {}): BridgeDefaults {
+  const env = opts.env ?? process.env;
+  const home = (opts.homedir ?? os.homedir)();
+
+  const openclawHome =
+    env.OPENCLAW_HOME && env.OPENCLAW_HOME.length > 0
+      ? env.OPENCLAW_HOME
+      : path.join(home, ".openclaw");
+
+  const managementDir =
+    env.MANAGEMENT_DIR && env.MANAGEMENT_DIR.length > 0
+      ? env.MANAGEMENT_DIR
+      : path.join(
+          openclawHome,
+          "workspace/.openclaw/extensions/whatsapp-auto-reply/management",
+        );
+
+  const openclawStatePath =
+    env.OPENCLAW_STATE_PATH && env.OPENCLAW_STATE_PATH.length > 0
+      ? env.OPENCLAW_STATE_PATH
+      : path.join(
+          openclawHome,
+          "workspace/.openclaw/extensions/whatsapp-auto-reply/whatsapp-auto-reply-state.json",
+        );
+
+  const sessionsDir =
+    env.OPENCLAW_SESSIONS_DIR && env.OPENCLAW_SESSIONS_DIR.length > 0
+      ? env.OPENCLAW_SESSIONS_DIR
+      : path.join(openclawHome, "agents/main/sessions");
+
+  const brainVaultPath =
+    env.BRAIN_VAULT_PATH && env.BRAIN_VAULT_PATH.length > 0
+      ? env.BRAIN_VAULT_PATH
+      : path.join(home, "Documents/Brainclaw/OpenClaw Brain");
+
+  const scanRootsRaw =
+    env.REVIEWER_SCAN_ROOTS ||
+    env.REVIEWER_SCAN_ROOT ||
+    path.join(home, "Documents");
+  const reviewerScanRoots = scanRootsRaw
     .split(/[;]/)
     .map((s) => s.trim())
-    .filter((s) => s.length > 0),
+    .filter((s) => s.length > 0);
+
+  const reviewerStateDir =
+    env.REVIEWER_STATE_DIR ||
+    path.join(
+      home,
+      ".openclaw/workspace/.openclaw/extensions/codebase-reviewer",
+    );
+
+  const hermesBaseUrl = env.HERMES_BASE_URL ?? "";
+  const hermesToken = env.HERMES_TOKEN ?? "";
+  const hermesEnabled = hermesBaseUrl.length > 0;
+
+  return {
+    bridgeHost: env.BRIDGE_HOST || "127.0.0.1",
+    bridgePort: Number(env.BRIDGE_PORT) || 3100,
+    openclawHome,
+    openclawStatePath,
+    managementDir,
+    sessionsDir,
+    brainVaultPath,
+    reviewerScanRoots,
+    reviewerStateDir,
+    hermesEnabled,
+    hermesBaseUrl,
+    hermesToken,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Required-env aggregation. Single multi-line throw instead of failing fast.
+// ---------------------------------------------------------------------------
+
+export interface MissingEnv {
+  name: string;
+  reason: string;
+}
+
+export function aggregateMissing(env: NodeJS.ProcessEnv): MissingEnv[] {
+  const missing: MissingEnv[] = [];
+  if (!env.BRIDGE_TOKEN) {
+    missing.push({ name: "BRIDGE_TOKEN", reason: "required" });
+  }
+  if (!env.OPENCLAW_GATEWAY_TOKEN) {
+    missing.push({ name: "OPENCLAW_GATEWAY_TOKEN", reason: "required" });
+  }
+  if (!env.AUTH_ASSERTION_SECRET || env.AUTH_ASSERTION_SECRET.length < 32) {
+    missing.push({
+      name: "AUTH_ASSERTION_SECRET",
+      reason: "must be set and >= 32 chars",
+    });
+  }
+  return missing;
+}
+
+function formatMissingError(missing: MissingEnv[]): string {
+  const lines = ["Bridge configuration is incomplete:"];
+  for (const m of missing) {
+    lines.push(`  - ${m.name}: ${m.reason}`);
+  }
+  lines.push("Set the missing values in apps/bridge/.env (see .env.example).");
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Top-level validation + config object.
+// ---------------------------------------------------------------------------
+
+const _missing = aggregateMissing(process.env);
+if (_missing.length > 0) {
+  throw new Error(formatMissingError(_missing));
+}
+
+const _defaults = computeDefaults();
+
+const _sdkResolved = resolveSdkPath();
+
+export const config = {
+  host: _defaults.bridgeHost,
+  port: _defaults.bridgePort,
+  token: process.env.BRIDGE_TOKEN as string,
+  openclawHome: _defaults.openclawHome,
+  openclawStatePath: _defaults.openclawStatePath,
+  managementDir: _defaults.managementDir,
+  runtimesConfigPath:
+    process.env.RUNTIMES_CONFIG_PATH ?? `${_defaults.managementDir}/runtimes.json`,
+  gatewayUrl: process.env.OPENCLAW_GATEWAY_URL || "http://127.0.0.1:18789",
+  gatewayToken: process.env.OPENCLAW_GATEWAY_TOKEN as string,
+  sessionsDir: _defaults.sessionsDir,
+  brainVaultPath: _defaults.brainVaultPath,
+  // OpenClaw SDK resolution — single source of truth.
+  openclawSdkPath: _sdkResolved.path,
+  openclawSdkSource: _sdkResolved.source as ResolveSource,
+  reviewerScanRoots: _defaults.reviewerScanRoots,
   get reviewerScanRoot(): string {
     return (this as any).reviewerScanRoots[0] ?? "";
   },
-  reviewerStateDir:
-    process.env.REVIEWER_STATE_DIR ||
-    path.join(
-      process.env.USERPROFILE || "",
-      ".openclaw/workspace/.openclaw/extensions/codebase-reviewer"
-    ),
+  reviewerStateDir: _defaults.reviewerStateDir,
   reviewerAgent: process.env.REVIEWER_AGENT || "reviewer",
   reviewerTimeoutMs: Number(process.env.REVIEWER_TIMEOUT_MS) || 600000,
   reviewerAckCooldownMs:
     Number(process.env.REVIEWER_ACK_COOLDOWN_MS) || 86400000,
+  // Hermes — optional.
+  hermesEnabled: _defaults.hermesEnabled,
+  hermesBaseUrl: _defaults.hermesBaseUrl,
+  hermesToken: _defaults.hermesToken,
   get reviewerStatePath() {
     return path.join(this.reviewerStateDir, "state.json");
   },
