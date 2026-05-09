@@ -2,7 +2,7 @@
   "name": "openclaw-whatsapp-manager",
   "private": true,
   "scripts": {
-    "setup": "tsx scripts/setup.ts",
+    "bootstrap": "tsx scripts/setup.ts",
     "doctor": "tsx scripts/doctor.ts",
     "dev": "concurrently -n bridge,dashboard -c blue,green \"pnpm --filter bridge dev\" \"pnpm --filter dashboard dev\"",
     "dev:bridge": "pnpm --filter bridge dev",

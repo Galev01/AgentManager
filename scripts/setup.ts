@@ -115,7 +115,7 @@ async function main() {
   const adminPassword = readablePassword();
 
   // Idempotency check
-  if (fs.existsSync(bridgeEnvPath) && !args.yes) {
+  if (fs.existsSync(bridgeEnvPath) && !args.yes && !args.resetAdminPassword) {
     const rl = readline.createInterface({ input: stdin, output: stdout });
     const ok = await rl.question(`${bridgeEnvPath} exists. Overwrite? [y/N]: `);
     rl.close();
