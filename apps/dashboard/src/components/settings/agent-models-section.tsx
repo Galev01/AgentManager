@@ -73,7 +73,7 @@ export function AgentModelsSection({ snapshot }: Props) {
             </div>
           )}
           <div className="text-xs text-neutral-400">
-            Catalog source: OpenClaw runtime
+            Catalog source: Agent runtime
             {defaultModelId && <> - Default model: <span className="text-neutral-200">{defaultModelId}</span></>}
           </div>
           <div className="grid gap-2">

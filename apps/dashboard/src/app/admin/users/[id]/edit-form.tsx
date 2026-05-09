@@ -142,7 +142,7 @@ export function EditForm({
                   })
                 }
               />
-              OpenClaw
+              Agent
             </label>
             <label className="flex items-center gap-1 text-neutral-500" title="available in next phase">
               <input

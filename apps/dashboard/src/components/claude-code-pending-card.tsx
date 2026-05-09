@@ -51,7 +51,7 @@ export function ClaudeCodePendingCard({
 
       <div className="pending-block">
         <div className="pending-label">
-          {mode === "replace" ? "Your reply" : "OpenClaw drafted"}
+          {mode === "replace" ? "Your reply" : "Agent drafted"}
         </div>
         {pending.draftEnvelope && mode === "idle" ? (
           <div style={{ marginBottom: 4 }}>

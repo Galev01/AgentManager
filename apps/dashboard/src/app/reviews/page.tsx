@@ -30,7 +30,7 @@ export default async function ReviewsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-zinc-100">Codebase Reviews</h1>
             <p className="mt-1 text-sm text-zinc-400">
-              OpenClaw reviews each project once per day as a product manager. Acknowledge a report to unlock the next 24-hour window.
+              The agent reviews each project once per day as a product manager. Acknowledge a report to unlock the next 24-hour window.
             </p>
           </div>
           <Link href="/reviews/ideas" className="text-sm text-sky-300 hover:text-sky-200">

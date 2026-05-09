@@ -28,7 +28,7 @@ export type Capability = {
 export const CATEGORY_META: Record<CapabilityCategory, { label: string; description: string; icon: string }> = {
   channels: {
     label: "Channels",
-    description: "Connect messaging platforms to your OpenClaw agent",
+    description: "Connect messaging platforms to your agent",
     icon: "💬",
   },
   models: {

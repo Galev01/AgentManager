@@ -190,7 +190,7 @@ export function AgentTable({
           <SectionTitle>Create agent</SectionTitle>
           <div style={{ padding: 16 }}>
             <p style={{ margin: "0 0 14px 0", fontSize: 12, color: "var(--text-muted)" }}>
-              Workspace is the absolute path to an OpenClaw workspace on the bridge host, e.g.{" "}
+              Workspace is the absolute path to an agent workspace on the bridge host, e.g.{" "}
               <code style={{ fontSize: 11.5, color: "var(--text)" }}>
                 C:\Users\you\.openclaw\workspace
               </code>
