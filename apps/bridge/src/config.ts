@@ -1,6 +1,13 @@
 import path from "node:path";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 import { resolveSdkPath, type ResolveSource } from "./openclaw/resolve-sdk.js";
+
+// ESM `__dirname` workaround. We resolve the manager-owned runtimes.json
+// relative to this module's directory so it works whether we run from src
+// (dev/tests via tsx) or compiled dist.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ---------------------------------------------------------------------------
 // Pure defaults computation. Exposed for tests; takes injectable env+homedir.
@@ -145,6 +152,25 @@ const _defaults = computeDefaults();
 
 const _sdkResolved = resolveSdkPath();
 
+// Resolution order for runtimes.json:
+//   1. RUNTIMES_CONFIG_PATH explicit override.
+//   2. Manager-owned canonical file under apps/bridge/config/runtimes.json
+//      when running from repo root (dev / tests via tsx).
+//   3. Same file but resolved relative to this module — handles compiled
+//      dist where cwd may not be the repo root.
+//   4. Legacy plugin-managed location under managementDir.
+function _computeRuntimesConfigPaths(): string[] {
+  const paths: string[] = [];
+  const explicit = process.env.RUNTIMES_CONFIG_PATH;
+  if (explicit && explicit.length > 0) paths.push(explicit);
+  paths.push(path.resolve(process.cwd(), "apps/bridge/config/runtimes.json"));
+  paths.push(path.resolve(__dirname, "../config/runtimes.json"));
+  paths.push(path.join(_defaults.managementDir, "runtimes.json"));
+  return paths;
+}
+
+const _runtimesConfigPaths = _computeRuntimesConfigPaths();
+
 export const config = {
   host: _defaults.bridgeHost,
   port: _defaults.bridgePort,
@@ -152,8 +178,10 @@ export const config = {
   openclawHome: _defaults.openclawHome,
   openclawStatePath: _defaults.openclawStatePath,
   managementDir: _defaults.managementDir,
-  runtimesConfigPath:
-    process.env.RUNTIMES_CONFIG_PATH ?? `${_defaults.managementDir}/runtimes.json`,
+  runtimesConfigPaths: _runtimesConfigPaths,
+  // Back-compat alias: callers that read a single path get the highest-priority
+  // candidate. Registry now prefers the array form.
+  runtimesConfigPath: _runtimesConfigPaths[0],
   gatewayUrl: process.env.OPENCLAW_GATEWAY_URL || "http://127.0.0.1:18789",
   gatewayToken: process.env.OPENCLAW_GATEWAY_TOKEN as string,
   sessionsDir: _defaults.sessionsDir,

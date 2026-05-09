@@ -1,8 +1,17 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import type { RuntimeAdapter, RuntimeDescriptor, RuntimeKind } from "@openclaw-manager/types";
 import type { AdapterConfig, AdapterFactory } from "./adapter-base.js";
 
-export type RegistryConfig = { configPath: string; factories?: Partial<Record<RuntimeKind, AdapterFactory>> };
+export type RegistryConfig = {
+  /** Single explicit path. Mutually compatible with `configPaths`. */
+  configPath?: string;
+  /**
+   * Ordered candidate paths; the first one that exists wins. Manager-owned
+   * paths are listed before legacy plugin-owned ones.
+   */
+  configPaths?: string[];
+  factories?: Partial<Record<RuntimeKind, AdapterFactory>>;
+};
 
 type RegistryInternal = {
   descriptors: RuntimeDescriptor[];
@@ -25,12 +34,42 @@ export type RuntimeRegistry = {
   list(): Promise<RuntimeDescriptor[]>;
   get(id: string): Promise<RuntimeDescriptor | null>;
   adapter(id: string): Promise<RuntimeAdapter | null>;
+  /** Path the registry actually loaded from. Useful for downstream services
+   *  (e.g. runtime-config) that need to write back to the same file. */
+  configPath(): string;
 };
 
+async function pickConfigPath(cfg: RegistryConfig): Promise<string> {
+  const candidates: string[] = [];
+  if (cfg.configPath) candidates.push(cfg.configPath);
+  if (cfg.configPaths) candidates.push(...cfg.configPaths);
+  if (candidates.length === 0) {
+    throw new Error("invalid runtime config: no configPath/configPaths provided");
+  }
+  const tried: string[] = [];
+  for (const p of candidates) {
+    tried.push(p);
+    try {
+      const s = await stat(p);
+      if (s.isFile()) return p;
+    } catch {
+      // not present, try next
+    }
+  }
+  // Fall back to the first candidate so the readFile error surfaces a sensible
+  // path instead of "no candidates".
+  throw new Error(
+    `invalid runtime config: no readable file found. Tried: ${tried.join(", ")}`,
+  );
+}
+
 export async function createRuntimeRegistry(cfg: RegistryConfig): Promise<RuntimeRegistry> {
+  const chosen = await pickConfigPath(cfg);
+  // eslint-disable-next-line no-console
+  console.log(`runtime-registry: loaded ${chosen}`);
   let raw: string;
-  try { raw = await readFile(cfg.configPath, "utf8"); }
-  catch (e) { throw new Error(`invalid runtime config: cannot read ${cfg.configPath}: ${(e as Error).message}`); }
+  try { raw = await readFile(chosen, "utf8"); }
+  catch (e) { throw new Error(`invalid runtime config: cannot read ${chosen}: ${(e as Error).message}`); }
 
   let parsed: { runtimes?: unknown };
   try { parsed = JSON.parse(raw); }
@@ -47,6 +86,7 @@ export async function createRuntimeRegistry(cfg: RegistryConfig): Promise<Runtim
   const factories = cfg.factories ?? {};
 
   return {
+    configPath() { return chosen; },
     async list() { return [...state.descriptors]; },
     async get(id) { return state.descriptors.find((d) => d.id === id) ?? null; },
     async adapter(id) {
