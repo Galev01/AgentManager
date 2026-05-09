@@ -2075,3 +2075,20 @@ After all tasks merge:
 - [ ] PM2 `ecosystem.config.cjs` references `dist/server.js` and `next start`, both of which exist after `pnpm build`.
 - [ ] README, INSTALL_README, SECURITY, CONTRIBUTING, LICENSE present at repo root.
 - [ ] `engines.node >= 20.11.0` enforced via `package.json`.
+
+---
+
+## Smoke results (2026-05-10)
+
+End-to-end verification on a fresh clone of branch `Gal/agent-model-fixes` (last commit `65a21af`) into a tmp dir, against a synthetic OpenClaw home (`$TMPDIR/fake-openclaw-*`), with `--bridge-port 3199` to dodge the host's running bridge on 3100.
+
+- Fresh-clone install: PASS — `pnpm install` 4.5s, lockfile satisfied, no engines warning, no errors.
+- `pnpm run bootstrap --yes --openclaw-home <fake> --bridge-port 3199`: PASS — wrote `apps/bridge/.env`, `apps/dashboard/.env.local`, `apps/bridge/config/runtimes.json`. Generated admin password matched `/^[a-z]+-[a-z]+-\d{2}$/`. Bootstrap token printed.
+- Generated env contents: PASS — `BRIDGE_TOKEN` 64 hex; `AUTH_ASSERTION_SECRET` 64 hex and identical across both files; `BRIDGE_HOST=127.0.0.1`; `OPENCLAW_HOME` matches synthetic dir (forward-slash form); `OPENCLAW_GATEWAY_TOKEN=fake-gateway-token-for-smoke`; `HERMES_BASE_URL=` and `HERMES_TOKEN=` empty; `runtimes.json` contains exactly one entry (`oc-main`).
+- Build (`pnpm -r build`): PASS — `apps/bridge/dist/server.js` and `apps/dashboard/.next` both produced.
+- Doctor (bridge stopped): expected non-zero — Node OK, env files OK, Bridge `/health` ECONNREFUSED, Hermes skipped. (Gateway HTTP 200 because the host has a real OpenClaw running on 18789 — informational, not a failure of the smoke clone.)
+- Doctor (bridge running on 3199): PASS — all six checks green; bridge booted cleanly with the standard `[openclaw] Resolved SDK from global npm install` transitional fallback message and listened on 127.0.0.1:3199 within 1s.
+- Audit hits for `GalLe`, `192.168.0.`, `OpenClaw-Bridge`, `openclaw2026`, `/opt/openclaw-manager`, `Cursor projects`, `C:\Users\GalLe`, `C:\ProgramData\OpenClaw-Bridge`: none outside `docs/superpowers/specs/`, `docs/superpowers/plans/`, `docs/history/` (allowed).
+- Issues fixed in this branch: none. No source/scripts/deploy/README rough edges surfaced; smoke clean on first try.
+- Tester host: Windows 11 Pro, Node v24.14.1, pnpm 9.15.0.
+- Caveats: `pnpm doctor` (without `run`) silently produced no output under the agent's Bash shell; `pnpm run doctor` works correctly. Not a real bug — pnpm script dispatch artifact in this shell. Documented INSTALL guides already use `pnpm doctor` directly which works in interactive shells.
