@@ -250,11 +250,30 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
   }
 
   async function ask(req: ClaudeCodeAskRequest): Promise<ClaudeCodeAskResponse> {
+    // Phase D: brand-new session resolves runtimeId in this order:
+    //   1. req.runtimeId (MCP-forwarded OPENCLAW_RUNTIME_ID hint)
+    //   2. runtimeConfig.effectivePrimaryRuntimeId
+    //   3. "openclaw" (legacy back-compat)
+    // Existing session records always win — getOrCreateSession returns the
+    // stored record and ignores `runtimeId` arg if a record already exists.
+    let fallbackRuntimeId = req.runtimeId;
+    if (!fallbackRuntimeId && deps.runtimeConfig) {
+      try {
+        const snap = await deps.runtimeConfig.read();
+        if (snap.effectivePrimaryRuntimeId) {
+          fallbackRuntimeId = snap.effectivePrimaryRuntimeId;
+        }
+      } catch {
+        // Fall through to "openclaw" default below.
+      }
+    }
+    if (!fallbackRuntimeId) fallbackRuntimeId = "openclaw";
+
     let session = await getOrCreateSession(deps.sessionsPath, {
       ide: req.ide,
       workspace: req.workspace,
       clientId: req.clientId,
-      runtimeId: req.runtimeId ?? "openclaw",
+      runtimeId: fallbackRuntimeId,
     });
     if (session.state === "ended") {
       await resurrectSession(deps.sessionsPath, session.id);
@@ -317,6 +336,24 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
     // (legacy records created before Phase D) implicitly default to "openclaw"
     // for back-compat.
     const sessionRuntimeId = session.runtimeId ?? "openclaw";
+
+    // Phase D capability gate: reject runtimes that explicitly declare
+    // `claudeCode.ask` unsupported (e.g. Hermes). Runtimes that don't
+    // declare the capability either way pass through to the dispatch
+    // logic below. Produces the structured 409 the route maps for the
+    // dashboard.
+    if (deps.registry && sessionRuntimeId !== "openclaw") {
+      const gateAdapter = await deps.registry.adapter(sessionRuntimeId);
+      if (gateAdapter) {
+        const caps = await gateAdapter.getCapabilities();
+        if (caps.unsupported.includes("claudeCode.ask")) {
+          throw new ClaudeCodeUnsupportedRuntimeError(
+            sessionRuntimeId,
+            `runtime '${sessionRuntimeId}' declares claudeCode.ask unsupported`,
+          );
+        }
+      }
+    }
 
     let draft: string;
     // Agent id used for the draft envelope author field.
@@ -394,7 +431,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
         );
         if (!create.ok) {
           throw new Error(
-            `sessions.create on '${sessionRuntimeId}' failed: ${(create as { error?: string }).error ?? "unknown"}`
+            `gateway: sessions.create on '${sessionRuntimeId}' failed: ${(create as { error?: string }).error ?? "unknown"}`
           );
         }
         const native = (create.nativeResult ?? {}) as Record<string, unknown>;
@@ -404,7 +441,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
           (typeof native.id === "string" && native.id) ||
           null;
         if (!resolvedKey) {
-          throw new Error(`sessions.create on '${sessionRuntimeId}' did not return a key`);
+          throw new Error(`gateway: sessions.create on '${sessionRuntimeId}' did not return a key`);
         }
         runtimeSessionKey = resolvedKey;
         // Persist the key so subsequent turns reuse the same adapter session.
@@ -424,7 +461,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
       );
       if (!send.ok) {
         throw new Error(
-          `sessions.send on '${sessionRuntimeId}' failed: ${(send as { error?: string }).error ?? "unknown"}`
+          `gateway: sessions.send on '${sessionRuntimeId}' failed: ${(send as { error?: string }).error ?? "unknown"}`
         );
       }
       const sendNative = (send.nativeResult ?? {}) as Record<string, unknown>;
@@ -432,7 +469,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
         ? sendNative.assistantText.trim()
         : "";
       if (!draftText) {
-        throw new Error(`empty assistantText from '${sessionRuntimeId}'`);
+        throw new Error(`gateway: empty assistantText from '${sessionRuntimeId}'`);
       }
       // Non-OpenClaw adapters don't emit control tags; skip stripping.
       draft = draftText;

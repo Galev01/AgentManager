@@ -190,7 +190,7 @@ test.skip("new session dispatches claudeCode.ask via the resolved adapter", asyn
   assert.equal(sessions[0]!.runtimeId, "oc-main");
 });
 
-test.skip("session against runtime that declares claudeCode.ask unsupported throws ClaudeCodeUnsupportedRuntimeError", async () => {
+test("session against runtime that declares claudeCode.ask unsupported throws ClaudeCodeUnsupportedRuntimeError", async () => {
   const dir = await tmp();
   const p = makePaths(dir);
   const hermes = makeFakeAdapter({
