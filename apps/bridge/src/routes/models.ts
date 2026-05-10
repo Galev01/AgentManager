@@ -66,7 +66,7 @@ export function createModelsRouter(deps: ModelsRouterDeps): ExpressRouter {
 
     // The service already projects entities through the adapter when registry is
     // wired. Preserve historical wire shape: { models, status, runtimeId, source }.
-    const result = await service.readCatalog();
+    const result = await service.readCatalog({ runtimeId: resolved.runtimeId });
     res.json({ ...result, runtimeId: resolved.runtimeId, source: resolved.source });
   });
 
