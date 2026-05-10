@@ -1,4 +1,7 @@
 import type { ClaudeCodeTranscriptEvent } from "@openclaw-manager/types";
+import type { RuntimeRegistry } from "./runtimes/registry.js";
+import type { RuntimeConfigService } from "./runtime-config.js";
+import { requireCapability } from "./runtime-resolver.js";
 
 /**
  * Generates a concise summary of a Claude Code session by sending the
@@ -6,11 +9,21 @@ import type { ClaudeCodeTranscriptEvent } from "@openclaw-manager/types";
  *
  * Uses a disposable session key so the summary prompt does not pollute the
  * real Claude Code session history.
+ *
+ * For non-OpenClaw runtimes, gracefully returns null (phase-1 limit).
  */
 
-type SummarizeDeps = {
+export type SummarizeDeps = {
   callGateway: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
   agentId?: string;
+  /** Optional registry — when present enables non-OpenClaw runtime awareness. */
+  registry?: RuntimeRegistry;
+  /** Optional runtime config — used to resolve primary when runtimeId is absent. */
+  runtimeConfig?: RuntimeConfigService;
+  /** Runtime id from the session record. When absent/undefined defaults to "openclaw". */
+  runtimeId?: string;
+  /** Agent name from the session record. Used for non-OpenClaw dispatches (phase-2). */
+  agentName?: string;
 };
 
 type GatewayMessage = {
@@ -100,6 +113,26 @@ export async function summarizeSession(
   const prompt = buildSummarizationPrompt(events);
   if (!prompt) return null;
 
+  // Sessions without runtimeId default to "openclaw" for back-compat.
+  const runtimeId = deps.runtimeId ?? "openclaw";
+
+  // Non-OpenClaw path: gracefully no-op (phase-1 limit). Future work will
+  // generalize the summarize prompt into a shared adapter-dispatched helper.
+  if (runtimeId !== "openclaw" && deps.registry) {
+    const adapter = await deps.registry.adapter(runtimeId);
+    if (!adapter) return null;
+    try {
+      await requireCapability(adapter, "sessions.send", runtimeId);
+    } catch {
+      // Adapter doesn't support sessions.send — skip gracefully.
+      return null;
+    }
+    // Phase-1: even if the adapter supports sessions.send, we return null here.
+    // A future task will create a temp adapter session and dispatch the summarize prompt.
+    return null;
+  }
+
+  // OpenClaw legacy path (unchanged).
   const agentId = deps.agentId || "main";
   const tempKey = `agent:${agentId}:cc-summary-${Date.now()}`;
   let tempSessionId: string | null = null;

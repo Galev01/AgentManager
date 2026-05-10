@@ -71,8 +71,34 @@ test("listEntities('agent') returns []", async () => {
   assert.deepEqual(await a.listEntities("agent"), []);
 });
 
-test("invokeAction always returns ok:false in Phase 1", async () => {
-  const a = createHermesAdapter({ descriptor: desc, bearer: "tok", http: fakeHttp({}) });
+test("invokeAction sessions.send calls /v1/chat and returns assistantText", async () => {
+  const a = createHermesAdapter({
+    descriptor: desc,
+    bearer: "tok",
+    http: fakeHttp({
+      "/v1/chat": { assistantText: "Hello back", sessionKey: "s1" },
+    }),
+  });
+  const r = await a.invokeAction(
+    "sessions.send",
+    { sessionKey: "s1", message: "hello" },
+    { actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" } },
+  );
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    const result = r.nativeResult as { assistantText: string; sessionKey: string; elapsedMs: number };
+    assert.equal(result.assistantText, "Hello back");
+    assert.equal(result.sessionKey, "s1");
+    assert.equal(typeof result.elapsedMs, "number");
+  }
+});
+
+test("invokeAction sessions.send returns ok:false when /v1/chat errors", async () => {
+  const a = createHermesAdapter({
+    descriptor: desc,
+    bearer: "tok",
+    http: { json: async () => { throw new Error("upstream failure"); } },
+  });
   const r = await a.invokeAction(
     "sessions.send",
     { sessionKey: "s1", message: "hello" },
@@ -80,7 +106,7 @@ test("invokeAction always returns ok:false in Phase 1", async () => {
   );
   assert.equal(r.ok, false);
   if (!r.ok) {
-    assert.match(r.error, /sessions\.send/);
+    assert.match(r.error, /upstream failure/);
   }
 });
 
@@ -95,14 +121,21 @@ test("invokeAction surfaces action name in error for any unsupported action", as
   if (!r.ok) assert.match(r.error, /agents\.create/);
 });
 
-test("getCapabilities static fallback declares all actions unsupported", async () => {
+test("getCapabilities static fallback declares new session lifecycle + cron ids unsupported", async () => {
   const a = createHermesAdapter({
     descriptor: desc,
     bearer: "tok",
     http: { json: async () => { throw new Error("network down"); } },
   });
   const caps = await a.getCapabilities();
-  for (const action of ["agents.create", "channels.connect", "tools.invoke", "cron.write", "claudeCode.ask", "sessions.send"]) {
+  // sessions.send is now supported on Hermes via /v1/chat.
+  assert.ok(caps.supported.includes("sessions.send" as any), "sessions.send should be in supported");
+  // New session lifecycle ids that Hermes does NOT support:
+  for (const action of [
+    "agents.create", "channels.connect", "tools.invoke", "cron.write", "claudeCode.ask",
+    "sessions.create", "sessions.reset", "sessions.abort", "sessions.compact", "sessions.delete",
+    "cron.run", "sessions.usage", "cron.status", "tools.effective",
+  ]) {
     assert.ok(caps.unsupported.includes(action as any), `${action} should be unsupported`);
   }
 });

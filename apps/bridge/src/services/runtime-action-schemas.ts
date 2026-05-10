@@ -243,8 +243,27 @@ const claudeCodeAsk: RuntimeActionSchema<"claudeCode.ask"> = (input) => {
   const msgId = requireString(obj, "msgId", errors);
   const question = requireString(obj, "question", errors);
   const sessionId = optionalString(obj, "sessionId", errors);
+  const gatewayKey = optionalString(obj, "gatewayKey", errors);
+  const firstTurnMessage = optionalString(obj, "firstTurnMessage", errors);
+  // intervalMs / timeoutMs are tuning hints; accept numbers or undefined.
+  const replyPollIntervalMs =
+    typeof obj.replyPollIntervalMs === "number" ? obj.replyPollIntervalMs : undefined;
+  const replyTimeoutMs =
+    typeof obj.replyTimeoutMs === "number" ? obj.replyTimeoutMs : undefined;
   throwIfErrors("claudeCode.ask", errors);
-  return { ide: ide!, workspace: workspace!, msgId: msgId!, question: question!, sessionId };
+  return {
+    ide: ide!, workspace: workspace!, msgId: msgId!, question: question!,
+    sessionId, gatewayKey, firstTurnMessage,
+    replyPollIntervalMs, replyTimeoutMs,
+  };
+};
+
+const sessionsCreate: RuntimeActionSchema<"sessions.create"> = (input) => {
+  const obj = requireObject(input, "sessions.create");
+  const errors: FieldError[] = [];
+  const agentName = optionalString(obj, "agentName", errors);
+  throwIfErrors("sessions.create", errors);
+  return { agentName };
 };
 
 const sessionsSend: RuntimeActionSchema<"sessions.send"> = (input) => {
@@ -253,7 +272,50 @@ const sessionsSend: RuntimeActionSchema<"sessions.send"> = (input) => {
   const sessionKey = requireString(obj, "sessionKey", errors);
   const message = requireString(obj, "message", errors);
   throwIfErrors("sessions.send", errors);
-  return { sessionKey: sessionKey!, message: message! };
+  // awaitCompletion and timeoutMs are optional; pass through as-is.
+  const awaitCompletion = "awaitCompletion" in obj && obj.awaitCompletion === true ? true : undefined;
+  const timeoutMs = typeof obj.timeoutMs === "number" ? obj.timeoutMs : undefined;
+  return { sessionKey: sessionKey!, message: message!, awaitCompletion, timeoutMs };
+};
+
+const sessionsReset: RuntimeActionSchema<"sessions.reset"> = (input) => {
+  const obj = requireObject(input, "sessions.reset");
+  const errors: FieldError[] = [];
+  const sessionKey = requireString(obj, "sessionKey", errors);
+  throwIfErrors("sessions.reset", errors);
+  return { sessionKey: sessionKey! };
+};
+
+const sessionsAbort: RuntimeActionSchema<"sessions.abort"> = (input) => {
+  const obj = requireObject(input, "sessions.abort");
+  const errors: FieldError[] = [];
+  const sessionKey = requireString(obj, "sessionKey", errors);
+  throwIfErrors("sessions.abort", errors);
+  return { sessionKey: sessionKey! };
+};
+
+const sessionsCompact: RuntimeActionSchema<"sessions.compact"> = (input) => {
+  const obj = requireObject(input, "sessions.compact");
+  const errors: FieldError[] = [];
+  const sessionKey = requireString(obj, "sessionKey", errors);
+  throwIfErrors("sessions.compact", errors);
+  return { sessionKey: sessionKey! };
+};
+
+const sessionsDelete: RuntimeActionSchema<"sessions.delete"> = (input) => {
+  const obj = requireObject(input, "sessions.delete");
+  const errors: FieldError[] = [];
+  const sessionKey = requireString(obj, "sessionKey", errors);
+  throwIfErrors("sessions.delete", errors);
+  return { sessionKey: sessionKey! };
+};
+
+const cronRun: RuntimeActionSchema<"cron.run"> = (input) => {
+  const obj = requireObject(input, "cron.run");
+  const errors: FieldError[] = [];
+  const id = requireString(obj, "id", errors);
+  throwIfErrors("cron.run", errors);
+  return { id: id! };
 };
 
 const memoryWrite: RuntimeActionSchema<"memory.write"> = (input) => {
@@ -291,8 +353,14 @@ export const runtimeActionSchemas: { [A in RuntimeActionId]: RuntimeActionSchema
   "tools.invoke": toolsInvoke,
   "cron.write": cronWrite,
   "cron.delete": cronDelete,
+  "cron.run": cronRun,
   "claudeCode.ask": claudeCodeAsk,
+  "sessions.create": sessionsCreate,
   "sessions.send": sessionsSend,
+  "sessions.reset": sessionsReset,
+  "sessions.abort": sessionsAbort,
+  "sessions.compact": sessionsCompact,
+  "sessions.delete": sessionsDelete,
   "memory.write": memoryWrite,
   "skills.install": skillsInstall,
   "config.set": configSet,

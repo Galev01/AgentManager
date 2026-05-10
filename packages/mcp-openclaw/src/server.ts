@@ -16,6 +16,10 @@ const WORKSPACE = process.env.OPENCLAW_WORKSPACE || process.cwd();
 // of this process; different across concurrent Claude Code chats.
 const CLIENT_ID =
   process.env.OPENCLAW_CLIENT_ID || `cc-${crypto.randomBytes(6).toString("hex")}`;
+// Optional Phase D hint. When set, forwarded to /claude-code/ask as
+// `runtimeId` so the bridge attaches new sessions to the requested runtime.
+// Existing sessions ignore this — their stored runtimeId always wins.
+const RUNTIME_ID = process.env.OPENCLAW_RUNTIME_ID || "";
 
 async function bridgeFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BRIDGE_URL}${path}`, {
@@ -121,6 +125,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       question: message,
       context,
     };
+    if (RUNTIME_ID) payload.runtimeId = RUNTIME_ID;
     if (typeof args.intent === "string") payload.intent = args.intent;
     if (typeof args.state === "string") payload.state = args.state;
     if (typeof args.artifact === "string") payload.artifact = args.artifact;

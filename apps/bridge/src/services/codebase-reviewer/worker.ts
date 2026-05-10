@@ -9,8 +9,21 @@ import { parseReport } from "./parser.js";
 import { runReview } from "./runner.js";
 import { isEligible } from "./scheduler.js";
 import type { ReviewRun } from "@openclaw-manager/types";
+import type { RuntimeRegistry } from "../runtimes/registry.js";
+import type { RuntimeConfigService } from "../runtime-config.js";
 
 type Job = { projectId: string; trigger: "cron" | "manual" };
+
+type WorkerDeps = {
+  registry: RuntimeRegistry;
+  runtimeConfig: RuntimeConfigService;
+};
+
+let workerDeps: WorkerDeps | null = null;
+
+export function configureCodebaseReviewerWorker(deps: WorkerDeps): void {
+  workerDeps = deps;
+}
 
 const queue: Job[] = [];
 let current: string | null = null;
@@ -52,6 +65,10 @@ async function drain(): Promise<void> {
 }
 
 async function process(job: Job): Promise<void> {
+  if (!workerDeps) {
+    throw new Error("codebase-reviewer worker not configured (call configureCodebaseReviewerWorker at boot)");
+  }
+
   const project = await getProject(job.projectId);
   if (!project) return;
 
@@ -70,11 +87,16 @@ async function process(job: Job): Promise<void> {
   await appendRun(startRun);
 
   try {
-    const result = await runReview({
-      projectName: project.name,
-      projectPath: project.path,
-      reportDate,
-    });
+    const result = await runReview(
+      {
+        projectName: project.name,
+        projectPath: project.path,
+        reportDate,
+        runtimeId: project.runtimeId,
+        agentName: project.agentName,
+      },
+      workerDeps,
+    );
 
     const reviewDir = path.join(project.path, ".openclaw-review");
     await fs.mkdir(reviewDir, { recursive: true });
