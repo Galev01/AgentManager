@@ -234,11 +234,23 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
             break;
           }
           case "channels.connect": {
-            nativeResult = await callGateway("channels.connect", payload as Record<string, unknown>);
+            // OpenClaw gateway has no `channels.connect` method today; channel
+            // sessions auto-establish on first message. We pass through to
+            // `channels.connect` for symmetry with future gateway support and
+            // forward the typed payload's `channelId` as the legacy `channel`
+            // param the gateway uses elsewhere.
+            const p = payload as RuntimeActionPayload["channels.connect"];
+            const params: Record<string, unknown> = { channel: p.channelId };
+            if (p.config !== undefined) params.config = p.config;
+            nativeResult = await callGateway("channels.connect", params);
             break;
           }
           case "channels.disconnect": {
-            nativeResult = await callGateway("channels.disconnect", payload as Record<string, unknown>);
+            // Maps the typed `channels.disconnect` action to the legacy gateway
+            // method `channels.logout` (single existing implementation), and
+            // renames the `channelId` payload field to `channel`.
+            const p = payload as RuntimeActionPayload["channels.disconnect"];
+            nativeResult = await callGateway("channels.logout", { channel: p.channelId });
             break;
           }
           case "tools.invoke": {

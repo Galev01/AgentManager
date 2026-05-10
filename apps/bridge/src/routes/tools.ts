@@ -9,6 +9,10 @@ import {
   UnknownRuntimeError,
   NoRuntimeAvailableError,
 } from "../services/runtime-resolver.js";
+import {
+  runtimeActionSchemas,
+  InvalidActionPayloadError,
+} from "../services/runtime-action-schemas.js";
 import type { ActorAssertionRef, RuntimeActionContext } from "@openclaw-manager/types";
 
 export type CallGateway = (method: string, params?: Record<string, unknown>) => Promise<unknown>;
@@ -252,9 +256,92 @@ export function createToolsRouter(deps: ToolsRouterDeps): ExpressRouter {
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // POST /tools/:id/invoke — synchronous tool invocation (Phase C).
+  //
+  // Resolves runtime via catalog rules (?runtimeId= override or primary), gates
+  // `tools.invoke`, validates the typed payload, and dispatches through the
+  // adapter. The dashboard does not currently call this endpoint, but the
+  // canonical spec calls it out as part of the runtime-agnostic surface.
+  // ---------------------------------------------------------------------------
+  router.post("/tools/:id/invoke", async (req: Request, res: Response) => {
+    let resolved;
+    try {
+      resolved = await resolveRuntimeForCatalog(req, registry, runtimeConfig);
+    } catch (e) {
+      if (e instanceof UnknownRuntimeError) {
+        res.status(404).json({ error: "runtime_not_found", runtimeId: e.runtimeId });
+        return;
+      }
+      if (e instanceof NoRuntimeAvailableError) {
+        res.status(503).json({ error: "no_runtime_available" });
+        return;
+      }
+      res.status(500).json({ error: (e as Error).message });
+      return;
+    }
+    const adapter = await registry.adapter(resolved.runtimeId);
+    if (!adapter) {
+      res.status(404).json({ error: "runtime_not_found", runtimeId: resolved.runtimeId });
+      return;
+    }
+    try {
+      await requireCapability(adapter, "tools.invoke", resolved.runtimeId);
+    } catch (e) {
+      if (e instanceof UnsupportedCapabilityError) {
+        unsupportedCapabilityResponse(res, e);
+        return;
+      }
+      res.status(502).json({ error: (e as Error).message });
+      return;
+    }
+
+    const toolId = req.params.id as string;
+    const inputVal = (req.body && typeof req.body === "object" && "input" in req.body)
+      ? (req.body as { input?: unknown }).input
+      : undefined;
+
+    let validated: import("@openclaw-manager/types").RuntimeActionPayload["tools.invoke"];
+    try {
+      validated = runtimeActionSchemas["tools.invoke"]({ toolId, input: inputVal });
+    } catch (e) {
+      if (e instanceof InvalidActionPayloadError) {
+        res.status(422).json({
+          ok: false,
+          error: {
+            code: "INVALID_PAYLOAD",
+            action: e.action,
+            fieldErrors: e.fieldErrors,
+            message: e.message,
+          },
+        });
+        return;
+      }
+      throw e;
+    }
+
+    const actor: ActorAssertionRef = {
+      humanActorUserId: ((req as any).auth?.user?.id as string) ?? "unknown",
+      managerServiceId,
+      basis: "service-principal",
+    };
+    const context: RuntimeActionContext = { actor, resourceRuntimeId: resolved.runtimeId };
+
+    try {
+      const result = await adapter.invokeAction("tools.invoke", validated, context);
+      if (!result.ok) {
+        res.status(502).json({ error: result.error });
+        return;
+      }
+      res.json(result.nativeResult ?? {});
+    } catch (err: any) {
+      res.status(502).json({ error: err.message || "Failed to invoke tool" });
+    }
+  });
+
   // callGateway is retained in deps for other routes that may still use it
   // during the migration. The variable is intentionally unused here after
-  // migration of all three endpoints; suppress the lint-unused warning.
+  // migration of all migrated endpoints; suppress the lint-unused warning.
   void callGateway;
 
   return router;

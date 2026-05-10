@@ -462,3 +462,83 @@ test("POST /skills/install against unsupported runtime → 409 UNSUPPORTED_CAPAB
     assert.equal(body.error.capabilityId, "skills.install");
   } finally { await a.close(); }
 });
+
+// ===========================================================================
+// POST /tools/:id/invoke (Phase C)
+// ===========================================================================
+
+test("POST /tools/:id/invoke → primary adapter receives tools.invoke with toolId+input", async () => {
+  const calls: { action: string; payload: unknown }[] = [];
+  const primary = makeFakeAdapter({
+    id: "oc-main",
+    supported: ["tools.list", "tools.invoke"],
+    invokeActionImpl: async (action, payload) => {
+      calls.push({ action, payload });
+      return { ok: true, nativeResult: { result: 42 }, projectionMode: "exact" };
+    },
+  });
+  const a = await mkApp({ adapters: { "oc-main": primary }, primary: "oc-main" });
+
+  try {
+    const r = await fetch(`${a.url}/tools/calc/invoke`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ input: { x: 1, y: 2 } }),
+    });
+    assert.equal(r.status, 200);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].action, "tools.invoke");
+    const p = calls[0].payload as any;
+    assert.equal(p.toolId, "calc");
+    assert.deepEqual(p.input, { x: 1, y: 2 });
+  } finally { await a.close(); }
+});
+
+test("POST /tools/:id/invoke?runtimeId=hermes (unsupported) → 409", async () => {
+  const hermes = makeFakeAdapter({
+    id: "hermes",
+    supported: ["tools.list"],
+    unsupported: ["tools.invoke"],
+  });
+  const a = await mkApp({
+    adapters: { "oc-main": makeFakeAdapter({ id: "oc-main" }), "hermes": hermes },
+    primary: "oc-main",
+  });
+
+  try {
+    const r = await fetch(`${a.url}/tools/calc/invoke?runtimeId=hermes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ input: {} }),
+    });
+    assert.equal(r.status, 409);
+    const body = await r.json();
+    assert.equal(body.error.code, "UNSUPPORTED_CAPABILITY");
+    assert.equal(body.error.capabilityId, "tools.invoke");
+  } finally { await a.close(); }
+});
+
+test("POST /tools/:id/invoke with missing input → 422 INVALID_PAYLOAD", async () => {
+  const primary = makeFakeAdapter({
+    id: "oc-main",
+    supported: ["tools.list", "tools.invoke"],
+    invokeActionImpl: async () => {
+      throw new Error("adapter must not be invoked when payload is invalid");
+    },
+  });
+  const a = await mkApp({ adapters: { "oc-main": primary }, primary: "oc-main" });
+
+  try {
+    const r = await fetch(`${a.url}/tools/calc/invoke`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    assert.equal(r.status, 422);
+    const body = await r.json();
+    assert.equal(body.error.code, "INVALID_PAYLOAD");
+    assert.equal(body.error.action, "tools.invoke");
+    assert.ok(Array.isArray(body.error.fieldErrors));
+    assert.ok(body.error.fieldErrors.some((f: any) => f.path === "input"));
+  } finally { await a.close(); }
+});

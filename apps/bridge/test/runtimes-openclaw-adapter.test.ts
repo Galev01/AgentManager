@@ -133,12 +133,19 @@ test("openclaw invokeAction cron.delete forwards id", async () => {
 });
 
 test("openclaw invokeAction channels.connect / disconnect proxy to gateway", async () => {
-  const calls: Array<{ method: string }> = [];
-  const fakeGateway = async (method: string) => { calls.push({ method }); return null; };
+  const calls: Array<{ method: string; params?: Record<string, unknown> }> = [];
+  const fakeGateway = async (method: string, params?: Record<string, unknown>) => {
+    calls.push({ method, params }); return null;
+  };
   const a = createOpenclawAdapter({ descriptor: desc }, { callGateway: fakeGateway });
   await a.invokeAction("channels.connect", { channelId: "wa" }, ctx);
   await a.invokeAction("channels.disconnect", { channelId: "wa" }, ctx);
-  assert.deepEqual(calls.map((c) => c.method), ["channels.connect", "channels.disconnect"]);
+  // channels.connect → channels.connect (passthrough); channels.disconnect →
+  // channels.logout (the gateway's only existing implementation).
+  assert.deepEqual(calls.map((c) => c.method), ["channels.connect", "channels.logout"]);
+  // Both rename channelId → channel for the gateway.
+  assert.equal(calls[0].params?.channel, "wa");
+  assert.equal(calls[1].params?.channel, "wa");
 });
 
 test("openclaw invokeAction tools.invoke + sessions.send proxy to gateway", async () => {
