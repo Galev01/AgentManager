@@ -175,7 +175,9 @@ test("openclaw invokeAction surfaces gateway errors as ok:false", async () => {
   if (!r.ok) assert.match(r.error, /kaboom/);
 });
 
-test("openclaw invokeAction claudeCode.ask returns structured deferral signal", async () => {
+test("openclaw invokeAction claudeCode.ask requires gatewayKey", async () => {
+  // Phase D: payload.gatewayKey is required because the orchestrator owns the
+  // gateway-key derivation (it knows the agent id + openclaw session id).
   const fakeGateway = async () => null;
   const a = createOpenclawAdapter({ descriptor: desc }, { callGateway: fakeGateway });
   const r = await a.invokeAction(
@@ -184,5 +186,82 @@ test("openclaw invokeAction claudeCode.ask returns structured deferral signal", 
     ctx,
   );
   assert.equal(r.ok, false);
-  if (!r.ok) assert.match(r.error, /createAskOrchestrator|Phase D/);
+  if (!r.ok) assert.match(r.error, /gatewayKey/);
+});
+
+test("openclaw invokeAction claudeCode.ask happy path: ensure-session, send, poll, return assistant text", async () => {
+  // Stateful gateway stub mirrors the real gateway's sessions.create/send/get
+  // semantics: create is idempotent, send appends user message + schedules
+  // assistant reply, get returns the running message array.
+  const messages: Array<{ role: string; content: Array<{ type: string; text: string }> }> = [];
+  const calls: { method: string; params?: Record<string, unknown> }[] = [];
+  const fakeGateway = async (method: string, params?: Record<string, unknown>) => {
+    calls.push({ method, params });
+    if (method === "sessions.create") return { key: String(params?.key ?? ""), created: true };
+    if (method === "sessions.get") return { messages: [...messages] };
+    if (method === "sessions.send") {
+      messages.push({ role: "user", content: [{ type: "text", text: String(params?.message ?? "") }] });
+      setTimeout(() => {
+        messages.push({ role: "assistant", content: [{ type: "text", text: "hello back" }] });
+      }, 5);
+      return { runId: "r1", status: "started", messageSeq: messages.length };
+    }
+    throw new Error(`unmocked: ${method}`);
+  };
+  const a = createOpenclawAdapter({ descriptor: desc }, { callGateway: fakeGateway });
+  const r = await a.invokeAction(
+    "claudeCode.ask",
+    {
+      ide: "cc", workspace: "/w", msgId: "m1", question: "ping",
+      gatewayKey: "agent:claude-code:cc-abc",
+      replyPollIntervalMs: 5,
+      replyTimeoutMs: 1_000,
+    },
+    ctx,
+  );
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    const native = r.nativeResult as { assistantText: string; gatewayKey: string };
+    assert.equal(native.assistantText, "hello back");
+    assert.equal(native.gatewayKey, "agent:claude-code:cc-abc");
+  }
+  // Adapter must have called sessions.create once + sessions.send once + at
+  // least one sessions.get (baseline + poll loop).
+  const methods = calls.map((c) => c.method);
+  assert.ok(methods.includes("sessions.create"));
+  assert.ok(methods.includes("sessions.send"));
+  assert.ok(methods.includes("sessions.get"));
+});
+
+test("openclaw invokeAction claudeCode.ask wraps first-turn message when baseline is empty", async () => {
+  const messages: Array<{ role: string; content: Array<{ type: string; text: string }> }> = [];
+  const sentMessages: string[] = [];
+  const fakeGateway = async (method: string, params?: Record<string, unknown>) => {
+    if (method === "sessions.create") return { created: true };
+    if (method === "sessions.get") return { messages: [...messages] };
+    if (method === "sessions.send") {
+      sentMessages.push(String(params?.message ?? ""));
+      messages.push({ role: "user", content: [{ type: "text", text: String(params?.message ?? "") }] });
+      setTimeout(() => {
+        messages.push({ role: "assistant", content: [{ type: "text", text: "ok" }] });
+      }, 5);
+      return { ok: true };
+    }
+    throw new Error(`unmocked: ${method}`);
+  };
+  const a = createOpenclawAdapter({ descriptor: desc }, { callGateway: fakeGateway });
+  await a.invokeAction(
+    "claudeCode.ask",
+    {
+      ide: "cc", workspace: "/w", msgId: "m1", question: "raw question",
+      gatewayKey: "agent:claude-code:cc-x",
+      firstTurnMessage: "WRAPPED PREAMBLE\nraw question",
+      replyPollIntervalMs: 5,
+      replyTimeoutMs: 1_000,
+    },
+    ctx,
+  );
+  // First turn: baseline=0 → adapter sends the wrapped preamble form.
+  assert.equal(sentMessages.length, 1);
+  assert.match(sentMessages[0]!, /WRAPPED PREAMBLE/);
 });

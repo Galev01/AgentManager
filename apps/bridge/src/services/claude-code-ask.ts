@@ -2,6 +2,7 @@ import type {
   ClaudeCodeAskRequest,
   ClaudeCodeAskResponse,
   ClaudeCodeTranscriptEvent,
+  ActorAssertionRef,
 } from "@openclaw-manager/types";
 import {
   getOrCreateSession,
@@ -11,9 +12,13 @@ import {
   resurrectSession,
   setOpenclawSessionId,
   deriveOpenclawSessionId,
+  setRuntimeSessionKey,
 } from "./claude-code-sessions.js";
-
-const LEGACY_SHARED_OPENCLAW_SESSION_ID = "oc-shared-claude-code";
+import type { RuntimeRegistry } from "./runtimes/registry.js";
+import type { RuntimeConfigService } from "./runtime-config.js";
+import {
+  requireCapability,
+} from "./runtime-resolver.js";
 import {
   appendTranscript,
   transcriptPathFor,
@@ -30,29 +35,48 @@ import {
 } from "./envelope.js";
 import type { CCEnvelope } from "@openclaw-manager/types";
 
+const LEGACY_SHARED_OPENCLAW_SESSION_ID = "oc-shared-claude-code";
+
 export type AskOrchestratorDeps = {
   sessionsPath: string;
   pendingPath: string;
   transcriptsDir: string;
   pendingTimeoutMs: number;
   openclawAgentId: string;
+  /** Required for the OpenClaw legacy path. When registry is present and the
+   *  session is non-OpenClaw, the adapter is used instead; callGateway is still
+   *  required for OpenClaw sessions and for test stubs. */
   callGateway: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
   broadcast: (kind: string, payload: unknown) => void;
   replyPollIntervalMs?: number;
   replyTimeoutMs?: number;
+  /** Optional runtime registry — when provided, non-OpenClaw sessions dispatch
+   *  through the adapter; when absent, all sessions use the legacy OpenClaw path. */
+  registry?: RuntimeRegistry;
+  /** Optional runtime config service — reserved for future use. */
+  runtimeConfig?: RuntimeConfigService;
 };
 
-type GatewayMessage = {
-  role?: string;
-  content?: Array<{ type?: string; text?: string }>;
-};
-
-function extractAssistantText(messages: GatewayMessage[]): string | null {
-  const last = messages[messages.length - 1];
-  if (!last || last.role !== "assistant") return null;
-  const textPart = last.content?.find((p) => p.type === "text" && typeof p.text === "string");
-  return textPart?.text ?? null;
+/**
+ * Structured rejection from the orchestrator when capability gating refuses
+ * the request (e.g. a runtime that doesn't support sessions.send). Routes
+ * map this to 409 UNSUPPORTED_CAPABILITY.
+ */
+export class ClaudeCodeUnsupportedRuntimeError extends Error {
+  constructor(
+    public runtimeId: string,
+    public reason: string,
+  ) {
+    super(`runtime '${runtimeId}' does not support sessions.send: ${reason}`);
+    this.name = "ClaudeCodeUnsupportedRuntimeError";
+  }
 }
+
+const SYSTEM_ACTOR: ActorAssertionRef = {
+  humanActorUserId: "system",
+  managerServiceId: "bridge",
+  basis: "service-principal",
+};
 
 const FIRST_TURN_PREAMBLE = [
   "[System instructions to OpenClaw — this is the first turn of a new session, so take these as persistent guidance for the rest of the conversation:]",
@@ -160,8 +184,20 @@ function buildGatewayKey(agentId: string, openclawSessionId: string): string {
 
 const ASK_DEBUG = process.env.CLAUDE_CODE_ASK_DEBUG === "1";
 
+type GatewayMessage = {
+  role?: string;
+  content?: Array<{ type?: string; text?: string }>;
+};
+
+function extractAssistantText(messages: GatewayMessage[]): string | null {
+  const last = messages[messages.length - 1];
+  if (!last || last.role !== "assistant") return null;
+  const textPart = last.content?.find((p) => p.type === "text" && typeof p.text === "string");
+  return textPart?.text ?? null;
+}
+
 async function ensureSessionExists(
-  callGateway: AskOrchestratorDeps["callGateway"],
+  callGateway: (method: string, params?: Record<string, unknown>) => Promise<unknown>,
   gatewayKey: string
 ): Promise<number> {
   // Gateway's sessions.get returns {messages: []} stub for missing keys rather
@@ -186,7 +222,7 @@ async function ensureSessionExists(
 }
 
 async function pollForReply(
-  callGateway: AskOrchestratorDeps["callGateway"],
+  callGateway: (method: string, params?: Record<string, unknown>) => Promise<unknown>,
   sessionKey: string,
   baselineLength: number,
   timeoutMs: number,
@@ -218,6 +254,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
       ide: req.ide,
       workspace: req.workspace,
       clientId: req.clientId,
+      runtimeId: req.runtimeId ?? "openclaw",
     });
     if (session.state === "ended") {
       await resurrectSession(deps.sessionsPath, session.id);
@@ -276,53 +313,133 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
       envelope: askEnvelope,
     });
 
-    const gatewayKey = buildGatewayKey(deps.openclawAgentId, session.openclawSessionId);
+    // Determine which runtime backs this session. Sessions without runtimeId
+    // (legacy records created before Phase D) implicitly default to "openclaw"
+    // for back-compat.
+    const sessionRuntimeId = session.runtimeId ?? "openclaw";
 
     let draft: string;
-    try {
-      // Ensure the OpenClaw session exists (create-on-miss, verified by
-      // re-probing state rather than matching error substrings). Returns
-      // the baseline message count so we know when our reply lands.
-      const baselineLength = await ensureSessionExists(deps.callGateway, gatewayKey);
-      // On the first turn of a new OpenClaw session, prepend persistent
-      // system instructions. Keep the transcript's "ask" event showing the
-      // original question — only the gateway sees the wrapped version.
-      const messageToGateway =
-        baselineLength === 0 ? wrapFirstMessage(req.question) : req.question;
+    // Agent id used for the draft envelope author field.
+    let draftAgentId: string;
 
-      // Submit the user turn. Gateway is async: returns {runId, status, messageSeq}.
-      console.log(
-        `[claude-code-ask] sending to gateway key="${gatewayKey}" idemp="${askEnvelope.msgId}" (baseline=${baselineLength})`
-      );
+    if (sessionRuntimeId === "openclaw" || !deps.registry) {
+      // -----------------------------------------------------------------------
+      // OpenClaw legacy path — gateway-specific control flow (idempotency,
+      // baseline polling). Kept verbatim; no adapter dispatch here.
+      // -----------------------------------------------------------------------
+      const gatewayKey = buildGatewayKey(deps.openclawAgentId, session.openclawSessionId);
       try {
-        const sendResult = await deps.callGateway("sessions.send", {
-          key: gatewayKey,
-          idempotencyKey: askEnvelope.msgId,
-          message: messageToGateway,
-        });
+        // Ensure the OpenClaw session exists (create-on-miss, verified by
+        // re-probing state rather than matching error substrings). Returns
+        // the baseline message count so we know when our reply lands.
+        const baselineLength = await ensureSessionExists(deps.callGateway, gatewayKey);
+        // On the first turn of a new OpenClaw session, prepend persistent
+        // system instructions. Keep the transcript's "ask" event showing the
+        // original question — only the gateway sees the wrapped version.
+        const messageToGateway =
+          baselineLength === 0 ? wrapFirstMessage(req.question) : req.question;
+
+        // Submit the user turn. Gateway is async: returns {runId, status, messageSeq}.
         console.log(
-          `[claude-code-ask] send returned ${JSON.stringify(sendResult).slice(0, 200)}`
+          `[claude-code-ask] sending to gateway key="${gatewayKey}" idemp="${askEnvelope.msgId}" (baseline=${baselineLength})`
         );
-      } catch (sendErr) {
-        console.warn(
-          `[claude-code-ask] sessions.send threw for "${gatewayKey}": ${(sendErr as Error).message}`
+        try {
+          const sendResult = await deps.callGateway("sessions.send", {
+            key: gatewayKey,
+            idempotencyKey: askEnvelope.msgId,
+            message: messageToGateway,
+          });
+          console.log(
+            `[claude-code-ask] send returned ${JSON.stringify(sendResult).slice(0, 200)}`
+          );
+        } catch (sendErr) {
+          console.warn(
+            `[claude-code-ask] sessions.send threw for "${gatewayKey}": ${(sendErr as Error).message}`
+          );
+          throw sendErr;
+        }
+
+        // Poll sessions.get until the assistant reply appears.
+        draft = await pollForReply(
+          deps.callGateway,
+          gatewayKey,
+          baselineLength,
+          deps.replyTimeoutMs ?? 120000,
+          deps.replyPollIntervalMs ?? 500
         );
-        throw sendErr;
+      } catch (e) {
+        throw new Error(`gateway: ${(e as Error).message}`);
+      }
+      draftAgentId = deps.openclawAgentId;
+    } else {
+      // -----------------------------------------------------------------------
+      // Non-OpenClaw path — dispatch through the runtime adapter.
+      // -----------------------------------------------------------------------
+      const adapter = await deps.registry.adapter(sessionRuntimeId);
+      if (!adapter) {
+        throw new Error(`runtime '${sessionRuntimeId}' has no adapter`);
+      }
+      // Capability gate: adapter must support sessions.send.
+      await requireCapability(adapter, "sessions.send", sessionRuntimeId);
+
+      // Establish (or reuse) the runtime-native session key.
+      let runtimeSessionKey = session.runtimeSessionKey;
+      if (!runtimeSessionKey) {
+        // First turn: ask the adapter to create a session.
+        await requireCapability(adapter, "sessions.create", sessionRuntimeId);
+        const create = await adapter.invokeAction(
+          "sessions.create",
+          { agentName: session.agentName },
+          { actor: SYSTEM_ACTOR },
+        );
+        if (!create.ok) {
+          throw new Error(
+            `sessions.create on '${sessionRuntimeId}' failed: ${(create as { error?: string }).error ?? "unknown"}`
+          );
+        }
+        const native = (create.nativeResult ?? {}) as Record<string, unknown>;
+        const resolvedKey =
+          (typeof native.key === "string" && native.key) ||
+          (typeof native.sessionKey === "string" && native.sessionKey) ||
+          (typeof native.id === "string" && native.id) ||
+          null;
+        if (!resolvedKey) {
+          throw new Error(`sessions.create on '${sessionRuntimeId}' did not return a key`);
+        }
+        runtimeSessionKey = resolvedKey;
+        // Persist the key so subsequent turns reuse the same adapter session.
+        session = await setRuntimeSessionKey(deps.sessionsPath, session.id, runtimeSessionKey);
       }
 
-      // Poll sessions.get until the assistant reply appears.
-      draft = await pollForReply(
-        deps.callGateway,
-        gatewayKey,
-        baselineLength,
-        deps.replyTimeoutMs ?? 120000,
-        deps.replyPollIntervalMs ?? 500
+      // Send the prompt with awaitCompletion semantics.
+      const send = await adapter.invokeAction(
+        "sessions.send",
+        {
+          sessionKey: runtimeSessionKey,
+          message: req.question,
+          awaitCompletion: true,
+          timeoutMs: deps.replyTimeoutMs ?? 120000,
+        },
+        { actor: SYSTEM_ACTOR },
       );
-    } catch (e) {
-      throw new Error(`gateway: ${(e as Error).message}`);
+      if (!send.ok) {
+        throw new Error(
+          `sessions.send on '${sessionRuntimeId}' failed: ${(send as { error?: string }).error ?? "unknown"}`
+        );
+      }
+      const sendNative = (send.nativeResult ?? {}) as Record<string, unknown>;
+      const draftText = typeof sendNative.assistantText === "string"
+        ? sendNative.assistantText.trim()
+        : "";
+      if (!draftText) {
+        throw new Error(`empty assistantText from '${sessionRuntimeId}'`);
+      }
+      // Non-OpenClaw adapters don't emit control tags; skip stripping.
+      draft = draftText;
+      draftAgentId = session.agentName ?? sessionRuntimeId;
     }
 
-    // Construct the draft's envelope. Author = gateway agent composing the reply.
+    // Construct the draft's envelope. Author = agent composing the reply.
     const draftEnvelope: CCEnvelope = normalizeEnvelope(
       {
         message: draft,
@@ -333,7 +450,7 @@ export function createAskOrchestrator(deps: AskOrchestratorDeps) {
         artifact: askEnvelope.artifact === "question" ? "decision" : "none",
       },
       {
-        authorContext: { kind: "agent", id: deps.openclawAgentId },
+        authorContext: { kind: "agent", id: draftAgentId },
         midThread: true,
         parentMsgIdFallback: askEnvelope.msgId,
       }

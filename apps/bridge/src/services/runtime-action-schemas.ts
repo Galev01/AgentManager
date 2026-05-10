@@ -243,8 +243,19 @@ const claudeCodeAsk: RuntimeActionSchema<"claudeCode.ask"> = (input) => {
   const msgId = requireString(obj, "msgId", errors);
   const question = requireString(obj, "question", errors);
   const sessionId = optionalString(obj, "sessionId", errors);
+  const gatewayKey = optionalString(obj, "gatewayKey", errors);
+  const firstTurnMessage = optionalString(obj, "firstTurnMessage", errors);
+  // intervalMs / timeoutMs are tuning hints; accept numbers or undefined.
+  const replyPollIntervalMs =
+    typeof obj.replyPollIntervalMs === "number" ? obj.replyPollIntervalMs : undefined;
+  const replyTimeoutMs =
+    typeof obj.replyTimeoutMs === "number" ? obj.replyTimeoutMs : undefined;
   throwIfErrors("claudeCode.ask", errors);
-  return { ide: ide!, workspace: workspace!, msgId: msgId!, question: question!, sessionId };
+  return {
+    ide: ide!, workspace: workspace!, msgId: msgId!, question: question!,
+    sessionId, gatewayKey, firstTurnMessage,
+    replyPollIntervalMs, replyTimeoutMs,
+  };
 };
 
 const sessionsCreate: RuntimeActionSchema<"sessions.create"> = (input) => {

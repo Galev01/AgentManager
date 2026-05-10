@@ -182,7 +182,23 @@ export type RuntimeActionPayload = {
   "tools.invoke": { toolId: string; input: JsonValue };
   "cron.write": { id?: string; spec: { cron: string; payload: JsonValue; enabled: boolean } };
   "cron.delete": { id: string };
-  "claudeCode.ask": { ide: string; workspace: string; msgId: string; question: string; sessionId?: string };
+  "claudeCode.ask": {
+    ide: string; workspace: string; msgId: string; question: string;
+    sessionId?: string;
+    /** Bridge-orchestrator-derived OpenClaw gateway session key
+     *  ("agent:<agentId>:<openclawSessionId>"). When present, adapter
+     *  uses this verbatim; otherwise falls back to defaults. */
+    gatewayKey?: string;
+    /** Pre-wrapped form for the very first turn of a new session
+     *  (bridge-owned preamble). Adapter sends this only when the
+     *  gateway session has no prior messages; otherwise it sends the
+     *  raw `question`. */
+    firstTurnMessage?: string;
+    /** Polling tuning for the assistant reply. Defaults match the
+     *  legacy orchestrator (intervalMs=500, timeoutMs=120000). */
+    replyPollIntervalMs?: number;
+    replyTimeoutMs?: number;
+  };
   "sessions.create": { agentName?: string };
   "sessions.send": {
     sessionKey: string;

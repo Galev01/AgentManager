@@ -28,7 +28,7 @@ import reviewsRouter from "./routes/reviews.js";
 import youtubeRouter from "./routes/youtube.js";
 import youtubeChatRouter from "./routes/youtube-chat.js";
 import youtubeRebuildRouter from "./routes/youtube-rebuild.js";
-import claudeCodeRouter from "./routes/claude-code.js";
+import { createClaudeCodeRouter } from "./routes/claude-code.js";
 import { createTelemetryRouter } from "./routes/telemetry.js";
 import { createModelsRouter } from "./routes/models.js";
 import { createAgentModelsRouter } from "./routes/agent-models.js";
@@ -73,21 +73,11 @@ app.get("/health", (_req, res) => { res.json({ ok: true, uptime: process.uptime(
 app.use(bearerAuth);
 app.use(createPublicAuthRouter(authService));
 
-// Claude Code MCP bridge: headless agent traffic carves identity from the
-// request body (ide/workspace/clientId). Actor assertion is optional so the
-// stdio MCP can talk without a user session; dashboard callers still sign and
-// req.auth is populated when they do.
-app.use(actorAssertionAuth(authService, { strict: false }), claudeCodeRouter);
-
-// Strict actor assertion required for authenticated routes.
-app.use(actorAssertionAuth(authService, { strict: true }));
-app.use(createAuthRouter(authService));
-
-// Multi-runtime control plane. Initialized early so catalog-read route
-// factories below (Phase B) can resolve runtimes through the registry.
-// Mounted AFTER strict actor-assertion so req.auth is populated before the
-// router's requirePerm gate runs, and so the bridge can stamp
-// humanActorUserId from req.auth.user.id instead of trusting the request body.
+// Multi-runtime control plane. Initialized before the claude-code router so
+// the orchestrator can dispatch through non-OpenClaw adapters. Also mounted
+// before strict actor-assertion so catalog-read route factories below can
+// resolve runtimes through the registry; the requirePerm gate inside each
+// factory router still fires per-request after strict auth.
 const runtimeRegistry = await createRuntimeRegistry({
   configPaths: config.runtimesConfigPaths,
   factories: realFactories,
@@ -96,6 +86,19 @@ const runtimeConfigService = createRuntimeConfigService({
   configPath: runtimeRegistry.configPath(),
   probeStatus: probeFromRegistry(runtimeRegistry),
 });
+
+// Claude Code MCP bridge: headless agent traffic carves identity from the
+// request body (ide/workspace/clientId). Actor assertion is optional so the
+// stdio MCP can talk without a user session; dashboard callers still sign and
+// req.auth is populated when they do.
+app.use(
+  actorAssertionAuth(authService, { strict: false }),
+  createClaudeCodeRouter({ registry: runtimeRegistry, runtimeConfig: runtimeConfigService })
+);
+
+// Strict actor assertion required for authenticated routes.
+app.use(actorAssertionAuth(authService, { strict: true }));
+app.use(createAuthRouter(authService));
 
 configureYoutubeChatWorker({ registry: runtimeRegistry, runtimeConfig: runtimeConfigService });
 configureCodebaseReviewerWorker({ registry: runtimeRegistry, runtimeConfig: runtimeConfigService });

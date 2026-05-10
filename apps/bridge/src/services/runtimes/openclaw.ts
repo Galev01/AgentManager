@@ -351,14 +351,94 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
             return wrapGw("sessions.delete", { session: p.sessionKey });
           }
           case "claudeCode.ask": {
-            // claude-code orchestration lives in createAskOrchestrator; the
-            // adapter's role here is to declare the capability and provide a
-            // pass-through to the gateway-backed claudeCode bridge entry.
-            // Until Phase D rewires the route, surface a structured signal so
-            // callers know to keep using the orchestrator directly.
+            // claude-code orchestration owns transcript/pending/operator-approval
+            // (bridge cross-cutting concerns). The adapter's job is the agent
+            // dispatch step: ensure the gateway session exists, send the user
+            // turn, poll for the assistant reply, return the assistant text.
+            const p = payload as RuntimeActionPayload["claudeCode.ask"];
+            const gatewayKey = p.gatewayKey;
+            if (!gatewayKey) {
+              return {
+                ok: false,
+                error: "openclaw claudeCode.ask requires payload.gatewayKey",
+                projectionMode: "exact",
+              };
+            }
+            // Ensure the gateway session exists, snapshot baseline length so
+            // we know when our reply lands. Mirrors the legacy orchestrator.
+            try {
+              await callGateway("sessions.create", { key: gatewayKey });
+            } catch (e) {
+              return {
+                ok: false,
+                error: `sessions.create failed: ${(e as Error).message}`,
+                projectionMode: "exact",
+              };
+            }
+            const baselineState = (await callGateway("sessions.get", {
+              key: gatewayKey,
+            })) as { messages?: Array<{ role?: string }> };
+            const baselineLength = baselineState?.messages?.length ?? 0;
+            const messageToSend =
+              baselineLength === 0 && typeof p.firstTurnMessage === "string"
+                ? p.firstTurnMessage
+                : p.question;
+            try {
+              await callGateway("sessions.send", {
+                key: gatewayKey,
+                idempotencyKey: p.msgId,
+                message: messageToSend,
+              });
+            } catch (e) {
+              return {
+                ok: false,
+                error: `sessions.send failed: ${(e as Error).message}`,
+                projectionMode: "exact",
+              };
+            }
+            // Poll until the assistant turn appears.
+            const intervalMs = p.replyPollIntervalMs ?? 500;
+            const timeoutMs = p.replyTimeoutMs ?? 120_000;
+            const deadline = Date.now() + timeoutMs;
+            let assistantText: string | null = null;
+            while (Date.now() < deadline) {
+              await new Promise((r) => setTimeout(r, intervalMs));
+              const state = (await callGateway("sessions.get", {
+                key: gatewayKey,
+              })) as {
+                messages?: Array<{
+                  role?: string;
+                  content?: Array<{ type?: string; text?: string }>;
+                }>;
+              };
+              const messages = state?.messages ?? [];
+              if (messages.length >= baselineLength + 2) {
+                const last = messages[messages.length - 1];
+                if (last && last.role === "assistant") {
+                  const part = last.content?.find(
+                    (c) => c.type === "text" && typeof c.text === "string",
+                  );
+                  if (part?.text) {
+                    assistantText = part.text;
+                    break;
+                  }
+                }
+              }
+            }
+            if (assistantText === null) {
+              return {
+                ok: false,
+                error: "timeout waiting for OpenClaw reply",
+                projectionMode: "exact",
+              };
+            }
             return {
-              ok: false,
-              error: "claudeCode.ask routes through createAskOrchestrator until Phase D",
+              ok: true,
+              nativeResult: {
+                assistantText,
+                gatewayKey,
+                msgId: p.msgId,
+              } as JsonValue,
               projectionMode: "exact",
             };
           }
