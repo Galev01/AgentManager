@@ -1,4 +1,3 @@
-﻿import { callGateway } from "./gateway.js";
 import {
   appendChatRow,
   foldChatLog,
@@ -11,8 +10,10 @@ import { searchIndex } from "./youtube-retrieve.js";
 import { buildReplayContext } from "./youtube-chat-replay.js";
 import { getOrCreateSessionKey, invalidateSessionKey, CHAT_SYSTEM_PROMPT } from "./youtube-chat-session.js";
 import { PROMPT_PRESETS } from "./youtube-prompt-presets.js";
-import type { YoutubeChatMessageRow, YoutubePromptPresetId } from "@openclaw-manager/types";
+import type { YoutubeChatMessageRow, YoutubePromptPresetId, ActorAssertionRef } from "@openclaw-manager/types";
 import { readSummaryWithFallback } from "./youtube-compat.js";
+import type { RuntimeRegistry } from "./runtimes/registry.js";
+import type { RuntimeConfigService } from "./runtime-config.js";
 
 type Job = {
   videoId: string;
@@ -20,7 +21,26 @@ type Job = {
   userRow: YoutubeChatMessageRow;
   assistantRowId: string;
   presetId?: YoutubePromptPresetId;
+  runtimeId?: string;
+  agentName?: string;
 };
+
+type WorkerDeps = {
+  registry: RuntimeRegistry;
+  runtimeConfig: RuntimeConfigService;
+};
+
+const SYSTEM_ACTOR: ActorAssertionRef = {
+  humanActorUserId: "system",
+  managerServiceId: "bridge",
+  basis: "service-principal",
+};
+
+let workerDeps: WorkerDeps | null = null;
+
+export function configureYoutubeChatWorker(deps: WorkerDeps): void {
+  workerDeps = deps;
+}
 
 const queue: Job[] = [];
 const locks = new Set<string>();
@@ -76,6 +96,11 @@ async function drain(): Promise<void> {
 }
 
 async function processChat(job: Job): Promise<void> {
+  if (!workerDeps) {
+    throw new Error("youtube-chat-worker not configured (call configureYoutubeChatWorker at boot)");
+  }
+  const { registry, runtimeConfig } = workerDeps;
+
   // Build context
   const [meta, summaryLoaded, chunksFile, history] = await Promise.all([
     readMetadata(job.videoId),
@@ -114,43 +139,45 @@ async function processChat(job: Job): Promise<void> {
         `USER: ${job.userRow.content}`,
       ].join("\n");
 
-  // Session send with GC recovery
-  let sessionKey: string;
-  try {
-    ({ key: sessionKey } = await getOrCreateSessionKey(job.videoId));
-    await callGateway("sessions.send", { key: sessionKey, message: contextBlock });
-  } catch (e: any) {
-    if (/session not found/i.test(String(e?.message))) {
-      await invalidateSessionKey(job.videoId);
-      ({ key: sessionKey } = await getOrCreateSessionKey(job.videoId));
-      await callGateway("sessions.send", { key: sessionKey, message: contextBlock });
-    } else {
-      throw e;
-    }
+  // Resolve session via runtime adapter
+  const sess = await getOrCreateSessionKey(job.videoId, {
+    registry,
+    runtimeConfig,
+    preferredRuntimeId: job.runtimeId,
+    preferredAgentName: job.agentName,
+    actor: SYSTEM_ACTOR,
+  });
+  const adapter = await registry.adapter(sess.runtimeId);
+  if (!adapter) throw new Error(`runtime '${sess.runtimeId}' has no adapter`);
+
+  // Send with awaitCompletion; GC recovery on "session not found"
+  let sendResult = await adapter.invokeAction(
+    "sessions.send",
+    { sessionKey: sess.key, message: contextBlock, awaitCompletion: true, timeoutMs: 120_000 },
+    { actor: SYSTEM_ACTOR },
+  );
+
+  if (!sendResult.ok && /session not found/i.test(sendResult.error)) {
+    await invalidateSessionKey(job.videoId);
+    const sess2 = await getOrCreateSessionKey(job.videoId, {
+      registry,
+      runtimeConfig,
+      preferredRuntimeId: job.runtimeId,
+      preferredAgentName: job.agentName,
+      actor: SYSTEM_ACTOR,
+    });
+    sendResult = await adapter.invokeAction(
+      "sessions.send",
+      { sessionKey: sess2.key, message: contextBlock, awaitCompletion: true, timeoutMs: 120_000 },
+      { actor: SYSTEM_ACTOR },
+    );
   }
 
+  if (!sendResult.ok) throw new Error(sendResult.error);
 
-  // Wait for the turn to complete.
-  // We don't have `created.entry.sessionFile` here (we reused an existing session),
-  // so fall back to config.sessionsDir + key pattern. If that's missing, re-create
-  // the session to get a fresh path.
-  // First: we need a sessionId for polling. For reused sessions, the key IS
-  // usable as an identifier for sessions.list lookup. Query sessions.list once to
-  // resolve key -> sessionId.
-  type SessionsListEntry = { sessionId?: string; id?: string; key?: string; status?: string; entry?: { sessionFile?: string } };
-  const listRaw = (await callGateway("sessions.list", {})) as unknown;
-  const list = Array.isArray(listRaw)
-    ? (listRaw as SessionsListEntry[])
-    : ((listRaw as { sessions?: SessionsListEntry[] })?.sessions ?? []);
-  const entry = list.find((e) => (e as any).key === sessionKey);
-  if (!entry) throw new Error("sessions.list did not include our session");
-  const sessionId = entry.sessionId || entry.id;
-  if (!sessionId) throw new Error("session has no id");
-  const { waitForSessionTerminal, sessionFilePath, readLastAssistantMessage } = await import("./openclaw-session-tail.js");
-  await waitForSessionTerminal(sessionId, 120_000);
-  const sessionFile = sessionFilePath(entry as any, sessionId);
-  const content = await readLastAssistantMessage(sessionFile);
-  if (!content) throw new Error(`no assistant output in ${sessionFile}`);
+  const native = (sendResult.nativeResult ?? {}) as Record<string, unknown>;
+  const assistantText = typeof native.assistantText === "string" ? native.assistantText.trim() : "";
+  if (!assistantText) throw new Error(`empty assistantText from ${sess.runtimeId}`);
 
   const assistantRow: YoutubeChatMessageRow = {
     id: job.assistantRowId,
@@ -158,10 +185,12 @@ async function processChat(job: Job): Promise<void> {
     chatSessionId: job.chatSessionId,
     turnId: job.userRow.turnId,
     role: "assistant",
-    content: content.trim(),
+    content: assistantText,
     createdAt: new Date().toISOString(),
     status: "complete",
-    openclawSessionKey: sessionKey,
+    runtimeId: sess.runtimeId,
+    runtimeSessionKey: sess.key,
+    openclawSessionKey: sess.key,    // back-compat mirror
     parentMessageId: job.userRow.id,
     retrievedChunkIds: retrieved.map((r) => r.id),
   };

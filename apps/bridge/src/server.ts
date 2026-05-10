@@ -48,6 +48,7 @@ import path from "node:path";
 import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
 import { scanProjects } from "./services/codebase-reviewer/discovery.js";
 import { repairOnStartup as repairYoutubeOnStartup } from "./services/youtube-worker.js";
+import { configureYoutubeChatWorker } from "./services/youtube-chat-worker.js";
 import { attachWebSocket } from "./ws.js";
 
 const app: Express = express();
@@ -95,6 +96,8 @@ const runtimeConfigService = createRuntimeConfigService({
   configPath: runtimeRegistry.configPath(),
   probeStatus: probeFromRegistry(runtimeRegistry),
 });
+
+configureYoutubeChatWorker({ registry: runtimeRegistry, runtimeConfig: runtimeConfigService });
 
 app.use(overviewRouter);
 app.use(conversationsRouter);

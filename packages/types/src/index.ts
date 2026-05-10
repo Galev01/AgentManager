@@ -617,7 +617,9 @@ export type YoutubeChatMessageRow = {
   presetId?: YoutubePromptPresetId;
   parentMessageId?: string;
   retrievedChunkIds?: string[];
-  openclawSessionKey?: string;
+  openclawSessionKey?: string;        // back-compat; mirrored from runtimeSessionKey when runtime=openclaw
+  runtimeSessionKey?: string;
+  runtimeId?: string;
   status: "streaming" | "complete" | "error";
   errorMessage?: string;
 };
@@ -625,7 +627,10 @@ export type YoutubeChatMessageRow = {
 export type YoutubeChatMetaFile = {
   videoId: string;
   chatSessionId: string;
-  openclawSessionKey?: string;
+  openclawSessionKey?: string;        // back-compat; mirrored from runtimeSessionKey when runtime=openclaw
+  runtimeSessionKey?: string;
+  runtimeId?: string;
+  agentName?: string;
   lastReplayedAt?: string;
   distilledMemory?: string;
 };
