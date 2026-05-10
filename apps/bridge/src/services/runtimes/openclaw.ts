@@ -81,12 +81,37 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
         }));
       }
       if (kind === "channel") {
-        const res = (await callGateway("channels.status")) as { channels?: Array<{ id: string; status: string }> };
-        return (res.channels ?? []).map((c) => ({
-          runtimeKind: "openclaw" as const, runtimeId: descriptor.id,
-          entityKind: "channel" as const, entityId: c.id, displayName: c.id,
-          nativeType: c.status, nativeRef: c as JsonValue,
-        }));
+        // Gateway returns { channels: { <id>: <entry> }, channelOrder?: string[] }.
+        // Flatten into one entity per channel id, preserving the native entry as
+        // nativeRef so route projection can recover full status fields.
+        const res = (await callGateway("channels.status")) as {
+          channels?: Record<string, Record<string, unknown>>;
+          channelOrder?: string[];
+        };
+        const channels = res?.channels ?? {};
+        const order = Array.isArray(res?.channelOrder) && res.channelOrder.length
+          ? res.channelOrder
+          : Object.keys(channels);
+        return order.map((id) => {
+          const entry = (channels[id] ?? {}) as Record<string, unknown>;
+          const lastError = entry.lastError;
+          const connected = entry.connected;
+          const status = lastError ? "error" : connected === true ? "connected" : "disconnected";
+          const lastActivityAt = typeof entry.lastEventAt === "number"
+            ? (entry.lastEventAt as number)
+            : typeof entry.lastConnectedAt === "number"
+              ? (entry.lastConnectedAt as number)
+              : undefined;
+          return {
+            runtimeKind: "openclaw" as const, runtimeId: descriptor.id,
+            entityKind: "channel" as const,
+            entityId: id,
+            displayName: id,
+            nativeType: status,
+            lastActivityAt,
+            nativeRef: { ...entry, status, id } as JsonValue,
+          };
+        });
       }
       if (kind === "tool") {
         const res = (await callGateway("tools.catalog")) as { tools?: Array<{ id: string; label?: string }> };
@@ -96,9 +121,55 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
           nativeRef: t as JsonValue,
         }));
       }
+      if (kind === "cron") {
+        const res = (await callGateway("cron.list")) as { jobs?: Array<{ id?: string; name?: string }> } | Array<Record<string, unknown>>;
+        const rows = Array.isArray(res) ? res : (res?.jobs ?? []);
+        return rows.map((r) => {
+          const rec = r as Record<string, unknown>;
+          const id = String(rec.id ?? rec.name ?? "");
+          return {
+            runtimeKind: "openclaw" as const, runtimeId: descriptor.id,
+            entityKind: "cron" as const,
+            entityId: id,
+            displayName: String(rec.name ?? id),
+            nativeRef: rec as JsonValue,
+          };
+        });
+      }
+      if (kind === "model") {
+        const res = (await callGateway("models.list")) as { models?: Array<Record<string, unknown>> };
+        return (res?.models ?? []).map((m) => {
+          const id = String(m.id ?? m.key ?? "");
+          const label = (typeof m.displayName === "string" && m.displayName)
+            || (typeof m.name === "string" && m.name)
+            || id;
+          return {
+            runtimeKind: "openclaw" as const, runtimeId: descriptor.id,
+            entityKind: "model" as const,
+            entityId: id,
+            displayName: label,
+            nativeRef: m as JsonValue,
+          };
+        });
+      }
       return [];
     },
     async getEntity(kind, id) {
+      if (kind === "agent") {
+        try {
+          const identity = (await callGateway("agents.identity", { name: id })) as Record<string, unknown> | null;
+          if (!identity || typeof identity !== "object") return null;
+          const entityId = String(identity.id ?? identity.name ?? id);
+          const displayName = String(identity.name ?? entityId);
+          return {
+            runtimeKind: "openclaw" as const, runtimeId: descriptor.id,
+            entityKind: "agent" as const, entityId, displayName,
+            nativeRef: identity as JsonValue,
+          };
+        } catch {
+          return null;
+        }
+      }
       const list = await this.listEntities(kind);
       return list.find((e) => e.entityId === id) ?? null;
     },

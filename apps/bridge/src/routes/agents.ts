@@ -1,18 +1,93 @@
 import { Router, type Router as ExpressRouter, type Request, type Response } from "express";
 import { requirePerm } from "../auth-middleware.js";
 import { createAgentModelsService, type CallGateway } from "../services/agent-models.js";
+import type { RuntimeRegistry } from "../services/runtimes/registry.js";
+import type { RuntimeConfigService } from "../services/runtime-config.js";
+import {
+  resolveRuntimeForCatalog,
+  requireCapability,
+  UnsupportedCapabilityError,
+  UnknownRuntimeError,
+  NoRuntimeAvailableError,
+} from "../services/runtime-resolver.js";
 
-export type AgentsRouterDeps = { callGateway: CallGateway };
+export type AgentsRouterDeps = {
+  callGateway: CallGateway;
+  registry: RuntimeRegistry;
+  runtimeConfig: RuntimeConfigService;
+};
+
+function unsupportedCapabilityResponse(res: Response, e: UnsupportedCapabilityError): void {
+  res.status(409).json({
+    ok: false,
+    error: {
+      code: "UNSUPPORTED_CAPABILITY",
+      runtimeId: e.runtimeId,
+      capabilityId: e.capabilityId,
+      reason: e.reason,
+      message: e.message,
+    },
+  });
+}
 
 export function createAgentsRouter(deps: AgentsRouterDeps): ExpressRouter {
   const router: ExpressRouter = Router();
-  const { callGateway } = deps;
-  const modelsService = createAgentModelsService({ callGateway });
+  const { callGateway, registry, runtimeConfig } = deps;
+  const modelsService = createAgentModelsService({ callGateway, registry, runtimeConfig });
 
-  router.get("/agents", async (_req: Request, res: Response) => {
+  router.get("/agents", async (req: Request, res: Response) => {
+    let resolved;
     try {
-      const result = await callGateway("agents.list", {});
-      res.json(result);
+      resolved = await resolveRuntimeForCatalog(req, registry, runtimeConfig);
+    } catch (e) {
+      if (e instanceof UnknownRuntimeError) {
+        res.status(404).json({ error: "runtime_not_found", runtimeId: e.runtimeId });
+        return;
+      }
+      if (e instanceof NoRuntimeAvailableError) {
+        res.status(503).json({ error: "no_runtime_available" });
+        return;
+      }
+      res.status(500).json({ error: (e as Error).message });
+      return;
+    }
+
+    const adapter = await registry.adapter(resolved.runtimeId);
+    if (!adapter) {
+      res.status(404).json({ error: "runtime_not_found", runtimeId: resolved.runtimeId });
+      return;
+    }
+
+    let partialMeta: Awaited<ReturnType<typeof requireCapability>>["partial"];
+    try {
+      const out = await requireCapability(adapter, "agents.list", resolved.runtimeId);
+      partialMeta = out.partial;
+    } catch (e) {
+      if (e instanceof UnsupportedCapabilityError) {
+        unsupportedCapabilityResponse(res, e);
+        return;
+      }
+      res.status(502).json({ error: (e as Error).message });
+      return;
+    }
+
+    try {
+      const entities = await adapter.listEntities("agent");
+      // Preserve historical wire shape: { agents: [...] } from gateway-style response.
+      // Project entity.nativeRef when present (raw runtime shape), else fall back
+      // to a minimal projection.
+      const agents = entities.map((e) =>
+        e.nativeRef && typeof e.nativeRef === "object" && !Array.isArray(e.nativeRef)
+          ? (e.nativeRef as Record<string, unknown>)
+          : { id: e.entityId, name: e.displayName },
+      );
+      const body: Record<string, unknown> = {
+        agents,
+        runtimeId: resolved.runtimeId,
+        source: resolved.source,
+      };
+      if (partialMeta) body.partial = partialMeta;
+      res.json(body);
     } catch (err: any) {
       res.status(502).json({ error: err.message || "Failed to list agents" });
     }
@@ -74,10 +149,58 @@ export function createAgentsRouter(deps: AgentsRouterDeps): ExpressRouter {
   });
 
   router.get("/agents/:name", async (req: Request, res: Response) => {
+    let resolved;
+    try {
+      resolved = await resolveRuntimeForCatalog(req, registry, runtimeConfig);
+    } catch (e) {
+      if (e instanceof UnknownRuntimeError) {
+        res.status(404).json({ error: "runtime_not_found", runtimeId: e.runtimeId });
+        return;
+      }
+      if (e instanceof NoRuntimeAvailableError) {
+        res.status(503).json({ error: "no_runtime_available" });
+        return;
+      }
+      res.status(500).json({ error: (e as Error).message });
+      return;
+    }
+
+    const adapter = await registry.adapter(resolved.runtimeId);
+    if (!adapter) {
+      res.status(404).json({ error: "runtime_not_found", runtimeId: resolved.runtimeId });
+      return;
+    }
+
+    let partialMeta: Awaited<ReturnType<typeof requireCapability>>["partial"];
+    try {
+      const out = await requireCapability(adapter, "agents.read", resolved.runtimeId);
+      partialMeta = out.partial;
+    } catch (e) {
+      if (e instanceof UnsupportedCapabilityError) {
+        unsupportedCapabilityResponse(res, e);
+        return;
+      }
+      res.status(502).json({ error: (e as Error).message });
+      return;
+    }
+
     try {
       const name = req.params.name as string;
-      const result = await callGateway("agents.identity", { name });
-      res.json(result);
+      const entity = await adapter.getEntity("agent", name);
+      if (!entity) {
+        res.status(404).json({ error: "agent_not_found", name });
+        return;
+      }
+      const item = entity.nativeRef && typeof entity.nativeRef === "object" && !Array.isArray(entity.nativeRef)
+        ? (entity.nativeRef as Record<string, unknown>)
+        : { id: entity.entityId, name: entity.displayName };
+      const body: Record<string, unknown> = {
+        ...item,
+        runtimeId: resolved.runtimeId,
+        source: resolved.source,
+      };
+      if (partialMeta) body.partial = partialMeta;
+      res.json(body);
     } catch (err: any) {
       res.status(502).json({ error: err.message || "Failed to get agent" });
     }

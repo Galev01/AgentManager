@@ -10,15 +10,15 @@ import messagesRouter from "./routes/messages.js";
 import settingsRouter from "./routes/settings.js";
 import commandsRouter from "./routes/commands.js";
 import gatewayRouter from "./routes/gateway.js";
-import logsRouter from "./routes/logs.js";
+import { createLogsRouter } from "./routes/logs.js";
 import relayRouter from "./routes/relay.js";
 import routingRouter from "./routes/routing.js";
 import composeRouter from "./routes/compose.js";
 import { createAgentsRouter } from "./routes/agents.js";
-import agentSessionsRouter from "./routes/agent-sessions.js";
-import cronRouter from "./routes/cron.js";
-import channelsRouter from "./routes/channels.js";
-import toolsRouter from "./routes/tools.js";
+import { createAgentSessionsRouter } from "./routes/agent-sessions.js";
+import { createCronRouter } from "./routes/cron.js";
+import { createChannelsRouter } from "./routes/channels.js";
+import { createToolsRouter } from "./routes/tools.js";
 import gatewayConfigRouter from "./routes/gateway-config.js";
 import gatewayControlRouter from "./routes/gateway-control.js";
 import brainRouter from "./routes/brain.js";
@@ -80,23 +80,37 @@ app.use(actorAssertionAuth(authService, { strict: false }), claudeCodeRouter);
 app.use(actorAssertionAuth(authService, { strict: true }));
 app.use(createAuthRouter(authService));
 
+// Multi-runtime control plane. Initialized early so catalog-read route
+// factories below (Phase B) can resolve runtimes through the registry.
+// Mounted AFTER strict actor-assertion so req.auth is populated before the
+// router's requirePerm gate runs, and so the bridge can stamp
+// humanActorUserId from req.auth.user.id instead of trusting the request body.
+const runtimeRegistry = await createRuntimeRegistry({
+  configPaths: config.runtimesConfigPaths,
+  factories: realFactories,
+});
+const runtimeConfigService = createRuntimeConfigService({
+  configPath: runtimeRegistry.configPath(),
+  probeStatus: probeFromRegistry(runtimeRegistry),
+});
+
 app.use(overviewRouter);
 app.use(conversationsRouter);
 app.use(messagesRouter);
 app.use(settingsRouter);
 app.use(commandsRouter);
 app.use(gatewayRouter);
-app.use(logsRouter);
+app.use(createLogsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 app.use(relayRouter);
 app.use(routingRouter);
 app.use(composeRouter);
-app.use(createAgentsRouter({ callGateway }));
-app.use(createModelsRouter({ callGateway }));
-app.use(createAgentModelsRouter({ callGateway }));
-app.use(agentSessionsRouter);
-app.use(cronRouter);
-app.use(channelsRouter);
-app.use(toolsRouter);
+app.use(createAgentsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+app.use(createModelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+app.use(createAgentModelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+app.use(createAgentSessionsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+app.use(createCronRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+app.use(createChannelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+app.use(createToolsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 app.use(gatewayConfigRouter);
 app.use(gatewayControlRouter);
 app.use(brainRouter);
@@ -110,23 +124,10 @@ app.use(createTelemetryRouter({
   maxDiskMB: config.telemetryMaxDiskMB,
 }));
 
-// Multi-runtime control plane. Mounted AFTER strict actor-assertion so
-// req.auth is populated before the router's requirePerm gate runs, and so the
-// bridge can stamp humanActorUserId from req.auth.user.id instead of trusting
-// the request body.
-const runtimeRegistry = await createRuntimeRegistry({
-  configPaths: config.runtimesConfigPaths,
-  factories: realFactories,
-});
 app.use(createRuntimesRouter({
   registry: runtimeRegistry,
   managerServiceId: process.env.BRIDGE_SERVICE_ID ?? "bridge-primary",
 }));
-
-const runtimeConfigService = createRuntimeConfigService({
-  configPath: runtimeRegistry.configPath(),
-  probeStatus: probeFromRegistry(runtimeRegistry),
-});
 app.use(createRuntimeConfigRouter({ service: runtimeConfigService }));
 app.use(createRuntimesHealthRouter({
   registry: runtimeRegistry,
