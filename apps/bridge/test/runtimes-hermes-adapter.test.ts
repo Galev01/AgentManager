@@ -15,9 +15,11 @@ const desc: RuntimeDescriptor = {
 
 function fakeHttp(routes: Record<string, unknown>): HttpClient {
   return {
-    async json(url, _req) {
+    async json(url, req) {
       const path = url.replace(/^https?:\/\/[^/]+/, "");
       if (!(path in routes)) throw new Error(`no fake for ${path}`);
+      const handler = routes[path];
+      if (typeof handler === "function") return (handler as (req: unknown) => unknown)(req);
       return routes[path] as any;
     },
   };
@@ -76,7 +78,10 @@ test("invokeAction sessions.send calls /v1/chat and returns assistantText", asyn
     descriptor: desc,
     bearer: "tok",
     http: fakeHttp({
-      "/v1/chat": { assistantText: "Hello back", sessionKey: "s1" },
+      "/v1/chat": (req: any) => {
+        assert.deepEqual(req.body, { session_id: "s1", message: "hello" });
+        return { ok: true, assistant_text: "Hello back", session_id: "s1", elapsed_ms: 12 };
+      },
     }),
   });
   const r = await a.invokeAction(
@@ -89,7 +94,7 @@ test("invokeAction sessions.send calls /v1/chat and returns assistantText", asyn
     const result = r.nativeResult as { assistantText: string; sessionKey: string; elapsedMs: number };
     assert.equal(result.assistantText, "Hello back");
     assert.equal(result.sessionKey, "s1");
-    assert.equal(typeof result.elapsedMs, "number");
+    assert.equal(result.elapsedMs, 12);
   }
 });
 

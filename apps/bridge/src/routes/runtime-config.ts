@@ -38,7 +38,10 @@ export function createRuntimeConfigRouter(deps: RuntimeConfigRouterDeps): Expres
       res.json(after);
     } catch (e) {
       if (e instanceof RuntimeConfigError) {
-        const status = e.code === "cannot_disable_all" ? 409 : 400;
+        const status =
+          e.code === "cannot_disable_all" || e.code === "cannot_remove_primary"
+            ? 409
+            : 400;
         res.status(status).json({ error: e.code, detail: e.message });
         return;
       }
