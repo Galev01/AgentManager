@@ -148,7 +148,22 @@ app.use(createRuntimesHealthRouter({
 }));
 
 const copilotRoot = path.join(config.managementDir, "copilot");
-const copilotStore = createCopilotStore({ rootDir: copilotRoot });
+
+// Read-time backfill resolver: for legacy meta files written before Phase E
+// (no `runtimeId` field), we map `backend` → first runtime of that kind in
+// the registry, falling back to the effective primary id.
+async function resolveRuntimeIdForCopilotBackend(backend: "openclaw" | "hermes"): Promise<string | null> {
+  const all = await runtimeRegistry.list();
+  const match = all.find((d) => d.kind === backend && (d.enabled ?? true));
+  if (match) return match.id;
+  const snap = await runtimeConfigService.read();
+  return snap.effectivePrimaryRuntimeId ?? null;
+}
+
+const copilotStore = createCopilotStore({
+  rootDir: copilotRoot,
+  resolveRuntimeId: resolveRuntimeIdForCopilotBackend,
+});
 const openclawChatBackend = createOpenclawChatBackend({ callGateway });
 
 // Hermes is optional. If HERMES_BASE_URL isn't configured, pass null so the
@@ -167,7 +182,19 @@ const hermesChatBackend = hermesShimEndpoint
   : createHermesChatBackend(null);
 const copilotOrchestrator = createCopilotOrchestrator({
   store: copilotStore,
-  backendFor: (kind) => (kind === "openclaw" ? openclawChatBackend : hermesChatBackend),
+  // Dispatch by runtime kind via registry lookup (Phase E). Falls back to
+  // the legacy `backend` field if the registry has no entry for the
+  // session's runtime — keeps older sessions routable while their on-disk
+  // metadata is still being backfilled.
+  resolveBackend: async (meta) => {
+    if (meta.runtimeId) {
+      const desc = await runtimeRegistry.get(meta.runtimeId);
+      if (desc) {
+        return desc.kind === "hermes" ? hermesChatBackend : openclawChatBackend;
+      }
+    }
+    return meta.backend === "hermes" ? hermesChatBackend : openclawChatBackend;
+  },
   onAudit: ({ event, data }) => console.log(`copilot.${event}`, JSON.stringify(data)),
 });
 app.use(createCopilotRouter({
@@ -176,6 +203,14 @@ app.use(createCopilotRouter({
   backendCreator: async (sessionId, ownerUserId, backend) => {
     const adapter = backend === "openclaw" ? openclawChatBackend : hermesChatBackend;
     return adapter.createSession({ sessionId, ownerUserId });
+  },
+  resolveRuntimeIdForBackend: resolveRuntimeIdForCopilotBackend,
+  resolveKindForRuntimeId: async (runtimeId) => {
+    const desc = await runtimeRegistry.get(runtimeId);
+    if (!desc) return null;
+    if (desc.kind === "openclaw" || desc.kind === "hermes") return desc.kind;
+    // Other kinds (zeroclaw/nanobot) aren't valid copilot backends today.
+    return null;
   },
 }));
 

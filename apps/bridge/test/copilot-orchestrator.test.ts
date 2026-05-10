@@ -26,7 +26,7 @@ test("submitTurn appends user msg + writes pending + dispatches + resolves to do
   const root = await tempRoot();
   const store = createCopilotStore({ rootDir: root });
   const orch = createCopilotOrchestrator({ store, backendFor: () => okBackend });
-  const meta = await store.createSession({ ownerUserId: "u1", backend: "openclaw" });
+  const meta = await store.createSession({ ownerUserId: "u1", runtimeId: "oc-main", backend: "openclaw" });
   const { msgId } = await orch.submitTurn({ sessionId: meta.id, userMessageText: "hi" });
 
   // Pending immediately set
@@ -49,7 +49,7 @@ test("concurrent submitTurn returns 409 turn_in_progress", async () => {
   const root = await tempRoot();
   const store = createCopilotStore({ rootDir: root });
   const orch = createCopilotOrchestrator({ store, backendFor: () => slowBackend(100) });
-  const meta = await store.createSession({ ownerUserId: "u1", backend: "openclaw" });
+  const meta = await store.createSession({ ownerUserId: "u1", runtimeId: "oc-main", backend: "openclaw" });
   await orch.submitTurn({ sessionId: meta.id, userMessageText: "first" });
   await assert.rejects(
     orch.submitTurn({ sessionId: meta.id, userMessageText: "second" }),
@@ -65,7 +65,7 @@ test("backend error transitions pending to error", async () => {
     async sendTurn() { return { ok: false, error: "boom" }; },
   };
   const orch = createCopilotOrchestrator({ store, backendFor: () => errBackend });
-  const meta = await store.createSession({ ownerUserId: "u1", backend: "openclaw" });
+  const meta = await store.createSession({ ownerUserId: "u1", runtimeId: "oc-main", backend: "openclaw" });
   const { msgId } = await orch.submitTurn({ sessionId: meta.id, userMessageText: "x" });
   await orch.waitForTurn(meta.id, msgId, 5000);
   const p = await store.readPending(meta.id);
@@ -76,7 +76,7 @@ test("backend error transitions pending to error", async () => {
 test("recoverOnBoot transitions stale running pending to timeout", async () => {
   const root = await tempRoot();
   const store = createCopilotStore({ rootDir: root });
-  const meta = await store.createSession({ ownerUserId: "u1", backend: "openclaw" });
+  const meta = await store.createSession({ ownerUserId: "u1", runtimeId: "oc-main", backend: "openclaw" });
   await store.writePending(meta.id, { msg_id: "m1", state: "running", startedAt: Date.now() - 999_999 });
   const orch = createCopilotOrchestrator({ store, backendFor: () => okBackend, pendingTimeoutMs: 180_000 });
   await orch.recoverOnBoot();
@@ -87,7 +87,7 @@ test("recoverOnBoot transitions stale running pending to timeout", async () => {
 test("recoverOnBoot transitions running with later assistant message to done", async () => {
   const root = await tempRoot();
   const store = createCopilotStore({ rootDir: root });
-  const meta = await store.createSession({ ownerUserId: "u1", backend: "openclaw" });
+  const meta = await store.createSession({ ownerUserId: "u1", runtimeId: "oc-main", backend: "openclaw" });
   const startedAt = Date.now() - 1000;
   await store.writePending(meta.id, { msg_id: "m1", state: "running", startedAt });
   await store.appendMessage(meta.id, {

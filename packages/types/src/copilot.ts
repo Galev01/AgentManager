@@ -5,6 +5,16 @@ export type BackendKind = "openclaw" | "hermes";
 export type CopilotSessionMeta = {
   id: string;
   ownerUserId: string;
+  /**
+   * Runtime backing this session. Required for new records; legacy reads
+   * backfill via the copilot store (see `apps/bridge/src/services/copilot/store.ts`).
+   */
+  runtimeId: string;
+  /**
+   * Backend kind kept as UI-display alias. Always equals the kind of the
+   * runtime named by `runtimeId`. Migrating away from this field for
+   * dispatch decisions; routes still emit it for dashboard compatibility.
+   */
   backend: BackendKind;
   title: string | null;
   createdAt: number;
@@ -69,7 +79,17 @@ export type CopilotTurnPollResponse = {
 };
 
 export type CopilotSessionCreateInput = {
-  backend: BackendKind;
+  /**
+   * Preferred. When provided, the bridge looks up the runtime adapter by id
+   * and derives `backend` from the runtime kind.
+   */
+  runtimeId?: string;
+  /**
+   * Legacy field still accepted for dashboard compatibility. If present
+   * without `runtimeId`, the bridge derives `runtimeId` from the registry
+   * (first runtime of that kind, falling back to primary).
+   */
+  backend?: BackendKind;
   title?: string;
 };
 
