@@ -26,12 +26,12 @@ export type RuntimeDescriptor = {
 // Reads are capability-gated but never go through invokeAction.
 export type RuntimeReadCapabilityId =
   | "agents.list" | "agents.read"
-  | "sessions.list" | "sessions.read"
+  | "sessions.list" | "sessions.read" | "sessions.usage"
   | "channels.list" | "channels.status"
   | "memory.query"
   | "skills.list"
-  | "tools.list"
-  | "cron.list"
+  | "tools.list" | "tools.effective"
+  | "cron.list" | "cron.status"
   | "models.list"
   | "logs.tail"
   | "config.get";
@@ -41,9 +41,9 @@ export type RuntimeActionId =
   | "agents.create" | "agents.update" | "agents.delete"
   | "channels.connect" | "channels.disconnect"
   | "tools.invoke"
-  | "cron.write" | "cron.delete"
+  | "cron.write" | "cron.delete" | "cron.run"
   | "claudeCode.ask"
-  | "sessions.send"
+  | "sessions.create" | "sessions.send" | "sessions.reset" | "sessions.abort" | "sessions.compact" | "sessions.delete"
   | "memory.write"
   | "skills.install"
   | "config.set";
@@ -183,7 +183,25 @@ export type RuntimeActionPayload = {
   "cron.write": { id?: string; spec: { cron: string; payload: JsonValue; enabled: boolean } };
   "cron.delete": { id: string };
   "claudeCode.ask": { ide: string; workspace: string; msgId: string; question: string; sessionId?: string };
-  "sessions.send": { sessionKey: string; message: string };
+  "sessions.create": { agentName?: string };
+  "sessions.send": {
+    sessionKey: string;
+    message: string;
+    /**
+     * When true, adapter waits for terminal status and returns
+     * `{ assistantText, elapsedMs, sessionKey }` in nativeResult.
+     * When false/undefined, adapter returns `{ ack: true, sessionKey }`
+     * (existing fire-and-forget shape).
+     */
+    awaitCompletion?: boolean;
+    /** Default 120000. Only used when awaitCompletion=true. */
+    timeoutMs?: number;
+  };
+  "sessions.reset":   { sessionKey: string };
+  "sessions.abort":   { sessionKey: string };
+  "sessions.compact": { sessionKey: string };
+  "sessions.delete":  { sessionKey: string };
+  "cron.run":         { id: string };
   "memory.write": { key: string; value: JsonValue };
   "skills.install": { ref: string };
   "config.set": { path: string; value: JsonValue };
@@ -216,4 +234,13 @@ export interface RuntimeAdapter {
   // must implement dispose(). Others may leave it undefined; the registry
   // treats undefined as no-op.
   dispose?(): Promise<void>;
+  /**
+   * Optional per-capability read surface. Used for read capabilities that
+   * don't fit `listEntities` (e.g. sessions.usage on a single session,
+   * cron.status, tools.effective). Adapters that support a given read
+   * capability implement this; routes call requireCapability first then
+   * dispatch through here. Adapters that don't implement read are treated
+   * as not supporting any read capability beyond listEntities.
+   */
+  read?(capabilityId: RuntimeReadCapabilityId, params?: JsonValue): Promise<JsonValue>;
 }
