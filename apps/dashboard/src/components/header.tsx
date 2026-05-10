@@ -1,8 +1,10 @@
 "use client";
+import { Suspense } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AutoRefresh } from "./auto-refresh";
 import { GatewayStatus } from "./gateway-status";
 import { Icons } from "./icons";
+import { RuntimeSelector } from "./runtime/runtime-selector";
 
 // Static health-strip items for Task 1 (real data wired in Task 2)
 type PillStatus = "ok" | "warn" | "err" | "checking";
@@ -73,6 +75,11 @@ export function Header({ title }: { title: string }) {
 
       {/* Health strip (static — Task 2 will wire real data) */}
       <HealthStrip />
+
+      {/* Active-runtime selector (Phase F) */}
+      <Suspense fallback={null}>
+        <RuntimeSelector />
+      </Suspense>
 
       {/* Gateway status (existing component kept) */}
       <GatewayStatus />
