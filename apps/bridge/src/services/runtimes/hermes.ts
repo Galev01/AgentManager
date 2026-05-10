@@ -157,14 +157,27 @@ export function createHermesAdapter(cfg: AdapterConfig): RuntimeAdapter {
           const res = (await http.json(`${base}/v1/chat`, {
             method: "POST",
             headers: { ...headers, "Content-Type": "application/json" },
-            body: { session: p.sessionKey, message: p.message },
+            body: { session_id: p.sessionKey, message: p.message },
             timeoutMs: p.timeoutMs ?? timeoutMs ?? 120_000,
-          })) as { text?: string; content?: string; assistantText?: string };
-          const assistantText = res?.assistantText ?? res?.text ?? res?.content ?? "";
+          })) as {
+            text?: string;
+            content?: string;
+            assistantText?: string;
+            assistant_text?: string;
+            sessionKey?: string;
+            session_id?: string;
+            elapsedMs?: number;
+            elapsed_ms?: number;
+          };
+          const assistantText = res?.assistantText ?? res?.assistant_text ?? res?.text ?? res?.content ?? "";
           const elapsedMs = Date.now() - started;
           return {
             ok: true,
-            nativeResult: { assistantText, elapsedMs, sessionKey: p.sessionKey },
+            nativeResult: {
+              assistantText,
+              elapsedMs: res?.elapsedMs ?? res?.elapsed_ms ?? elapsedMs,
+              sessionKey: res?.sessionKey ?? res?.session_id ?? p.sessionKey,
+            },
             projectionMode: "exact",
           };
         } catch (e) {

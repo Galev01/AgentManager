@@ -96,6 +96,8 @@ export type RuntimeConfigSnapshot = {
 export type RuntimeConfigPatch = {
   configuredPrimaryRuntimeId?: string;
   enabled?: { [runtimeId: string]: boolean };
+  upsertRuntime?: RuntimeDescriptor;
+  removeRuntimeId?: string;
 };
 
 export type RuntimeEntityKind =

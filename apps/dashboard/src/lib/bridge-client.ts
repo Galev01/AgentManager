@@ -75,6 +75,18 @@ async function bridgeFetch<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+/**
+ * Append `?runtimeId=` to a bridge path. Pages with runtime-aware
+ * catalog data pass the active runtime selection through so the bridge
+ * routes the request to the right adapter. Bridge falls back to the
+ * primary runtime when the param is missing, preserving back-compat.
+ */
+function withRuntimeId(path: string, runtimeId?: string | null): string {
+  if (!runtimeId) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}runtimeId=${encodeURIComponent(runtimeId)}`;
+}
+
 export async function getOverview(): Promise<OverviewData> { return bridgeFetch<OverviewData>("/overview"); }
 export async function getConversations(): Promise<ConversationRow[]> { return bridgeFetch<ConversationRow[]>("/conversations"); }
 export async function getConversation(key: string): Promise<ConversationRow | null> {
@@ -214,8 +226,8 @@ export async function getSettingsV2(): Promise<RuntimeSettingsV2> {
 }
 
 // --- Agents ---
-export async function listAgents(): Promise<Agent[]> {
-  const result = await bridgeFetch<unknown>("/agents");
+export async function listAgents(runtimeId?: string | null): Promise<Agent[]> {
+  const result = await bridgeFetch<unknown>(withRuntimeId("/agents", runtimeId));
   return Array.isArray(result) ? result : [];
 }
 
@@ -286,8 +298,8 @@ export async function deleteSession(id: string): Promise<{ ok: boolean }> {
 }
 
 // --- Cron Jobs ---
-export async function listCronJobs(): Promise<CronJob[]> {
-  const result = await bridgeFetch<unknown>("/cron");
+export async function listCronJobs(runtimeId?: string | null): Promise<CronJob[]> {
+  const result = await bridgeFetch<unknown>(withRuntimeId("/cron", runtimeId));
   return Array.isArray(result) ? result : [];
 }
 
@@ -310,8 +322,8 @@ export async function removeCronJob(id: string): Promise<{ ok: boolean }> {
 }
 
 // --- Channels ---
-export async function getChannels(): Promise<Channel[]> {
-  const result = await bridgeFetch<unknown>("/channels");
+export async function getChannels(runtimeId?: string | null): Promise<Channel[]> {
+  const result = await bridgeFetch<unknown>(withRuntimeId("/channels", runtimeId));
   if (!Array.isArray(result)) {
     throw new Error(`Unexpected /channels response shape: ${typeof result}`);
   }
@@ -715,14 +727,14 @@ export async function getYoutubeHighlights(videoId: string): Promise<YoutubeHigh
 
 // --- Claude Code ---
 
-export async function getClaudeCodeSessions(): Promise<ClaudeCodeSession[]> {
-  return bridgeFetch<ClaudeCodeSession[]>("/claude-code/sessions");
+export async function getClaudeCodeSessions(runtimeId?: string | null): Promise<ClaudeCodeSession[]> {
+  return bridgeFetch<ClaudeCodeSession[]>(withRuntimeId("/claude-code/sessions", runtimeId));
 }
 
-export async function getClaudeCodeSessionsWithEnvelope(): Promise<
+export async function getClaudeCodeSessionsWithEnvelope(runtimeId?: string | null): Promise<
   Array<ClaudeCodeSession & { latestEnvelope: CCEnvelope | null }>
 > {
-  return bridgeFetch("/claude-code/sessions-with-envelope");
+  return bridgeFetch(withRuntimeId("/claude-code/sessions-with-envelope", runtimeId));
 }
 
 export async function getClaudeCodeEscalationCount(): Promise<number> {

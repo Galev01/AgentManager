@@ -86,3 +86,39 @@ test("PATCH /runtime-config 400 unknown id", async () => {
   assert.equal(r.status, 400);
   a.close();
 });
+
+test("PATCH /runtime-config upserts runtime descriptor", async () => {
+  const a = await bootApp({ perms: ["runtimes.view", "runtimes.config"] });
+  const r = await fetch(`${a.url}/runtime-config`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      upsertRuntime: {
+        id: "hermes-lan",
+        kind: "hermes",
+        displayName: "Hermes LAN",
+        endpoint: "http://192.168.0.10:9119",
+        transport: "http",
+        authMode: "bearer",
+        enabled: true,
+      },
+    }),
+  });
+  const body = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(body.runtimes.find((x: any) => x.id === "hermes-lan").displayName, "Hermes LAN");
+  a.close();
+});
+
+test("PATCH /runtime-config rejects removing configured primary", async () => {
+  const a = await bootApp({ perms: ["runtimes.view", "runtimes.config"] });
+  const r = await fetch(`${a.url}/runtime-config`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ removeRuntimeId: "oc-main" }),
+  });
+  const body = await r.json();
+  assert.equal(r.status, 409);
+  assert.equal(body.error, "cannot_remove_primary");
+  a.close();
+});

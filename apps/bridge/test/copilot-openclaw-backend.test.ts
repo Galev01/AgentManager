@@ -6,6 +6,7 @@ import type { CopilotSessionMeta } from "@openclaw-manager/types";
 const baseSession = (over?: Partial<CopilotSessionMeta>): CopilotSessionMeta => ({
   id: "s1",
   ownerUserId: "u1",
+  runtimeId: "oc-main",
   backend: "openclaw",
   title: null,
   createdAt: 0,

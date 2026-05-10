@@ -155,3 +155,67 @@ test("PATCH atomic: change primary AND disable old primary in one call", async (
   assert.equal(after.effectivePrimaryRuntimeId, "hermes-remote");
   assert.equal(after.runtimes.find((r) => r.id === "oc-main")!.enabled, false);
 });
+
+test("PATCH can add and edit a runtime descriptor", async () => {
+  const p = await tempConfig({
+    runtimes: [
+      { id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "x", transport: "sdk", authMode: "token-env", enabled: true },
+    ],
+  });
+  const svc = createRuntimeConfigService({ configPath: p, probeStatus: probe });
+  const added = await svc.patch({
+    upsertRuntime: {
+      id: "hermes-remote",
+      kind: "hermes",
+      displayName: "Hermes",
+      endpoint: "http://192.168.0.10:9119",
+      transport: "http",
+      authMode: "bearer",
+      enabled: true,
+    },
+  });
+  assert.equal(added.runtimes.find((r) => r.id === "hermes-remote")!.endpoint, "http://192.168.0.10:9119");
+
+  const edited = await svc.patch({
+    upsertRuntime: {
+      id: "hermes-remote",
+      kind: "hermes",
+      displayName: "Hermes LAN",
+      endpoint: "http://192.168.0.10:9119",
+      transport: "http",
+      authMode: "bearer",
+      enabled: false,
+    },
+  });
+  const target = edited.runtimes.find((r) => r.id === "hermes-remote")!;
+  assert.equal(target.displayName, "Hermes LAN");
+  assert.equal(target.enabled, false);
+});
+
+test("PATCH can remove a non-primary runtime descriptor", async () => {
+  const p = await tempConfig({
+    configuredPrimaryRuntimeId: "oc-main",
+    runtimes: [
+      { id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "x", transport: "sdk", authMode: "token-env", enabled: true },
+      { id: "hermes-remote", kind: "hermes", displayName: "H", endpoint: "y", transport: "http", authMode: "bearer", enabled: true },
+    ],
+  });
+  const svc = createRuntimeConfigService({ configPath: p, probeStatus: probe });
+  const after = await svc.patch({ removeRuntimeId: "hermes-remote" });
+  assert.equal(after.runtimes.some((r) => r.id === "hermes-remote"), false);
+});
+
+test("PATCH rejects removing configured primary", async () => {
+  const p = await tempConfig({
+    configuredPrimaryRuntimeId: "oc-main",
+    runtimes: [
+      { id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "x", transport: "sdk", authMode: "token-env", enabled: true },
+      { id: "hermes-remote", kind: "hermes", displayName: "H", endpoint: "y", transport: "http", authMode: "bearer", enabled: true },
+    ],
+  });
+  const svc = createRuntimeConfigService({ configPath: p, probeStatus: probe });
+  await assert.rejects(
+    svc.patch({ removeRuntimeId: "oc-main" }),
+    (e: any) => e.code === "cannot_remove_primary",
+  );
+});

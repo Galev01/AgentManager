@@ -5,11 +5,31 @@ import type {
   CopilotSessionMeta, CopilotMessage, CopilotPendingTurn, BackendKind,
 } from "@openclaw-manager/types";
 
-export type CopilotStoreDeps = { rootDir: string };
+/**
+ * Resolves a `runtimeId` for a legacy on-disk session that only carries
+ * `backend`. Implementations typically consult the runtime registry +
+ * runtime-config service: pick the first runtime of the matching kind, then
+ * fall back to the effective primary runtime id.
+ */
+export type RuntimeIdResolver = (backend: BackendKind) => Promise<string | null>;
+
+export type CopilotStoreDeps = {
+  rootDir: string;
+  /**
+   * Optional resolver invoked when a legacy meta is read without
+   * `runtimeId`. The resolved value is returned to callers and persisted to
+   * disk on the next `updateMeta` / `createSession`. Tests omit this to keep
+   * the store hermetic; the bridge wires it from the runtime registry.
+   */
+  resolveRuntimeId?: RuntimeIdResolver;
+};
 
 export type CopilotStore = {
   createSession(args: {
     ownerUserId: string;
+    /** Runtime backing this session. Preferred for new code paths. */
+    runtimeId: string;
+    /** UI-display alias. Equals the runtime kind. */
     backend: BackendKind;
     title?: string;
     openclawSessionKey?: string;
@@ -50,9 +70,38 @@ async function readJsonOrNull<T>(p: string): Promise<T | null> {
 
 export function createCopilotStore(deps: CopilotStoreDeps): CopilotStore {
   const root = deps.rootDir;
+  const resolveRuntimeId = deps.resolveRuntimeId;
 
+  type RawMeta = Partial<CopilotSessionMeta> & {
+    id: string;
+    ownerUserId: string;
+    backend: BackendKind;
+    title: string | null;
+    createdAt: number;
+    lastTurnAt: number | null;
+  };
+
+  async function readRawMeta(id: string): Promise<RawMeta | null> {
+    return readJsonOrNull<RawMeta>(metaPath(root, id));
+  }
+
+  /**
+   * Returns a fully-shaped meta — applying read-time `runtimeId` backfill
+   * for legacy on-disk sessions that predate Phase E. The on-disk file is
+   * NOT rewritten here; persistence happens lazily on the next
+   * `updateMeta` so reads stay cheap and idempotent.
+   */
   async function readMeta(id: string): Promise<CopilotSessionMeta | null> {
-    return readJsonOrNull<CopilotSessionMeta>(metaPath(root, id));
+    const raw = await readRawMeta(id);
+    if (!raw) return null;
+    if (typeof raw.runtimeId === "string" && raw.runtimeId.length > 0) {
+      return raw as CopilotSessionMeta;
+    }
+    let runtimeId = "";
+    if (resolveRuntimeId) {
+      runtimeId = (await resolveRuntimeId(raw.backend)) ?? "";
+    }
+    return { ...(raw as CopilotSessionMeta), runtimeId };
   }
 
   async function writeMeta(meta: CopilotSessionMeta): Promise<void> {
@@ -60,10 +109,11 @@ export function createCopilotStore(deps: CopilotStoreDeps): CopilotStore {
   }
 
   return {
-    async createSession({ ownerUserId, backend, title, openclawSessionKey }) {
+    async createSession({ ownerUserId, runtimeId, backend, title, openclawSessionKey }) {
+      if (!runtimeId) throw new Error("createSession requires runtimeId");
       const id = crypto.randomUUID();
       const meta: CopilotSessionMeta = {
-        id, ownerUserId, backend,
+        id, ownerUserId, runtimeId, backend,
         title: title ?? null,
         createdAt: Date.now(),
         lastTurnAt: null,
@@ -74,6 +124,8 @@ export function createCopilotStore(deps: CopilotStoreDeps): CopilotStore {
     },
     readMeta,
     async updateMeta(id, patch) {
+      // `readMeta` applies backfill, so the runtimeId we write back is the
+      // fully-resolved one (rather than the half-migrated raw on-disk shape).
       const current = await readMeta(id);
       if (!current) throw new Error(`copilot session not found: ${id}`);
       const next: CopilotSessionMeta = { ...current, ...patch, id: current.id };
