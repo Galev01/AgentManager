@@ -73,12 +73,38 @@ test("listEntities('agent') returns []", async () => {
 
 test("invokeAction always returns ok:false in Phase 1", async () => {
   const a = createHermesAdapter({ descriptor: desc, bearer: "tok", http: fakeHttp({}) });
-  const r = await a.invokeAction({
-    action: "sessions.send",
-    payload: {},
-    actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" },
-  });
+  const r = await a.invokeAction(
+    "sessions.send",
+    { sessionKey: "s1", message: "hello" },
+    { actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" } },
+  );
   assert.equal(r.ok, false);
+  if (!r.ok) {
+    assert.match(r.error, /sessions\.send/);
+  }
+});
+
+test("invokeAction surfaces action name in error for any unsupported action", async () => {
+  const a = createHermesAdapter({ descriptor: desc, bearer: "tok", http: fakeHttp({}) });
+  const r = await a.invokeAction(
+    "agents.create",
+    { name: "n", workspace: "w" },
+    { actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" } },
+  );
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.error, /agents\.create/);
+});
+
+test("getCapabilities static fallback declares all actions unsupported", async () => {
+  const a = createHermesAdapter({
+    descriptor: desc,
+    bearer: "tok",
+    http: { json: async () => { throw new Error("network down"); } },
+  });
+  const caps = await a.getCapabilities();
+  for (const action of ["agents.create", "channels.connect", "tools.invoke", "cron.write", "claudeCode.ask", "sessions.send"]) {
+    assert.ok(caps.unsupported.includes(action as any), `${action} should be unsupported`);
+  }
 });
 
 test("health hits /v1/health", async () => {

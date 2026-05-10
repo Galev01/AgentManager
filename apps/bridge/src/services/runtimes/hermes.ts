@@ -6,7 +6,8 @@
  * loopback port. See packages/hermes-shim/README.md.
  */
 import type {
-  RuntimeAdapter, RuntimeActivityEvent, InvokeActionRequest, InvokeActionResult,
+  RuntimeAdapter, RuntimeActivityEvent,
+  RuntimeActionId, RuntimeActionPayload, RuntimeActionContext, RuntimeActionResult,
   RuntimeAuthMode, CapabilitySnapshot, RuntimeEntity, RuntimeEntityKind,
 } from "@openclaw-manager/types";
 import { ADAPTER_CONTRACT_VERSION, defaultHttp, type AdapterConfig } from "./adapter-base.js";
@@ -20,10 +21,22 @@ const STATIC_CAPS = {
     lossiness: "lossy" as const,
   }],
   unsupported: [
-    "sessions.send", "channels.list", "channels.status",
-    "memory.query", "memory.write", "skills.install",
-    "tools.list", "tools.invoke", "cron.list", "cron.write",
-    "config.get", "config.set", "agents.list", "agents.read",
+    // reads
+    "channels.list", "channels.status",
+    "memory.query",
+    "tools.list", "cron.list",
+    "models.list",
+    "config.get", "agents.list", "agents.read",
+    // actions — Hermes Phase 1 has no write capability.
+    "agents.create", "agents.update", "agents.delete",
+    "channels.connect", "channels.disconnect",
+    "tools.invoke",
+    "cron.write", "cron.delete",
+    "claudeCode.ask",
+    "sessions.send",
+    "memory.write",
+    "skills.install",
+    "config.set",
   ] as const,
 };
 
@@ -122,10 +135,14 @@ export function createHermesAdapter(cfg: AdapterConfig): RuntimeAdapter {
       }));
     },
 
-    async invokeAction(_req: InvokeActionRequest): Promise<InvokeActionResult> {
+    async invokeAction<A extends RuntimeActionId>(
+      action: A,
+      _payload: RuntimeActionPayload[A],
+      _context: RuntimeActionContext,
+    ): Promise<RuntimeActionResult> {
       return {
         ok: false,
-        error: "hermes phase 1 has no write actions",
+        error: `hermes phase 1 has no '${action}' action`,
         projectionMode: "exact",
       };
     },

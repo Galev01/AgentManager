@@ -20,6 +20,26 @@ test("zeroclaw adapter reports partial channels.list with structured reason + un
   assert.ok(part);
   assert.equal(part!.lossiness, "lossy");
   assert.ok(caps.unsupported.includes("memory.write"));
+  // Phase 1: every action id must be declared unsupported.
+  for (const action of [
+    "agents.create", "agents.update", "agents.delete",
+    "channels.connect", "channels.disconnect",
+    "tools.invoke", "cron.write", "cron.delete",
+    "claudeCode.ask", "sessions.send", "skills.install", "config.set",
+  ]) {
+    assert.ok(caps.unsupported.includes(action as any), `${action} missing from unsupported`);
+  }
+});
+
+test("zeroclaw invokeAction returns ok:false with action name in error", async () => {
+  const a = createZeroclawAdapter({ descriptor: desc, bearer: "tok" });
+  const r = await a.invokeAction(
+    "tools.invoke",
+    { toolId: "t1", input: {} },
+    { actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" } },
+  );
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.error, /tools\.invoke/);
 });
 
 test("zeroclaw adapter health surfaces error detail on probe failure", async () => {
