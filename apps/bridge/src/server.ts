@@ -33,6 +33,7 @@ import { createAgentModelsRouter } from "./routes/agent-models.js";
 import { createRuntimeRegistry } from "./services/runtimes/registry.js";
 import { realFactories } from "./services/runtimes/factories.js";
 import { createRuntimesRouter } from "./routes/runtimes.js";
+import { createRuntimesHealthRouter } from "./routes/runtimes-health.js";
 import { createRuntimeConfigRouter } from "./routes/runtime-config.js";
 import { createRuntimeConfigService, probeFromRegistry } from "./services/runtime-config.js";
 import { createCopilotRouter } from "./routes/copilot.js";
@@ -127,6 +128,10 @@ const runtimeConfigService = createRuntimeConfigService({
   probeStatus: probeFromRegistry(runtimeRegistry),
 });
 app.use(createRuntimeConfigRouter({ service: runtimeConfigService }));
+app.use(createRuntimesHealthRouter({
+  registry: runtimeRegistry,
+  runtimeConfig: runtimeConfigService,
+}));
 
 const copilotRoot = path.join(config.managementDir, "copilot");
 const copilotStore = createCopilotStore({ rootDir: copilotRoot });
