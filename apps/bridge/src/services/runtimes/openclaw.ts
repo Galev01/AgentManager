@@ -1,12 +1,21 @@
 import type {
   RuntimeAdapter, RuntimeEntity, RuntimeEntityKind, RuntimeActivityEvent,
   RuntimeActionId, RuntimeActionPayload, RuntimeActionContext, RuntimeActionResult,
-  RuntimeAuthMode, CapabilitySnapshot, JsonValue,
+  RuntimeAuthMode, CapabilitySnapshot, JsonValue, RuntimeReadCapabilityId,
 } from "@openclaw-manager/types";
 import { ADAPTER_CONTRACT_VERSION, type AdapterConfig } from "./adapter-base.js";
+import {
+  waitForSessionTerminal,
+  sessionFilePath,
+  readLastAssistantMessage,
+} from "../openclaw-session-tail.js";
 
 export type OpenclawAdapterDeps = {
   callGateway: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
+  /** Optional DI for session-tail helpers (used in tests to avoid fs/timer deps). */
+  waitForSessionTerminal?: typeof waitForSessionTerminal;
+  sessionFilePath?: typeof sessionFilePath;
+  readLastAssistantMessage?: typeof readLastAssistantMessage;
 };
 
 // Action ids the OpenClaw gateway exposes natively. claude-code orchestration
@@ -19,9 +28,9 @@ const SUPPORTED_ACTIONS: RuntimeActionId[] = [
   "agents.create", "agents.update", "agents.delete",
   "channels.connect", "channels.disconnect",
   "tools.invoke",
-  "cron.write", "cron.delete",
+  "cron.write", "cron.delete", "cron.run",
   "claudeCode.ask",
-  "sessions.send",
+  "sessions.create", "sessions.send", "sessions.reset", "sessions.abort", "sessions.compact", "sessions.delete",
 ];
 
 // Out of v1 scope on OpenClaw; safer to declare unsupported and add later
@@ -34,13 +43,18 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
   const { descriptor } = cfg;
   const { callGateway } = deps;
 
+  // Allow DI of session-tail helpers for tests, fall back to real imports.
+  const _waitForSessionTerminal = deps.waitForSessionTerminal ?? waitForSessionTerminal;
+  const _sessionFilePath = deps.sessionFilePath ?? sessionFilePath;
+  const _readLastAssistantMessage = deps.readLastAssistantMessage ?? readLastAssistantMessage;
+
   const supported: CapabilitySnapshot["supported"] = [
     // reads
     "agents.list", "agents.read",
-    "sessions.list", "sessions.read",
+    "sessions.list", "sessions.read", "sessions.usage",
     "channels.list", "channels.status",
-    "tools.list",
-    "cron.list",
+    "tools.list", "tools.effective",
+    "cron.list", "cron.status",
     "models.list",
     "logs.tail",
     "config.get",
@@ -53,6 +67,15 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
     "memory.query",
     ...UNSUPPORTED_ACTIONS,
   ];
+
+  async function wrapGw(method: string, params: Record<string, unknown>): Promise<RuntimeActionResult> {
+    try {
+      const raw = await callGateway(method, params);
+      return { ok: true, nativeResult: (raw as JsonValue) ?? null, projectionMode: "exact" };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message ?? String(e), projectionMode: "exact" };
+    }
+  }
 
   return {
     async describeRuntime() { return descriptor; },
@@ -231,9 +254,76 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
             nativeResult = await callGateway("cron.delete", payload as Record<string, unknown>);
             break;
           }
+          case "cron.run": {
+            const p = payload as RuntimeActionPayload["cron.run"];
+            return wrapGw("cron.run", { id: p.id });
+          }
+          case "sessions.create": {
+            const p = payload as RuntimeActionPayload["sessions.create"];
+            const params: Record<string, unknown> = {};
+            if (typeof p.agentName === "string" && p.agentName.trim()) {
+              params.agent = p.agentName.trim();
+            }
+            return wrapGw("sessions.create", params);
+          }
           case "sessions.send": {
+            const p = payload as RuntimeActionPayload["sessions.send"];
+            if (p.awaitCompletion) {
+              const started = Date.now();
+              const timeoutMs = p.timeoutMs ?? 120_000;
+              // Fire the send.
+              await callGateway("sessions.send", { key: p.sessionKey, message: p.message });
+              // Resolve the sessionId from sessions.list.
+              const listRaw = (await callGateway("sessions.list", {})) as unknown;
+              const sessions = Array.isArray(listRaw)
+                ? (listRaw as Array<Record<string, unknown>>)
+                : ((listRaw as { sessions?: Array<Record<string, unknown>> })?.sessions ?? []);
+              const entry = sessions.find(
+                (s) => s.key === p.sessionKey || s.sessionKey === p.sessionKey,
+              );
+              if (!entry) {
+                return { ok: false, error: `session '${p.sessionKey}' not found after send`, projectionMode: "exact" };
+              }
+              const sessionId = String(entry.sessionId ?? entry.id ?? p.sessionKey);
+              // Wait for terminal status; on timeout attempt abort.
+              try {
+                await _waitForSessionTerminal(sessionId, timeoutMs, async () => {
+                  try { await callGateway("sessions.abort", { key: p.sessionKey }); } catch { /* best-effort */ }
+                });
+              } catch (e) {
+                return { ok: false, error: (e as Error).message ?? String(e), projectionMode: "exact" };
+              }
+              const sessionFile = _sessionFilePath(entry as Parameters<typeof _sessionFilePath>[0], sessionId);
+              const content = await _readLastAssistantMessage(sessionFile);
+              if (!content) {
+                return { ok: false, error: `no assistant output in ${sessionFile}`, projectionMode: "exact" };
+              }
+              const elapsedMs = Date.now() - started;
+              return {
+                ok: true,
+                nativeResult: { assistantText: content.trim(), elapsedMs, sessionKey: p.sessionKey },
+                projectionMode: "exact",
+              };
+            }
+            // Fire-and-forget (existing behaviour).
             nativeResult = await callGateway("sessions.send", payload as Record<string, unknown>);
             break;
+          }
+          case "sessions.reset": {
+            const p = payload as RuntimeActionPayload["sessions.reset"];
+            return wrapGw("sessions.reset", { session: p.sessionKey });
+          }
+          case "sessions.abort": {
+            const p = payload as RuntimeActionPayload["sessions.abort"];
+            return wrapGw("sessions.abort", { session: p.sessionKey });
+          }
+          case "sessions.compact": {
+            const p = payload as RuntimeActionPayload["sessions.compact"];
+            return wrapGw("sessions.compact", { session: p.sessionKey });
+          }
+          case "sessions.delete": {
+            const p = payload as RuntimeActionPayload["sessions.delete"];
+            return wrapGw("sessions.delete", { session: p.sessionKey });
           }
           case "claudeCode.ask": {
             // claude-code orchestration lives in createAskOrchestrator; the
@@ -280,6 +370,26 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
     async health() {
       try { await callGateway("agents.list"); return { ok: true }; }
       catch (e) { return { ok: false, detail: (e as Error).message }; }
+    },
+    async read(capabilityId: RuntimeReadCapabilityId, params?: JsonValue): Promise<JsonValue> {
+      const p = (params ?? {}) as Record<string, unknown>;
+      switch (capabilityId) {
+        case "sessions.usage": {
+          const sessionKey = String(p.sessionKey ?? "");
+          if (!sessionKey) throw new Error("sessions.usage requires sessionKey");
+          return (await callGateway("sessions.usage", { session: sessionKey })) as JsonValue;
+        }
+        case "cron.status": {
+          const id = String(p.id ?? "");
+          if (!id) throw new Error("cron.status requires id");
+          return (await callGateway("cron.status", { id })) as JsonValue;
+        }
+        case "tools.effective": {
+          return (await callGateway("tools.effective", {})) as JsonValue;
+        }
+        default:
+          throw new Error(`OpenClaw adapter.read: unsupported capability ${capabilityId}`);
+      }
     },
   };
 }
