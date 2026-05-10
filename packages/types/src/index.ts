@@ -310,6 +310,10 @@ export type ReviewProject = {
   lastError: string | null;
   missing?: boolean;
   adhoc?: boolean;
+  /** Runtime to use for AI review sessions. Defaults to the primary runtime. */
+  runtimeId?: string;
+  /** Agent to use for AI review sessions. Defaults to config.reviewerAgent. */
+  agentName?: string;
 };
 
 export type ReviewerState = {

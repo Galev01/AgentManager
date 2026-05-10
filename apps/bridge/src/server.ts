@@ -45,7 +45,7 @@ import { createOpenclawChatBackend } from "./services/copilot/backends/openclaw.
 import { createHermesChatBackend } from "./services/copilot/backends/hermes.js";
 import { callGateway } from "./services/gateway.js";
 import path from "node:path";
-import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
+import { repairOnStartup, configureCodebaseReviewerWorker } from "./services/codebase-reviewer/worker.js";
 import { scanProjects } from "./services/codebase-reviewer/discovery.js";
 import { repairOnStartup as repairYoutubeOnStartup } from "./services/youtube-worker.js";
 import { configureYoutubeChatWorker } from "./services/youtube-chat-worker.js";
@@ -98,6 +98,7 @@ const runtimeConfigService = createRuntimeConfigService({
 });
 
 configureYoutubeChatWorker({ registry: runtimeRegistry, runtimeConfig: runtimeConfigService });
+configureCodebaseReviewerWorker({ registry: runtimeRegistry, runtimeConfig: runtimeConfigService });
 
 app.use(overviewRouter);
 app.use(conversationsRouter);
