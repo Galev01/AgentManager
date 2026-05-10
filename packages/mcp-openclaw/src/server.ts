@@ -5,6 +5,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { ClaudeCodeHermesSayResponse } from "@openclaw-manager/types";
 import crypto from "node:crypto";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://127.0.0.1:3100";
@@ -88,6 +89,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "hermes_say",
+      description:
+        "Send a turn in an ongoing collaborative conversation with Hermes through the OpenClaw Manager bridge. Hermes keeps session memory via the Hermes shim; include enough project context in the message for a remote agent to respond usefully.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message: { type: "string", description: "Your turn for Hermes. Include relevant project context, files, and prior decisions." },
+          context: {
+            type: "object",
+            description: "Optional structured context for the bridge and logs. Key details should still be restated in message.",
+            additionalProperties: true,
+          },
+        },
+        required: ["message"],
+      },
+    },
+    {
       name: "openclaw_conclude",
       description: "Signal that the current collaborative task is done and the session can end.",
       inputSchema: {
@@ -130,6 +148,32 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
     const result = await bridgeFetch<{ answer: string; source: string; action?: string; envelope?: unknown }>(
       "/claude-code/ask",
+      { method: "POST", body: JSON.stringify(payload) }
+    );
+    return { content: [{ type: "text", text: result.answer }] };
+  }
+
+  if (name === "hermes_say") {
+    const message = String(args.message ?? "");
+    const context = (args.context as Record<string, unknown>) ?? undefined;
+    const msgId = `m-${crypto.randomBytes(6).toString("hex")}`;
+    console.error("[openclaw-mcp] hermes_say dispatch", JSON.stringify({
+      ide: IDE,
+      workspace: WORKSPACE,
+      clientId: CLIENT_ID,
+      msgId,
+    }));
+    const payload = {
+      ide: IDE,
+      workspace: WORKSPACE,
+      clientId: CLIENT_ID,
+      msgId,
+      message,
+      context,
+    };
+
+    const result = await bridgeFetch<ClaudeCodeHermesSayResponse>(
+      "/claude-code/hermes-say",
       { method: "POST", body: JSON.stringify(payload) }
     );
     return { content: [{ type: "text", text: result.answer }] };

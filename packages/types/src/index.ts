@@ -541,6 +541,21 @@ export type ClaudeCodeAskResponse = {
   envelope?: CCEnvelope;
 };
 
+export type ClaudeCodeHermesSayRequest = {
+  ide: string;
+  workspace: string;
+  clientId?: string;
+  msgId?: string;
+  message: string;
+};
+
+export type ClaudeCodeHermesSayResponse = {
+  answer: string;
+  source: "hermes";
+  sessionId: string;
+  openclawSessionKey?: string;
+};
+
 export type ClaudeCodeConnectConfig = {
   antigravity: string;
   vscode: string;

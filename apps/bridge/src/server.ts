@@ -26,7 +26,7 @@ import reviewsRouter from "./routes/reviews.js";
 import youtubeRouter from "./routes/youtube.js";
 import youtubeChatRouter from "./routes/youtube-chat.js";
 import youtubeRebuildRouter from "./routes/youtube-rebuild.js";
-import claudeCodeRouter from "./routes/claude-code.js";
+import { createClaudeCodeRouter } from "./routes/claude-code.js";
 import { createTelemetryRouter } from "./routes/telemetry.js";
 import { createModelsRouter } from "./routes/models.js";
 import { createAgentModelsRouter } from "./routes/agent-models.js";
@@ -63,6 +63,27 @@ const authService = await createAuthService({
 });
 await authService.ensureSystemRoles();
 
+const runtimeRegistry = await createRuntimeRegistry({
+  configPaths: config.runtimesConfigPaths,
+  factories: realFactories,
+});
+const openclawChatBackend = createOpenclawChatBackend({ callGateway });
+
+// Hermes is optional. If HERMES_BASE_URL isn't configured, pass null so the
+// factory returns a disabled adapter and the bridge boots cleanly.
+const hermesShimEndpoint = config.hermesEnabled
+  ? (process.env.HERMES_SHIM_URL
+      ?? (await runtimeRegistry.get("hermes-remote"))?.endpoint
+      ?? config.hermesBaseUrl
+      ?? "http://127.0.0.1:9119")
+  : null;
+const hermesChatBackend = hermesShimEndpoint
+  ? createHermesChatBackend({
+      baseUrl: hermesShimEndpoint,
+      token: config.hermesToken ?? null,
+    })
+  : createHermesChatBackend(null);
+
 app.get("/health", (_req, res) => { res.json({ ok: true, uptime: process.uptime() }); });
 
 // Public /auth/* requires service bearer only.
@@ -73,7 +94,7 @@ app.use(createPublicAuthRouter(authService));
 // request body (ide/workspace/clientId). Actor assertion is optional so the
 // stdio MCP can talk without a user session; dashboard callers still sign and
 // req.auth is populated when they do.
-app.use(actorAssertionAuth(authService, { strict: false }), claudeCodeRouter);
+app.use(actorAssertionAuth(authService, { strict: false }), createClaudeCodeRouter({ hermesChatBackend }));
 
 // Strict actor assertion required for authenticated routes.
 app.use(actorAssertionAuth(authService, { strict: true }));
@@ -113,10 +134,6 @@ app.use(createTelemetryRouter({
 // req.auth is populated before the router's requirePerm gate runs, and so the
 // bridge can stamp humanActorUserId from req.auth.user.id instead of trusting
 // the request body.
-const runtimeRegistry = await createRuntimeRegistry({
-  configPaths: config.runtimesConfigPaths,
-  factories: realFactories,
-});
 app.use(createRuntimesRouter({
   registry: runtimeRegistry,
   managerServiceId: process.env.BRIDGE_SERVICE_ID ?? "bridge-primary",
@@ -130,22 +147,6 @@ app.use(createRuntimeConfigRouter({ service: runtimeConfigService }));
 
 const copilotRoot = path.join(config.managementDir, "copilot");
 const copilotStore = createCopilotStore({ rootDir: copilotRoot });
-const openclawChatBackend = createOpenclawChatBackend({ callGateway });
-
-// Hermes is optional. If HERMES_BASE_URL isn't configured, pass null so the
-// factory returns a disabled adapter and the bridge boots cleanly.
-const hermesShimEndpoint = config.hermesEnabled
-  ? (process.env.HERMES_SHIM_URL
-      ?? (await runtimeRegistry.get("hermes-remote"))?.endpoint
-      ?? config.hermesBaseUrl
-      ?? "http://127.0.0.1:9119")
-  : null;
-const hermesChatBackend = hermesShimEndpoint
-  ? createHermesChatBackend({
-      baseUrl: hermesShimEndpoint,
-      token: config.hermesToken ?? null,
-    })
-  : createHermesChatBackend(null);
 const copilotOrchestrator = createCopilotOrchestrator({
   store: copilotStore,
   backendFor: (kind) => (kind === "openclaw" ? openclawChatBackend : hermesChatBackend),

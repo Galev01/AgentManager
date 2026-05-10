@@ -1,8 +1,10 @@
 import { Router, type Router as ExpressRouter } from "express";
+import crypto from "node:crypto";
 import { config } from "../config.js";
 import { callGateway } from "../services/gateway.js";
 import { broadcast } from "../ws.js";
 import {
+  computeSessionId,
   listSessions,
   renameSession,
   setSessionMode,
@@ -23,7 +25,11 @@ import { summarizeSession } from "../services/claude-code-summarize.js";
 import type {
   ClaudeCodeAskRequest,
   ClaudeCodeConnectConfig,
+  ClaudeCodeHermesSayRequest,
+  ClaudeCodeHermesSayResponse,
+  CopilotSessionMeta,
 } from "@openclaw-manager/types";
+import type { ChatBackendAdapter } from "../services/copilot/backend.js";
 
 const router: ExpressRouter = Router();
 
@@ -39,6 +45,85 @@ const orchestrator = createAskOrchestrator({
 
 function validId(id: string): boolean {
   return /^[a-f0-9]{12}$/.test(id);
+}
+
+export type ClaudeCodeRouterDeps = {
+  hermesChatBackend?: ChatBackendAdapter;
+};
+
+function buildHermesSession(args: {
+  ide: string;
+  workspace: string;
+  clientId?: string;
+}): CopilotSessionMeta {
+  const id = computeSessionId(args.ide, args.workspace, args.clientId);
+  return {
+    id,
+    ownerUserId: "mcp",
+    backend: "hermes",
+    title: null,
+    createdAt: Date.now(),
+    lastTurnAt: null,
+    openclawSessionKey: `copilot-${id}`,
+  };
+}
+
+function registerHermesSayRoute(target: ExpressRouter, deps: ClaudeCodeRouterDeps): void {
+  target.post("/claude-code/hermes-say", async (req, res) => {
+    const body = req.body as Partial<ClaudeCodeHermesSayRequest>;
+    if (!body?.ide || !body?.workspace || typeof body.message !== "string" || body.message.length === 0) {
+      return res.status(400).json({ error: "ide, workspace, message are required" });
+    }
+    if (!deps.hermesChatBackend) {
+      console.warn("[claude-code] hermes_say rejected: Hermes backend not configured");
+      return res.status(503).json({ error: "hermes backend not configured" });
+    }
+
+    const session = buildHermesSession({
+      ide: body.ide,
+      workspace: body.workspace,
+      clientId: body.clientId,
+    });
+    const msgId = body.msgId || `m-${crypto.randomBytes(6).toString("hex")}`;
+    console.log("[claude-code] hermes_say accepted", JSON.stringify({
+      ide: body.ide,
+      workspace: body.workspace,
+      clientId: body.clientId,
+      sessionId: session.id,
+      msgId,
+    }));
+
+    try {
+      const result = await deps.hermesChatBackend.sendTurn({
+        session,
+        userMessageText: body.message,
+        msgId,
+      });
+      if (!result.ok) {
+        console.warn("[claude-code] hermes_say failed", JSON.stringify({
+          sessionId: session.id,
+          msgId,
+          error: result.error,
+        }));
+        return res.status(502).json({ error: result.error });
+      }
+      const response: ClaudeCodeHermesSayResponse = {
+        answer: result.assistantText,
+        source: "hermes",
+        sessionId: session.id,
+        openclawSessionKey: session.openclawSessionKey,
+      };
+      res.json(response);
+    } catch (err) {
+      const message = (err as Error).message;
+      console.warn("[claude-code] hermes_say threw", JSON.stringify({
+        sessionId: session.id,
+        msgId,
+        error: message,
+      }));
+      res.status(500).json({ error: message });
+    }
+  });
 }
 
 router.post("/claude-code/ask", async (req, res) => {
@@ -185,11 +270,18 @@ router.get("/claude-code/connect-config", (req, res) => {
   const token = config.token;
   const nodeServerPath = "<absolute path to mcp-openclaw>/dist/server.js";
   const config_: ClaudeCodeConnectConfig = {
-    antigravity: `# Antigravity mcp.config.json snippet:\n{\n  "mcpServers": {\n    "openclaw": {\n      "command": "node",\n      "args": ["${nodeServerPath}"],\n      "env": {\n        "OPENCLAW_BRIDGE_URL": "${bridgeUrl}",\n        "OPENCLAW_BRIDGE_TOKEN": "${token}",\n        "OPENCLAW_IDE": "antigravity",\n        "OPENCLAW_WORKSPACE": "\${workspaceFolder}"\n      }\n    }\n  }\n}`,
-    vscode: `# VSCode (Claude extension) mcp config snippet:\n{\n  "openclaw": {\n    "command": "node",\n    "args": ["${nodeServerPath}"],\n    "env": {\n      "OPENCLAW_BRIDGE_URL": "${bridgeUrl}",\n      "OPENCLAW_BRIDGE_TOKEN": "${token}",\n      "OPENCLAW_IDE": "vscode",\n      "OPENCLAW_WORKSPACE": "\${workspaceFolder}"\n    }\n  }\n}`,
-    cli: `# Claude Code CLI:\nclaude mcp add openclaw \\\n  -e OPENCLAW_BRIDGE_URL=${bridgeUrl} \\\n  -e OPENCLAW_BRIDGE_TOKEN=${token} \\\n  -e OPENCLAW_IDE=cli \\\n  -e OPENCLAW_WORKSPACE="$PWD" \\\n  -- node ${nodeServerPath}`,
+    antigravity: `# Antigravity mcp.config.json snippet. Exposes openclaw_say and hermes_say.\n{\n  "mcpServers": {\n    "openclaw": {\n      "command": "node",\n      "args": ["${nodeServerPath}"],\n      "env": {\n        "OPENCLAW_BRIDGE_URL": "${bridgeUrl}",\n        "OPENCLAW_BRIDGE_TOKEN": "${token}",\n        "OPENCLAW_IDE": "antigravity",\n        "OPENCLAW_WORKSPACE": "\${workspaceFolder}"\n      }\n    }\n  }\n}`,
+    vscode: `# VSCode (Claude extension) mcp config snippet. Exposes openclaw_say and hermes_say.\n{\n  "openclaw": {\n    "command": "node",\n    "args": ["${nodeServerPath}"],\n    "env": {\n      "OPENCLAW_BRIDGE_URL": "${bridgeUrl}",\n      "OPENCLAW_BRIDGE_TOKEN": "${token}",\n      "OPENCLAW_IDE": "vscode",\n      "OPENCLAW_WORKSPACE": "\${workspaceFolder}"\n    }\n  }\n}`,
+    cli: `# Claude Code CLI (exposes openclaw_say and hermes_say):\nclaude mcp add openclaw \\\n  -e OPENCLAW_BRIDGE_URL=${bridgeUrl} \\\n  -e OPENCLAW_BRIDGE_TOKEN=${token} \\\n  -e OPENCLAW_IDE=cli \\\n  -e OPENCLAW_WORKSPACE="$PWD" \\\n  -- node ${nodeServerPath}`,
   };
   res.json(config_);
 });
 
-export default router;
+export function createClaudeCodeRouter(deps: ClaudeCodeRouterDeps = {}): ExpressRouter {
+  const target = Router();
+  registerHermesSayRoute(target, deps);
+  target.use(router);
+  return target;
+}
+
+export default createClaudeCodeRouter();
