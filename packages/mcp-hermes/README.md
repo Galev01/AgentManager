@@ -7,7 +7,7 @@ Streamable HTTP, forwarding chat turns to a local `hermes-shim` process.
 ## Architecture
 
 ```
-Claude Code ── HTTP+bearer ──► mcp-hermes (192.168.0.10:9120)
+Claude Code ── HTTP+bearer ──► mcp-hermes (<hermes-host>:9120)
                                   │
                                   └─ HTTP+bearer ──► hermes-shim (127.0.0.1:9119)
                                                           │
@@ -31,14 +31,15 @@ Claude Code ── HTTP+bearer ──► mcp-hermes (192.168.0.10:9120)
 | `MCP_HERMES_PORT` | `9120` | Bind port |
 | `MCP_HERMES_BIND_LAN` | (unset) | Set to `1` to allow non-loopback bind |
 
-## Deployment to 192.168.0.10
+## Remote deployment
 
-See `scripts/deploy-remote.sh`.
+See `scripts/deploy-remote.sh`. Set `REMOTE_HOST` (and optionally `REMOTE_USER`)
+when invoking it; there is no built-in default.
 
 ## Register in Claude Code
 
 ```
 claude mcp add --transport http --scope user hermes \
-  http://192.168.0.10:9120/mcp \
+  http://<hermes-host>:9120/mcp \
   --header "Authorization: Bearer <MCP_HERMES_TOKEN>"
 ```

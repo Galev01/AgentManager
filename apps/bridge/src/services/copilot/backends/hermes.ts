@@ -5,28 +5,82 @@
  * health/capabilities). Each turn dispatches `POST /v1/chat` with the bridge
  * session id; the shim runs `hermes -z <message> --continue <session_id>`,
  * which gives Hermes durable session memory in `~/.hermes/state.db`.
+ *
+ * Hermes is optional: when `null` (or an empty `baseUrl`) is passed in, the
+ * factory returns a disabled adapter that surfaces `available: false` plus a
+ * reason. The orchestrator/router are expected to short-circuit on
+ * `!backend.available` so the bridge can boot without `HERMES_BASE_URL`.
  */
 import type {
   ChatBackendAdapter, ChatTurnRequest, ChatTurnResult, SessionBootstrap,
 } from "../backend.js";
 import { defaultHttp, type HttpClient } from "../../runtimes/adapter-base.js";
 
-export type HermesChatBackendDeps = {
-  endpoint: string;             // e.g. http://192.168.0.10:9119
-  bearer: string;               // HERMES_TOKEN
+/**
+ * Canonical config shape introduced for Hermes-optional support.
+ */
+export type HermesBackendConfig = {
+  baseUrl: string;
+  token: string | null;
   http?: HttpClient;
-  timeoutMs?: number;           // default 200_000 (slightly above shim's 180s)
+  timeoutMs?: number;
+};
+
+/**
+ * Legacy config shape kept for backward compatibility with existing call sites
+ * and tests (`endpoint`/`bearer`). New callers should use `HermesBackendConfig`.
+ */
+export type HermesChatBackendDeps = {
+  endpoint: string;
+  bearer: string;
+  http?: HttpClient;
+  timeoutMs?: number;
+};
+
+export type HermesBackend = ChatBackendAdapter & {
+  available: boolean;
+  reason?: string;
 };
 
 function deriveKey(sessionId: string): string { return `copilot-${sessionId}`; }
 
-export function createHermesChatBackend(deps: HermesChatBackendDeps): ChatBackendAdapter {
-  const http = deps.http ?? defaultHttp;
-  const base = deps.endpoint.replace(/\/$/, "");
-  const headers: Record<string, string> = { Authorization: `Bearer ${deps.bearer}` };
-  const timeoutMs = deps.timeoutMs ?? 200_000;
+function normalize(
+  cfg: HermesBackendConfig | HermesChatBackendDeps,
+): { baseUrl: string; token: string; http?: HttpClient; timeoutMs?: number } {
+  if ("baseUrl" in cfg) {
+    return {
+      baseUrl: cfg.baseUrl,
+      token: cfg.token ?? "",
+      http: cfg.http,
+      timeoutMs: cfg.timeoutMs,
+    };
+  }
+  return {
+    baseUrl: cfg.endpoint,
+    token: cfg.bearer ?? "",
+    http: cfg.http,
+    timeoutMs: cfg.timeoutMs,
+  };
+}
+
+export function createHermesChatBackend(
+  cfg: HermesBackendConfig | HermesChatBackendDeps | null,
+): HermesBackend {
+  if (!cfg) {
+    return makeDisabled("HERMES_BASE_URL is not set; Hermes copilot backend is disabled");
+  }
+  const norm = normalize(cfg);
+  if (!norm.baseUrl || norm.baseUrl.length === 0) {
+    return makeDisabled("HERMES_BASE_URL is not set; Hermes copilot backend is disabled");
+  }
+
+  const http = norm.http ?? defaultHttp;
+  const base = norm.baseUrl.replace(/\/$/, "");
+  const headers: Record<string, string> = { Authorization: `Bearer ${norm.token}` };
+  const timeoutMs = norm.timeoutMs ?? 200_000;
 
   return {
+    available: true,
     async createSession({ sessionId }): Promise<SessionBootstrap> {
       // No backend-side bootstrap needed: Hermes lazily creates the named
       // session on first `--continue <name>` call. The bridge's session id
@@ -49,6 +103,19 @@ export function createHermesChatBackend(deps: HermesChatBackendDeps): ChatBacken
       } catch (e) {
         return { ok: false, error: (e as Error).message };
       }
+    },
+  };
+}
+
+function makeDisabled(reason: string): HermesBackend {
+  return {
+    available: false,
+    reason,
+    async createSession(): Promise<SessionBootstrap> {
+      throw new Error(reason);
+    },
+    async sendTurn(): Promise<ChatTurnResult> {
+      return { ok: false, error: reason };
     },
   };
 }

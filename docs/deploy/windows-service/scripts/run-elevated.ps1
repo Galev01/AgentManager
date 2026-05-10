@@ -1,4 +1,4 @@
-$target = "C:\Users\GalLe\Cursor projects\OpenClaw-manager\scripts\install-bridge-service.ps1"
+$target = Join-Path $PSScriptRoot "install-bridge-service.ps1"
 $transcript = "$env:TEMP\openclaw-bridge-install.log"
 try {
     Start-Process -FilePath "powershell.exe" `

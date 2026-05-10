@@ -1,13 +1,39 @@
 {
-  "name": "openclaw-whatsapp-manager",
+  "name": "openclaw-manager",
+  "version": "0.1.0",
   "private": true,
+  "description": "Multi-runtime control plane and dashboard for collaborative AI agents (OpenClaw + optional Hermes).",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "keywords": [
+    "openclaw",
+    "ai-agents",
+    "control-plane",
+    "dashboard",
+    "hermes"
+  ],
   "scripts": {
+    "bootstrap": "tsx scripts/setup.ts",
+    "doctor": "tsx scripts/doctor.ts",
+    "dev": "concurrently -n bridge,dashboard -c blue,green \"pnpm --filter bridge dev\" \"pnpm --filter dashboard dev\"",
     "dev:bridge": "pnpm --filter bridge dev",
     "dev:dashboard": "pnpm --filter dashboard dev",
     "build": "pnpm -r build",
     "build:dashboard": "pnpm --filter dashboard build",
     "build:bridge": "pnpm --filter bridge build",
     "smoke:youtube": "node scripts/smoke-youtube-v2.mjs",
-    "smoke:runtimes": "node scripts/smoke-runtimes.mjs"
+    "smoke:runtimes": "node scripts/smoke-runtimes.mjs",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:restart": "pm2 restart ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs",
+    "pm2:logs": "pm2 logs --lines 200"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "tsx": "^4.21.0"
   }
 }

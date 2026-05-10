@@ -1,22 +1,23 @@
 import { pathToFileURL } from "node:url";
-import path from "node:path";
+import { config } from "../config.js";
 
 // Dynamically import OpenClaw SDK's callGateway which handles device identity,
-// auth handshake, and WebSocket protocol automatically.
-// `APPDATA` resolves to the system profile path when running as a Windows
-// service (LocalSystem), so allow an explicit override.
-const OPENCLAW_SDK_PATH = process.env.OPENCLAW_SDK_PATH || path.join(
-  process.env.APPDATA || "",
-  "npm/node_modules/openclaw/dist/call-CQ0eH9Ew.js"
-);
+// auth handshake, and WebSocket protocol automatically. The path is resolved
+// once at config load via the SDK resolver (env override -> workspace package
+// -> workspace glob -> global glob with warning -> throw).
+const OPENCLAW_SDK_PATH = config.openclawSdkPath;
 
-let sdkCallGateway: ((opts: { method: string; params: Record<string, unknown> }) => Promise<unknown>) | null = null;
+let sdkCallGateway:
+  | ((opts: { method: string; params: Record<string, unknown> }) => Promise<unknown>)
+  | null = null;
 
 async function loadSdk(): Promise<void> {
   try {
     const mod = await import(pathToFileURL(OPENCLAW_SDK_PATH).href);
     sdkCallGateway = mod.r; // callGateway is exported as 'r'
-    console.log("OpenClaw SDK loaded for gateway calls");
+    console.log(
+      `OpenClaw SDK loaded for gateway calls (source=${config.openclawSdkSource})`,
+    );
   } catch (err) {
     console.warn("Failed to load OpenClaw SDK:", (err as Error).message);
   }

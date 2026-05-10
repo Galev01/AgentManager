@@ -114,7 +114,7 @@ app.use(createTelemetryRouter({
 // bridge can stamp humanActorUserId from req.auth.user.id instead of trusting
 // the request body.
 const runtimeRegistry = await createRuntimeRegistry({
-  configPath: config.runtimesConfigPath,
+  configPaths: config.runtimesConfigPaths,
   factories: realFactories,
 });
 app.use(createRuntimesRouter({
@@ -123,7 +123,7 @@ app.use(createRuntimesRouter({
 }));
 
 const runtimeConfigService = createRuntimeConfigService({
-  configPath: config.runtimesConfigPath,
+  configPath: runtimeRegistry.configPath(),
   probeStatus: probeFromRegistry(runtimeRegistry),
 });
 app.use(createRuntimeConfigRouter({ service: runtimeConfigService }));
@@ -131,13 +131,21 @@ app.use(createRuntimeConfigRouter({ service: runtimeConfigService }));
 const copilotRoot = path.join(config.managementDir, "copilot");
 const copilotStore = createCopilotStore({ rootDir: copilotRoot });
 const openclawChatBackend = createOpenclawChatBackend({ callGateway });
-const hermesShimEndpoint = process.env.HERMES_SHIM_URL
-  ?? (await runtimeRegistry.get("hermes-remote"))?.endpoint
-  ?? "http://192.168.0.10:9119";
-const hermesChatBackend = createHermesChatBackend({
-  endpoint: hermesShimEndpoint,
-  bearer: process.env.HERMES_TOKEN ?? "",
-});
+
+// Hermes is optional. If HERMES_BASE_URL isn't configured, pass null so the
+// factory returns a disabled adapter and the bridge boots cleanly.
+const hermesShimEndpoint = config.hermesEnabled
+  ? (process.env.HERMES_SHIM_URL
+      ?? (await runtimeRegistry.get("hermes-remote"))?.endpoint
+      ?? config.hermesBaseUrl
+      ?? "http://127.0.0.1:9119")
+  : null;
+const hermesChatBackend = hermesShimEndpoint
+  ? createHermesChatBackend({
+      baseUrl: hermesShimEndpoint,
+      token: config.hermesToken ?? null,
+    })
+  : createHermesChatBackend(null);
 const copilotOrchestrator = createCopilotOrchestrator({
   store: copilotStore,
   backendFor: (kind) => (kind === "openclaw" ? openclawChatBackend : hermesChatBackend),

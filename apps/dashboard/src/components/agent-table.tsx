@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { Agent } from "@openclaw-manager/types";
+import type { Agent, ModelDescriptor } from "@openclaw-manager/types";
 import { timeAgo } from "@/lib/format";
 import type { AgentActivity } from "@/app/agents/page";
 import { useTelemetry } from "@/lib/telemetry";
+import { ModelSelect } from "@/components/model-select";
+import { PermissionGate } from "@/components/permission-gate";
 import {
   Badge,
   Button,
@@ -34,19 +36,33 @@ function getWorkspace(a: Agent): string | null {
   return typeof w === "string" && w.length > 0 ? w : null;
 }
 
+function getModelId(a: Agent): string {
+  const raw = (a as Agent & { model?: unknown }).model;
+  if (typeof raw === "string") return raw;
+  if (raw && typeof raw === "object") {
+    const primary = (raw as { primary?: unknown }).primary;
+    if (typeof primary === "string") return primary;
+  }
+  return "";
+}
+
 function shortenPath(p: string, max = 36): string {
   if (p.length <= max) return p;
   const parts = p.split(/[\\/]/);
-  if (parts.length <= 2) return "…" + p.slice(-max + 1);
-  return parts[0] + "/…/" + parts.slice(-2).join("/");
+  if (parts.length <= 2) return "..." + p.slice(-max + 3);
+  return parts[0] + "/.../" + parts.slice(-2).join("/");
 }
 
 export function AgentTable({
   initial,
   activity,
+  modelCatalog,
+  modelCatalogStatus,
 }: {
   initial: Agent[];
   activity: Record<string, AgentActivity>;
+  modelCatalog: ModelDescriptor[];
+  modelCatalogStatus: "ok" | "unavailable";
 }) {
   const { logAction } = useTelemetry();
   const [agents, setAgents] = useState<Agent[]>(initial);
@@ -55,6 +71,7 @@ export function AgentTable({
   const [workspace, setWorkspace] = useState("");
   const [model, setModel] = useState("");
   const [adding, setAdding] = useState(false);
+  const [updatingModel, setUpdatingModel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate() {
@@ -108,6 +125,29 @@ export function AgentTable({
     }
   }
 
+  async function handleModelChange(agentName: string, nextModel: string) {
+    setUpdatingModel(agentName);
+    setError(null);
+    const previous = agents;
+    setAgents((prev) => prev.map((a) => (a.name === agentName ? { ...a, model: nextModel } : a)));
+    try {
+      const res = await fetch(`/api/agents/${encodeURIComponent(agentName)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: nextModel }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || "Failed to update model");
+      }
+    } catch (err) {
+      setAgents(previous);
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setUpdatingModel(null);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -150,7 +190,7 @@ export function AgentTable({
           <SectionTitle>Create agent</SectionTitle>
           <div style={{ padding: 16 }}>
             <p style={{ margin: "0 0 14px 0", fontSize: 12, color: "var(--text-muted)" }}>
-              Workspace is the absolute path to an OpenClaw workspace on the bridge host, e.g.{" "}
+              Workspace is the absolute path to an agent workspace on the bridge host, e.g.{" "}
               <code style={{ fontSize: 11.5, color: "var(--text)" }}>
                 C:\Users\you\.openclaw\workspace
               </code>
@@ -173,20 +213,21 @@ export function AgentTable({
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                 style={{ ...INPUT_STYLE, minWidth: 260 }}
               />
-              <input
-                type="text"
-                placeholder="Model (optional)"
+              <ModelSelect
+                catalog={modelCatalog}
+                status={modelCatalogStatus}
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                style={INPUT_STYLE}
+                onChange={setModel}
+                includeEmpty
+                placeholder="Model (use default)"
+                style={{ flex: 1, minWidth: 260 }}
               />
               <Button
                 variant="primary"
                 onClick={handleCreate}
                 disabled={adding || !name.trim() || !workspace.trim()}
               >
-                {adding ? "Creating…" : "Create"}
+                {adding ? "Creating..." : "Create"}
               </Button>
             </div>
           </div>
@@ -228,19 +269,33 @@ export function AgentTable({
             {agents.map((a) => {
               const act = activity[a.name];
               const ws = getWorkspace(a);
+              const currentModel = getModelId(a);
               const toolsLabel = a.tools && a.tools.length > 0 ? a.tools.join(", ") : "";
               return (
                 <tr key={a.name}>
                   <td className="pri">{a.name}</td>
-                  <td className="mono" style={{ fontSize: 12 }}>
-                    {a.model || <span style={{ color: "var(--text-faint)" }}>—</span>}
+                  <td className="mono" style={{ fontSize: 12, minWidth: 260 }}>
+                    <PermissionGate
+                      perm="agents.manage"
+                      fallback={currentModel || <span style={{ color: "var(--text-faint)" }}>-</span>}
+                    >
+                      <ModelSelect
+                        catalog={modelCatalog}
+                        status={modelCatalogStatus}
+                        value={currentModel}
+                        placeholder="Select a model"
+                        disabled={updatingModel === a.name}
+                        style={{ minWidth: 240, maxWidth: 360, width: "100%" }}
+                        onChange={(nextModel) => handleModelChange(a.name, nextModel)}
+                      />
+                    </PermissionGate>
                   </td>
                   <td
                     className="mono"
                     style={{ fontSize: 11.5, color: "var(--text-muted)", maxWidth: 240 }}
                     title={ws ?? ""}
                   >
-                    {ws ? shortenPath(ws) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                    {ws ? shortenPath(ws) : <span style={{ color: "var(--text-faint)" }}>-</span>}
                   </td>
                   <td>
                     {a.tools && a.tools.length > 0 ? (
@@ -248,7 +303,7 @@ export function AgentTable({
                         <Badge kind="info">{a.tools.length}</Badge>
                       </span>
                     ) : (
-                      <span style={{ color: "var(--text-faint)" }}>—</span>
+                      <span style={{ color: "var(--text-faint)" }}>-</span>
                     )}
                   </td>
                   <td className="mono" style={{ textAlign: "right" }}>
@@ -263,7 +318,7 @@ export function AgentTable({
                     style={{ fontSize: 11.5, color: "var(--text-muted)" }}
                     title={act?.lastUsedAt ? new Date(act.lastUsedAt).toLocaleString() : ""}
                   >
-                    {act?.lastUsedAt ? timeAgo(act.lastUsedAt) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                    {act?.lastUsedAt ? timeAgo(act.lastUsedAt) : <span style={{ color: "var(--text-faint)" }}>-</span>}
                   </td>
                   <td style={{ textAlign: "right" }}>
                     <div style={{ display: "inline-flex", gap: 6 }}>

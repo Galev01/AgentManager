@@ -25,7 +25,7 @@ function fakeHttp(handler: (url: string, req: { method: string; body?: unknown }
 
 test("createSession returns derived openclawSessionKey", async () => {
   const backend = createHermesChatBackend({
-    endpoint: "http://192.168.0.10:9119",
+    endpoint: "http://hermes.test:9119",
     bearer: "tok",
     http: fakeHttp(() => null),
   });
@@ -36,7 +36,7 @@ test("createSession returns derived openclawSessionKey", async () => {
 test("sendTurn POSTs /v1/chat with bearer + session_id + message", async () => {
   const calls: Array<{ url: string; body: unknown }> = [];
   const backend = createHermesChatBackend({
-    endpoint: "http://192.168.0.10:9119",
+    endpoint: "http://hermes.test:9119",
     bearer: "tok",
     http: fakeHttp((url, req) => {
       calls.push({ url, body: req.body });
@@ -50,13 +50,13 @@ test("sendTurn POSTs /v1/chat with bearer + session_id + message", async () => {
   });
   assert.equal(result.ok, true);
   if (result.ok) assert.equal(result.assistantText, "hello");
-  assert.equal(calls[0].url, "http://192.168.0.10:9119/v1/chat");
+  assert.equal(calls[0].url, "http://hermes.test:9119/v1/chat");
   assert.deepEqual(calls[0].body, { session_id: "copilot-s1", message: "hi" });
 });
 
 test("sendTurn returns ok:false on http failure", async () => {
   const backend = createHermesChatBackend({
-    endpoint: "http://192.168.0.10:9119",
+    endpoint: "http://hermes.test:9119",
     bearer: "tok",
     http: fakeHttp(() => { throw new Error("502: shim down"); }),
   });
@@ -71,7 +71,7 @@ test("sendTurn returns ok:false on http failure", async () => {
 
 test("sendTurn returns ok:false when shim returns ok:false", async () => {
   const backend = createHermesChatBackend({
-    endpoint: "http://192.168.0.10:9119",
+    endpoint: "http://hermes.test:9119",
     bearer: "tok",
     http: fakeHttp(() => ({ ok: false, error: "auth expired" })),
   });

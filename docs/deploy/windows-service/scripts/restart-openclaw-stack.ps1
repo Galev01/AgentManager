@@ -5,12 +5,14 @@
 .DESCRIPTION
   1. Kills the running OpenClaw gateway node process (matched by command line
      containing 'openclaw' and 'gateway' and port 18789).
-  2. Relaunches it via the user's C:\Users\GalLe\.openclaw\gateway.cmd,
+  2. Relaunches the gateway via its launcher script (defaults to
+     `<USERPROFILE>\.openclaw\gateway.cmd`; override with `OPENCLAW_GATEWAY_CMD`),
      redirecting stdout/stderr to a log file so silent startup failures are
      diagnosable.
-  3. Restarts the NSSM-managed OpenClaw-Bridge service. This step needs admin
-     rights; if the script was started unelevated, it self-elevates just that
-     one command via Start-Process -Verb RunAs (one UAC prompt).
+  3. Restarts the NSSM-managed bridge service (default name
+     `openclaw-manager-bridge`; override with `BRIDGE_SERVICE_NAME`). This step
+     needs admin rights; if the script was started unelevated, it self-elevates
+     just that one command via Start-Process -Verb RunAs (one UAC prompt).
   4. Prints health checks and tails the gateway log on failure.
 
 .NOTES
@@ -21,14 +23,14 @@
 
 $ErrorActionPreference = 'Continue'
 
-$GatewayCmd      = 'C:\Users\GalLe\.openclaw\gateway.cmd'
+$GatewayCmd      = if ($env:OPENCLAW_GATEWAY_CMD)     { $env:OPENCLAW_GATEWAY_CMD }     else { Join-Path $env:USERPROFILE '.openclaw\gateway.cmd' }
 $GatewayPattern  = '*openclaw*gateway*18789*'
 $GatewayPort     = 18789
-$GatewayLogDir   = 'C:\Users\GalLe\.openclaw\logs'
+$GatewayLogDir   = if ($env:OPENCLAW_GATEWAY_LOG_DIR) { $env:OPENCLAW_GATEWAY_LOG_DIR } else { Join-Path $env:USERPROFILE '.openclaw\logs' }
 $GatewayOutLog   = Join-Path $GatewayLogDir 'gateway.out.log'
 $GatewayErrLog   = Join-Path $GatewayLogDir 'gateway.err.log'
-$BridgeService   = 'OpenClaw-Bridge'
-$BridgeLogFile   = 'C:\ProgramData\OpenClaw-Bridge\logs\bridge.out.log'
+$BridgeService   = if ($env:BRIDGE_SERVICE_NAME) { $env:BRIDGE_SERVICE_NAME } else { 'openclaw-manager-bridge' }
+$BridgeLogFile   = if ($env:BRIDGE_LOG_FILE)     { $env:BRIDGE_LOG_FILE }     else { Join-Path $env:ProgramData "$BridgeService\logs\bridge.out.log" }
 $BridgeHealthUrl = 'http://127.0.0.1:3100/health'
 
 function Write-Step($msg) { Write-Host "`n=== $msg ===" -ForegroundColor Cyan }

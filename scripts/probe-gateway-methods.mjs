@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Probe the OpenClaw gateway via the SDK to discover which methods read messages.
 // Run with: node scripts/probe-gateway-methods.mjs
-// Requires: OpenClaw gateway online (GalLe logged in on Windows).
+// Requires: OpenClaw gateway online on the host machine.
 
 import { pathToFileURL } from "node:url";
 import path from "node:path";

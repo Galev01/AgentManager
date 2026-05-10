@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 $ErrorActionPreference = "Stop"
-$name = "OpenClaw-Bridge"
-$log  = "$env:ProgramData\OpenClaw-Bridge\logs"
+$name = if ($env:BRIDGE_SERVICE_NAME) { $env:BRIDGE_SERVICE_NAME } else { "openclaw-manager-bridge" }
+$log  = if ($env:BRIDGE_LOG_DIR)      { $env:BRIDGE_LOG_DIR }      else { Join-Path $env:ProgramData "$name\logs" }
 
 & nssm restart $name | Out-Host
 Start-Sleep -Seconds 3

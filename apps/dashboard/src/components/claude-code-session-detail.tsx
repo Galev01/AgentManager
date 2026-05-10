@@ -177,7 +177,7 @@ export function ClaudeCodeSessionDetail({
 
   const intelItems = [
     {
-      label: "OpenClaw model",
+      label: "Agent model",
       value: intel.openclawModel ? (
         <code>{intel.openclawModel}</code>
       ) : (
@@ -185,7 +185,7 @@ export function ClaudeCodeSessionDetail({
       ),
     },
     {
-      label: "OpenClaw tokens",
+      label: "Agent tokens",
       value:
         totalOpenclawTokens === 0 ? (
           <span style={{ color: "var(--text-faint)" }}>-</span>
@@ -215,7 +215,7 @@ export function ClaudeCodeSessionDetail({
       label: "workspace",
       value: <code style={{ wordBreak: "break-all" }}>{session.workspace}</code>,
     },
-    { label: "openclaw", value: <code>{session.openclawSessionId}</code> },
+    { label: "agent", value: <code>{session.openclawSessionId}</code> },
     { label: "created", value: new Date(session.createdAt).toLocaleString() },
   ];
 
@@ -293,15 +293,15 @@ export function ClaudeCodeSessionDetail({
                 summary
               ) : summaryStatus === "loading" ? (
                 <span style={{ color: "var(--text-faint)" }}>
-                  OpenClaw is generating a summary...
+                  Agent is generating a summary...
                 </span>
               ) : summaryStatus === "error" ? (
                 <span style={{ color: "var(--text-faint)" }}>
-                  OpenClaw summary unavailable right now.
+                  Agent summary unavailable right now.
                 </span>
               ) : (
                 <span style={{ color: "var(--text-faint)" }}>
-                  OpenClaw summary unavailable.
+                  Agent summary unavailable.
                 </span>
               )}
             </div>
@@ -340,7 +340,7 @@ export function ClaudeCodeSessionDetail({
                   </div>
                   <div className="mode-hint">
                     {session.mode === "agent"
-                      ? "OpenClaw replies automatically"
+                      ? "Agent replies automatically"
                       : "Operator moderates every reply"}
                   </div>
                 </div>
@@ -424,7 +424,7 @@ function TranscriptBubble({
     return (
       <div className={`msg ${isOperator ? "op" : "them"}`}>
         <div className="msg-meta">
-          {isOperator ? `Operator (${event.action})` : "OpenClaw"}
+          {isOperator ? `Operator (${event.action})` : "Agent"}
         </div>
         {chrome}
         <div>{event.answer}</div>

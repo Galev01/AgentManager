@@ -44,7 +44,7 @@ export default async function BrainPeoplePage() {
         {!enabled && !bridgeError && (
           <div className="rounded border border-yellow-700 bg-yellow-900/20 px-4 py-3 text-sm text-yellow-200">
             Brain vault is not configured. Set <code className="font-mono">BRAIN_VAULT_PATH</code> in the bridge's
-            <code className="font-mono"> .env</code> (e.g. <code className="font-mono">C:\Users\GalLe\Documents\Brainclaw\OpenClaw Brain</code>) and restart the bridge.
+            <code className="font-mono"> .env</code> (e.g. <code className="font-mono">~/Documents/Brainclaw/OpenClaw Brain</code>) and restart the bridge.
           </div>
         )}
 

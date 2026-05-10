@@ -83,7 +83,7 @@ const OverviewScreen = ({ layoutVariant }) => {
         </div>
         <div className="page-actions">
           <button className="btn"><I.refresh/>Refresh</button>
-          <button className="btn"><I.sparkles/>Ask OpenClaw</button>
+          <button className="btn"><I.sparkles/>Ask Agent</button>
           <button className="btn btn-pri"><I.plus/>New agent</button>
         </div>
       </div>

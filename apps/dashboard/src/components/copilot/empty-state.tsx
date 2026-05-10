@@ -30,7 +30,7 @@ export function CopilotEmptyState({
           <label className="flex items-center gap-2">
             <input type="radio" name="backend" value="openclaw"
                    checked={backend === "openclaw"} onChange={() => setBackend("openclaw")} />
-            OpenClaw
+            Agent
           </label>
           <label className="flex items-center gap-2">
             <input type="radio" name="backend" value="hermes"

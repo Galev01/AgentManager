@@ -47,7 +47,7 @@ The registry now supports selective runtime enablement and configured primary ru
     { "id": "oc-main", "kind": "openclaw", "displayName": "OpenClaw (local)",
       "endpoint": "http://127.0.0.1:18789", "transport": "sdk", "authMode": "token-env",
       "enabled": true },
-    { "id": "hermes-remote", "kind": "hermes", "displayName": "Hermes (192.168.0.10)",
+    { "id": "hermes-remote", "kind": "hermes", "displayName": "Hermes (remote)",
       "endpoint": "http://127.0.0.1:19119", "transport": "http", "authMode": "bearer",
       "enabled": false }
   ]
@@ -63,7 +63,7 @@ The registry now supports selective runtime enablement and configured primary ru
 When proxying a remote Hermes instance via SSH tunnel:
 
 ```bash
-bridge-host$ ssh -L 19119:127.0.0.1:9119 gal@192.168.0.10
+bridge-host$ ssh -L 19119:127.0.0.1:9119 <user>@<hermes-host>
 ```
 
 The descriptor's `endpoint` should point at the tunnel entry point: `http://127.0.0.1:19119`.
