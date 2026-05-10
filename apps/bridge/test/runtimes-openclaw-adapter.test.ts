@@ -91,12 +91,37 @@ test("openclaw invokeAction agents.delete forwards name", async () => {
   assert.equal(captured?.name, "alice");
 });
 
-test("openclaw invokeAction cron.write maps to gateway cron.upsert", async () => {
-  const calls: Array<{ method: string }> = [];
-  const fakeGateway = async (method: string) => { calls.push({ method }); return { id: "j1" }; };
+test("openclaw invokeAction cron.write (no id) maps to gateway cron.add and unpacks spec", async () => {
+  const calls: Array<{ method: string; params?: Record<string, unknown> }> = [];
+  const fakeGateway = async (method: string, params?: Record<string, unknown>) => {
+    calls.push({ method, params }); return { id: "j1" };
+  };
   const a = createOpenclawAdapter({ descriptor: desc }, { callGateway: fakeGateway });
-  await a.invokeAction("cron.write", { spec: { cron: "* * * * *", payload: {}, enabled: true } }, ctx);
+  await a.invokeAction(
+    "cron.write",
+    { spec: { cron: "* * * * *", payload: { command: "ls", agent: "main" }, enabled: true } },
+    ctx,
+  );
+  assert.equal(calls[0].method, "cron.add");
+  assert.equal(calls[0].params?.schedule, "* * * * *");
+  assert.equal(calls[0].params?.command, "ls");
+  assert.equal(calls[0].params?.agent, "main");
+  assert.equal(calls[0].params?.enabled, true);
+});
+
+test("openclaw invokeAction cron.write (with id) maps to gateway cron.upsert", async () => {
+  const calls: Array<{ method: string; params?: Record<string, unknown> }> = [];
+  const fakeGateway = async (method: string, params?: Record<string, unknown>) => {
+    calls.push({ method, params }); return { id: "j1" };
+  };
+  const a = createOpenclawAdapter({ descriptor: desc }, { callGateway: fakeGateway });
+  await a.invokeAction(
+    "cron.write",
+    { id: "j1", spec: { cron: "*/5 * * * *", payload: {}, enabled: false } },
+    ctx,
+  );
   assert.equal(calls[0].method, "cron.upsert");
+  assert.equal(calls[0].params?.id, "j1");
 });
 
 test("openclaw invokeAction cron.delete forwards id", async () => {

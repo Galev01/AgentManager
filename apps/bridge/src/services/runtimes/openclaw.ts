@@ -246,8 +246,21 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
             break;
           }
           case "cron.write": {
-            // Gateway method historically named cron.upsert.
-            nativeResult = await callGateway("cron.upsert", payload as Record<string, unknown>);
+            // Gateway method historically named cron.add (upsert when id present).
+            // Translate the typed { id?, spec: { cron, payload, enabled } } shape
+            // back to the legacy gateway shape { id?, schedule, command?, agent?, name?, enabled? }.
+            const p = payload as RuntimeActionPayload["cron.write"];
+            const pl = (p.spec.payload ?? null) as Record<string, unknown> | null;
+            const gwParams: Record<string, unknown> = {
+              schedule: p.spec.cron,
+              enabled: p.spec.enabled,
+            };
+            if (typeof p.id === "string" && p.id) gwParams.id = p.id;
+            if (pl && typeof pl.command === "string") gwParams.command = pl.command;
+            if (pl && typeof pl.agent === "string")   gwParams.agent   = pl.agent;
+            if (pl && typeof pl.name === "string")    gwParams.name    = pl.name;
+            const method = typeof p.id === "string" && p.id ? "cron.upsert" : "cron.add";
+            nativeResult = await callGateway(method, gwParams);
             break;
           }
           case "cron.delete": {
