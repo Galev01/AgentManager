@@ -17,6 +17,7 @@ import composeRouter from "./routes/compose.js";
 import { createAgentsRouter } from "./routes/agents.js";
 import { createAgentSessionsRouter } from "./routes/agent-sessions.js";
 import { createCronRouter } from "./routes/cron.js";
+import { createCronStore } from "./services/cron-store.js";
 import { createChannelsRouter } from "./routes/channels.js";
 import { createToolsRouter } from "./routes/tools.js";
 import gatewayConfigRouter from "./routes/gateway-config.js";
@@ -108,7 +109,8 @@ app.use(createAgentsRouter({ callGateway, registry: runtimeRegistry, runtimeConf
 app.use(createModelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 app.use(createAgentModelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 app.use(createAgentSessionsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
-app.use(createCronRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+const cronStore = createCronStore({ filePath: path.join(config.managementDir, "cron-jobs.json") });
+app.use(createCronRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService, cronStore }));
 app.use(createChannelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 app.use(createToolsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 app.use(gatewayConfigRouter);
