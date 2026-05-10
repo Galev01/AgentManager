@@ -14,7 +14,8 @@
  */
 import type {
   RuntimeAdapter, RuntimeEntity, RuntimeEntityKind, RuntimeActivityEvent,
-  InvokeActionRequest, InvokeActionResult, RuntimeAuthMode, CapabilitySnapshot,
+  RuntimeActionId, RuntimeActionPayload, RuntimeActionContext, RuntimeActionResult,
+  RuntimeAuthMode, CapabilitySnapshot,
 } from "@openclaw-manager/types";
 import { ADAPTER_CONTRACT_VERSION, type AdapterConfig } from "./adapter-base.js";
 
@@ -54,14 +55,26 @@ export function createNanobotAdapter(cfg: AdapterConfig, deps: NanobotAdapterDep
         supported: ["tools.list"],
         partial: [],
         unsupported: [
+          // reads
           "agents.list", "agents.read",
-          "sessions.list", "sessions.read", "sessions.send",
+          "sessions.list", "sessions.read",
           "channels.list", "channels.status",
-          "memory.query", "memory.write",
-          "skills.list", "skills.install",
+          "memory.query",
+          "skills.list",
+          "cron.list",
+          "models.list",
+          "logs.tail",
+          "config.get",
+          // actions — Phase 1 has no writes.
+          "agents.create", "agents.update", "agents.delete",
+          "channels.connect", "channels.disconnect",
           "tools.invoke",
-          "cron.list", "cron.write",
-          "logs.tail", "config.get", "config.set",
+          "cron.write", "cron.delete",
+          "claudeCode.ask",
+          "sessions.send",
+          "memory.write",
+          "skills.install",
+          "config.set",
         ],
         version: ADAPTER_CONTRACT_VERSION,
         source: "runtime-reported",
@@ -84,8 +97,16 @@ export function createNanobotAdapter(cfg: AdapterConfig, deps: NanobotAdapterDep
       return list.find((e) => e.entityId === id) ?? null;
     },
     async listActivity(): Promise<RuntimeActivityEvent[]> { return []; },
-    async invokeAction(_req: InvokeActionRequest): Promise<InvokeActionResult> {
-      return { ok: false, error: "nanobot write actions not implemented in Phase 1", projectionMode: "exact" };
+    async invokeAction<A extends RuntimeActionId>(
+      action: A,
+      _payload: RuntimeActionPayload[A],
+      _context: RuntimeActionContext,
+    ): Promise<RuntimeActionResult> {
+      return {
+        ok: false,
+        error: `nanobot phase 1 has no '${action}' action`,
+        projectionMode: "exact",
+      };
     },
     async getAuthModes(): Promise<RuntimeAuthMode[]> {
       return [{ id: "service", label: "MCP transport", description: "Nanobot MCP does not currently gate by bearer." }];

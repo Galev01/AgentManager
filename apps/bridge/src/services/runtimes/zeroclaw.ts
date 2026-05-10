@@ -13,7 +13,8 @@
  */
 import type {
   RuntimeAdapter, RuntimeEntity, RuntimeEntityKind, RuntimeActivityEvent,
-  InvokeActionRequest, InvokeActionResult, RuntimeAuthMode, CapabilitySnapshot, PartialCapability,
+  RuntimeActionId, RuntimeActionPayload, RuntimeActionContext, RuntimeActionResult,
+  RuntimeAuthMode, CapabilitySnapshot, PartialCapability,
 } from "@openclaw-manager/types";
 import { ADAPTER_CONTRACT_VERSION, defaultHttp, type AdapterConfig } from "./adapter-base.js";
 
@@ -38,10 +39,22 @@ export function createZeroclawAdapter(cfg: AdapterConfig): RuntimeAdapter {
         supported: [],
         partial,
         unsupported: [
-          "sessions.send", "memory.query", "memory.write",
-          "skills.list", "skills.install", "tools.invoke",
-          "cron.list", "cron.write", "config.set",
+          // reads
+          "memory.query",
+          "skills.list",
+          "cron.list",
+          "models.list",
           "agents.read", "sessions.read", "sessions.list", "config.get",
+          // actions — Phase 1 has no writes.
+          "agents.create", "agents.update", "agents.delete",
+          "channels.connect", "channels.disconnect",
+          "tools.invoke",
+          "cron.write", "cron.delete",
+          "claudeCode.ask",
+          "sessions.send",
+          "memory.write",
+          "skills.install",
+          "config.set",
         ],
         version: ADAPTER_CONTRACT_VERSION,
         source: "static-adapter",
@@ -51,8 +64,16 @@ export function createZeroclawAdapter(cfg: AdapterConfig): RuntimeAdapter {
     async listEntities(_kind: RuntimeEntityKind): Promise<RuntimeEntity[]> { return []; },
     async getEntity() { return null; },
     async listActivity(): Promise<RuntimeActivityEvent[]> { return []; },
-    async invokeAction(_req: InvokeActionRequest): Promise<InvokeActionResult> {
-      return { ok: false, error: "zeroclaw write actions not implemented in Phase 1", projectionMode: "exact" };
+    async invokeAction<A extends RuntimeActionId>(
+      action: A,
+      _payload: RuntimeActionPayload[A],
+      _context: RuntimeActionContext,
+    ): Promise<RuntimeActionResult> {
+      return {
+        ok: false,
+        error: `zeroclaw phase 1 has no '${action}' action`,
+        projectionMode: "exact",
+      };
     },
     async getAuthModes(): Promise<RuntimeAuthMode[]> {
       return [{ id: "service", label: "Bearer", description: "ZeroClaw bearer via env ZEROCLAW_TOKEN." }];

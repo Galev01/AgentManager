@@ -23,16 +23,33 @@ export type RuntimeDescriptor = {
   enabled?: boolean;             // missing = true (back-compat)
 };
 
-export type CapabilityId =
+// Reads are capability-gated but never go through invokeAction.
+export type RuntimeReadCapabilityId =
   | "agents.list" | "agents.read"
-  | "sessions.list" | "sessions.read" | "sessions.send"
+  | "sessions.list" | "sessions.read"
   | "channels.list" | "channels.status"
-  | "memory.query" | "memory.write"
-  | "skills.list" | "skills.install"
-  | "tools.list" | "tools.invoke"
-  | "cron.list" | "cron.write"
+  | "memory.query"
+  | "skills.list"
+  | "tools.list"
+  | "cron.list"
+  | "models.list"
   | "logs.tail"
-  | "config.get" | "config.set";
+  | "config.get";
+
+// Writes flow through invokeAction with typed payloads.
+export type RuntimeActionId =
+  | "agents.create" | "agents.update" | "agents.delete"
+  | "channels.connect" | "channels.disconnect"
+  | "tools.invoke"
+  | "cron.write" | "cron.delete"
+  | "claudeCode.ask"
+  | "sessions.send"
+  | "memory.write"
+  | "skills.install"
+  | "config.set";
+
+// Every capability id (read OR action) is gated through the same matrix.
+export type CapabilityId = RuntimeReadCapabilityId | RuntimeActionId;
 
 // A partial capability must explain *why* so the dashboard can render honest
 // degradation instead of a silent amber badge. Examples:
@@ -82,7 +99,7 @@ export type RuntimeConfigPatch = {
 };
 
 export type RuntimeEntityKind =
-  | "agent" | "session" | "channel" | "skill" | "tool" | "cron" | "memory";
+  | "agent" | "session" | "channel" | "skill" | "tool" | "cron" | "memory" | "model";
 
 export type RuntimeEntity = {
   runtimeKind: RuntimeKind;
@@ -148,13 +165,50 @@ export type InvokeActionResult<T extends JsonValue = JsonValue> =
   | { ok: true; nativeResult: T; projectionMode: ProjectionMode }
   | { ok: false; error: string; projectionMode: ProjectionMode };
 
+// Result type for the typed invokeAction surface. Same shape as the legacy
+// InvokeActionResult; aliased here so adapters can express intent without
+// pulling the JsonValue generic.
+export type RuntimeActionResult = InvokeActionResult;
+
+// Per-action payload contract. Every entry in RuntimeActionId must have
+// exactly one entry here. Bridge route layer validates input against this
+// shape via runtimeActionSchemas before dispatching to the adapter.
+export type RuntimeActionPayload = {
+  "agents.create": { name: string; workspace: string; emoji?: string; avatar?: string; model?: string };
+  "agents.update": { name: string; updates: Record<string, unknown> };
+  "agents.delete": { name: string };
+  "channels.connect": { channelId: string; config?: JsonValue };
+  "channels.disconnect": { channelId: string };
+  "tools.invoke": { toolId: string; input: JsonValue };
+  "cron.write": { id?: string; spec: { cron: string; payload: JsonValue; enabled: boolean } };
+  "cron.delete": { id: string };
+  "claudeCode.ask": { ide: string; workspace: string; msgId: string; question: string; sessionId?: string };
+  "sessions.send": { sessionKey: string; message: string };
+  "memory.write": { key: string; value: JsonValue };
+  "skills.install": { ref: string };
+  "config.set": { path: string; value: JsonValue };
+};
+
+// Action context: bridge-stamped, never caller-supplied.
+export type RuntimeActionContext = {
+  actor: ActorAssertionRef;
+  resourceRuntimeId?: string; // when mutating an existing resource
+};
+
 export interface RuntimeAdapter {
   describeRuntime(): Promise<RuntimeDescriptor>;
   getCapabilities(): Promise<CapabilitySnapshot>;
   listEntities(kind: RuntimeEntityKind, filters?: JsonValue): Promise<RuntimeEntity[]>;
   getEntity(kind: RuntimeEntityKind, id: string): Promise<RuntimeEntity | null>;
   listActivity(sinceMs?: number, limit?: number): Promise<RuntimeActivityEvent[]>;
-  invokeAction(req: InvokeActionRequest): Promise<InvokeActionResult>;
+  // Typed mutation surface. Action ids are a closed union; payload shape is
+  // dictated by RuntimeActionPayload[A]; context is bridge-stamped. Bridge
+  // routes validate the payload against the shared schemas before calling.
+  invokeAction<A extends RuntimeActionId>(
+    action: A,
+    payload: RuntimeActionPayload[A],
+    context: RuntimeActionContext,
+  ): Promise<RuntimeActionResult>;
   getAuthModes(): Promise<RuntimeAuthMode[]>;
   getExtensions(): Promise<string[]>;
   health(): Promise<{ ok: boolean; detail?: string }>;

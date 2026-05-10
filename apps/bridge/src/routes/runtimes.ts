@@ -2,7 +2,8 @@ import { Router, type Router as ExpressRouter, type Request, type Response, type
 import type { RuntimeRegistry } from "../services/runtimes/registry.js";
 import type {
   RuntimeEntityKind, InvokeActionHttpRequest, ActorAssertionRef, CapabilityId,
-  InvokeActionRequest, PermissionId,
+  RuntimeActionId, RuntimeActionPayload, RuntimeActionContext,
+  PermissionId,
 } from "@openclaw-manager/types";
 
 export type RuntimesRouterDeps = {
@@ -98,14 +99,16 @@ export function createRuntimesRouter(deps: RuntimesRouterDeps): ExpressRouter {
       runtimeActorId: typeof body.runtimeActorId === "string" ? body.runtimeActorId : undefined,
       basis: "service-principal",
     };
-    const adapterReq: InvokeActionRequest = {
-      action: body.action,
-      targetEntityId: body.targetEntityId,
-      payload: body.payload ?? {},
-      runtimeActorId: actor.runtimeActorId,
-      actor,
-    };
-    res.json(await a.invokeAction(adapterReq));
+    const context: RuntimeActionContext = { actor };
+
+    // Legacy generic surface: this endpoint forwards arbitrary capability ids
+    // (including reads like agents.list) to the adapter so the dashboard's
+    // runtime-explorer page can introspect a runtime without a per-capability
+    // route. The typed RuntimeActionId surface is enforced on the per-feature
+    // routes (Phase B/C). Cast here is intentional; capability-gated above.
+    const action = body.action as RuntimeActionId;
+    const payload = (body.payload ?? {}) as RuntimeActionPayload[RuntimeActionId];
+    res.json(await a.invokeAction(action, payload, context));
   });
 
   return r;
