@@ -9,13 +9,24 @@ topology and component overview see [AGENTS.md](../AGENTS.md).
 
 ## TL;DR topology
 
+Production-style (recommended on Linux): nginx terminates HTTP(S) on the dashboard host and proxies to Next.js on **loopback** only:
+
 ```
-Browser  ->  reverse-proxy on <dashboard-host>  ->  Next.js 127.0.0.1:3000
-(Next.js server)  ->  http://<bridge-host>:3100  ->  OpenClaw Gateway 127.0.0.1:18789
+Browser -> nginx (:80 / :443) -> Next.js 127.0.0.1:3000
+(Next.js server) -> http://<bridge-host>:3100 -> OpenClaw Gateway 127.0.0.1:18789
+```
+
+See [docs/deploy/nginx.md](deploy/nginx.md) and [`docs/deploy/systemd/openclaw-dashboard.bind-loopback.conf`](deploy/systemd/openclaw-dashboard.bind-loopback.conf).
+
+Direct access without nginx (quick / dev):
+
+```
+Browser -> Next.js (e.g. :3000)
+(Next.js server) -> http://<bridge-host>:3100 -> OpenClaw Gateway 127.0.0.1:18789
 ```
 
 Two moving pieces: the **dashboard** (Linux, always up) and the **bridge**
-(Windows, always up as a service). Both must be running for the dashboard's
+(Windows or Linux, always up as a service). Both must be running for the dashboard's
 bridge-backed pages to load data.
 
 ---

@@ -1,10 +1,14 @@
 # nginx reverse proxy
 
-Front the dashboard with nginx for a friendly URL, TLS, or basic IP allow-listing. The dashboard binds `127.0.0.1:3000` by default, so a reverse proxy on the same host is the standard setup.
+Front the dashboard with nginx for a friendly URL, TLS, or basic IP allow-listing. Put the Next.js process on **loopback** (`127.0.0.1:3000`) and let nginx own **port 80/443** — see the systemd drop-in in [systemd/](systemd/). A copy-paste config lives in the repo as [`openclaw-dashboard.conf`](nginx/openclaw-dashboard.conf).
 
 ## Minimal HTTP config
 
-`/etc/nginx/conf.d/openclaw-dashboard.conf`:
+Shipped example (also copy to `/etc/nginx/conf.d/openclaw-dashboard.conf`):
+
+[`openclaw-dashboard.conf`](nginx/openclaw-dashboard.conf)
+
+Inline equivalent — adjust `server_name` to your hostname or keep `_` for IP access:
 
 ```nginx
 server {
@@ -21,6 +25,8 @@ server {
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_read_timeout 300s;
+    proxy_buffering off;
+    proxy_request_buffering off;
   }
 }
 ```
@@ -30,6 +36,10 @@ Reload:
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+## CentOS / RHEL stock `nginx.conf`
+
+The default package often ships a **`server { … }` block still inside `/etc/nginx/nginx.conf`** (in addition to `include /etc/nginx/conf.d/*.conf;`). If both use `listen 80` and `server_name _`, nginx logs *conflicting server name* and one vhost is skipped. **Remove or comment out** the extra `server { … }` stanza in `/etc/nginx/nginx.conf` so only `conf.d/openclaw-dashboard.conf` handles port 80.
 
 ## TLS upgrade
 

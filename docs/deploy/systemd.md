@@ -115,3 +115,4 @@ Same as PM2 — `git pull && pnpm install && pnpm build`, then either `systemctl
 
 - [PM2 recipe](pm2.md) — same idea, no systemd.
 - [nginx reverse proxy](nginx.md) — TLS/friendly URLs in front of the dashboard.
+- [`openclaw-dashboard.bind-loopback.conf`](systemd/openclaw-dashboard.bind-loopback.conf) — systemd drop-in when using nginx (Next standalone listens on `127.0.0.1:3000`).
