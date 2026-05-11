@@ -55,6 +55,7 @@ defaults set up by the install script):**
 - Env: `<install-prefix>/openclaw-manager/apps/dashboard/.env` (mode `0600`)
 - Unit: `/etc/systemd/system/openclaw-dashboard.service`
 - Reverse-proxy site config: e.g. `/etc/nginx/conf.d/openclaw-dashboard.conf`
+- With `output: "standalone"`, **`pnpm --filter dashboard build`** also copies **`apps/dashboard/.next/static`** and **`public/`** into the standalone tree so **`/_next/static/*`** works (otherwise you get bare HTML without CSS).
 
 ---
 
