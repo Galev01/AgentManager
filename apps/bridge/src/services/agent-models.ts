@@ -1,11 +1,22 @@
 import type { AgentModelsSnapshot, ModelDescriptor, AgentModelSummary } from "@openclaw-manager/types";
+import type { RuntimeRegistry } from "./runtimes/registry.js";
+import type { RuntimeConfigService } from "./runtime-config.js";
 
 export type CallGateway = (method: string, params?: Record<string, unknown>) => Promise<unknown>;
 
 export type AgentModelsService = {
-  readSnapshot(): Promise<AgentModelsSnapshot>;
-  readCatalog(): Promise<{ models: ModelDescriptor[]; status: "ok" | "unavailable" }>;
-  validateModelAgainstCatalog(modelId: string): Promise<{ ok: true } | { ok: false; status: 400 | 503; reason: string }>;
+  readSnapshot(opts?: { runtimeId?: string }): Promise<AgentModelsSnapshot>;
+  readCatalog(opts?: { runtimeId?: string }): Promise<{ models: ModelDescriptor[]; status: "ok" | "unavailable" }>;
+  validateModelAgainstCatalog(modelId: string, opts?: { runtimeId?: string }): Promise<{ ok: true } | { ok: false; status: 400 | 503; reason: string }>;
+};
+
+export type AgentModelsServiceDeps = {
+  callGateway: CallGateway;
+  /** Optional — when provided, model catalog is sourced via the runtime adapter
+   *  (capability-gated). When omitted, falls back to the legacy direct
+   *  `callGateway("models.list")` path. */
+  registry?: RuntimeRegistry;
+  runtimeConfig?: RuntimeConfigService;
 };
 
 type GatewayModelEntry = {
@@ -67,10 +78,37 @@ function projectModel(raw: GatewayModelEntry): ModelDescriptor | null {
   };
 }
 
-export function createAgentModelsService(deps: { callGateway: CallGateway }): AgentModelsService {
-  const { callGateway } = deps;
+export function createAgentModelsService(deps: AgentModelsServiceDeps): AgentModelsService {
+  const { callGateway, registry, runtimeConfig } = deps;
 
-  async function readCatalog(): Promise<{ models: ModelDescriptor[]; status: "ok" | "unavailable" }> {
+  async function readCatalogViaAdapter(forcedRuntimeId?: string): Promise<{ models: ModelDescriptor[]; status: "ok" | "unavailable" }> {
+    if (!registry || !runtimeConfig) {
+      return readCatalogViaGateway();
+    }
+    try {
+      const runtimeId = forcedRuntimeId ?? (await runtimeConfig.read()).effectivePrimaryRuntimeId;
+      if (!runtimeId) return { models: [], status: "unavailable" };
+      const adapter = await registry.adapter(runtimeId);
+      if (!adapter) return { models: [], status: "unavailable" };
+      const caps = await adapter.getCapabilities();
+      const isSupported = caps.supported.includes("models.list")
+        || caps.partial.some((p) => p.id === "models.list");
+      if (!isSupported) return { models: [], status: "unavailable" };
+      const entities = await adapter.listEntities("model");
+      const models = entities
+        .map((e) => {
+          const raw = (e.nativeRef ?? {}) as GatewayModelEntry;
+          const projected = projectModel({ ...raw, id: raw.id ?? e.entityId });
+          return projected;
+        })
+        .filter((m): m is ModelDescriptor => m !== null);
+      return { models, status: "ok" };
+    } catch {
+      return { models: [], status: "unavailable" };
+    }
+  }
+
+  async function readCatalogViaGateway(): Promise<{ models: ModelDescriptor[]; status: "ok" | "unavailable" }> {
     try {
       const res = (await callGateway("models.list", {})) as { models?: GatewayModelEntry[] };
       const models = Array.isArray(res?.models)
@@ -82,9 +120,14 @@ export function createAgentModelsService(deps: { callGateway: CallGateway }): Ag
     }
   }
 
-  async function readSnapshot(): Promise<AgentModelsSnapshot> {
+  async function readCatalog(opts?: { runtimeId?: string }): Promise<{ models: ModelDescriptor[]; status: "ok" | "unavailable" }> {
+    if (registry && runtimeConfig) return readCatalogViaAdapter(opts?.runtimeId);
+    return readCatalogViaGateway();
+  }
+
+  async function readSnapshot(opts?: { runtimeId?: string }): Promise<AgentModelsSnapshot> {
     const [catalogResult, agentsRaw] = await Promise.all([
-      readCatalog(),
+      readCatalog(opts),
       callGateway("agents.list", {}).catch(() => ({ agents: [] as GatewayAgentSummary[] })),
     ]);
     const agents = Array.isArray((agentsRaw as { agents?: GatewayAgentSummary[] })?.agents)
@@ -105,8 +148,8 @@ export function createAgentModelsService(deps: { callGateway: CallGateway }): Ag
     };
   }
 
-  async function validateModelAgainstCatalog(modelId: string) {
-    const cat = await readCatalog();
+  async function validateModelAgainstCatalog(modelId: string, opts?: { runtimeId?: string }) {
+    const cat = await readCatalog(opts);
     if (cat.status === "unavailable") {
       return { ok: false, status: 503 as const, reason: "model_catalog_unavailable" };
     }

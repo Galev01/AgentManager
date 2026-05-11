@@ -17,10 +17,38 @@ test("nanobot adapter advertises tools.list as supported", async () => {
   const a = createNanobotAdapter({ descriptor: desc }, { mcpClient: fakeClient });
   const caps = await a.getCapabilities();
   assert.ok(caps.supported.includes("tools.list"));
+  // Phase 1: every action id and new session lifecycle / cron ids must be declared unsupported.
+  for (const action of [
+    "agents.create", "agents.update", "agents.delete",
+    "channels.connect", "channels.disconnect",
+    "tools.invoke", "cron.write", "cron.delete", "cron.run",
+    "claudeCode.ask",
+    "sessions.create", "sessions.send", "sessions.reset", "sessions.abort", "sessions.compact", "sessions.delete",
+    "memory.write", "skills.install", "config.set",
+    "sessions.usage", "cron.status", "tools.effective",
+  ]) {
+    assert.ok(caps.unsupported.includes(action as any), `${action} missing from unsupported`);
+  }
   const tools = await a.listEntities("tool");
   assert.equal(tools.length, 1);
   assert.equal(tools[0].entityId, "echo");
   assert.equal(tools[0].runtimeKind, "nanobot");
+});
+
+test("nanobot invokeAction returns ok:false with action name in error", async () => {
+  const fakeClient = {
+    connect: async () => {},
+    listTools: async () => ({ tools: [] }),
+    close: async () => {},
+  };
+  const a = createNanobotAdapter({ descriptor: desc }, { mcpClient: fakeClient });
+  const r = await a.invokeAction(
+    "agents.create",
+    { name: "n", workspace: "w" },
+    { actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" } },
+  );
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.error, /agents\.create/);
 });
 
 test("nanobot health surfaces MCP transport error", async () => {

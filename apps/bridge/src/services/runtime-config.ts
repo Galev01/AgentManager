@@ -7,7 +7,14 @@ import { assertDescriptor } from "./runtimes/registry.js";
 import type { RuntimeRegistry } from "./runtimes/registry.js";
 
 export class RuntimeConfigError extends Error {
-  constructor(public code: "unknown_runtime_id" | "cannot_disable_all", message: string) {
+  constructor(
+    public code:
+      | "unknown_runtime_id"
+      | "cannot_disable_all"
+      | "cannot_remove_primary"
+      | "invalid_runtime_descriptor",
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -96,6 +103,38 @@ export function createRuntimeConfigService(deps: RuntimeConfigServiceDeps): Runt
 
     // Build candidate snapshot
     const candidate = descriptors.map((d) => ({ ...d }));
+    if (input.upsertRuntime) {
+      try {
+        assertDescriptor(input.upsertRuntime);
+      } catch (e) {
+        throw new RuntimeConfigError(
+          "invalid_runtime_descriptor",
+          (e as Error).message,
+        );
+      }
+      const nextRuntime = {
+        ...input.upsertRuntime,
+        enabled: input.upsertRuntime.enabled ?? true,
+      };
+      const existingIndex = candidate.findIndex((d) => d.id === nextRuntime.id);
+      if (existingIndex >= 0) candidate[existingIndex] = nextRuntime;
+      else candidate.push(nextRuntime);
+    }
+    if (input.removeRuntimeId) {
+      const target = candidate.find((d) => d.id === input.removeRuntimeId);
+      if (!target) {
+        throw new RuntimeConfigError("unknown_runtime_id", `unknown runtime id: ${input.removeRuntimeId}`);
+      }
+      const configured = file.configuredPrimaryRuntimeId ?? null;
+      if (configured === input.removeRuntimeId) {
+        throw new RuntimeConfigError(
+          "cannot_remove_primary",
+          "choose a different primary runtime before removing this one",
+        );
+      }
+      const idx = candidate.findIndex((d) => d.id === input.removeRuntimeId);
+      candidate.splice(idx, 1);
+    }
     if (input.enabled) {
       for (const [id, want] of Object.entries(input.enabled)) {
         const target = candidate.find((d) => d.id === id);

@@ -23,16 +23,33 @@ export type RuntimeDescriptor = {
   enabled?: boolean;             // missing = true (back-compat)
 };
 
-export type CapabilityId =
+// Reads are capability-gated but never go through invokeAction.
+export type RuntimeReadCapabilityId =
   | "agents.list" | "agents.read"
-  | "sessions.list" | "sessions.read" | "sessions.send"
+  | "sessions.list" | "sessions.read" | "sessions.usage"
   | "channels.list" | "channels.status"
-  | "memory.query" | "memory.write"
-  | "skills.list" | "skills.install"
-  | "tools.list" | "tools.invoke"
-  | "cron.list" | "cron.write"
+  | "memory.query"
+  | "skills.list"
+  | "tools.list" | "tools.effective"
+  | "cron.list" | "cron.status"
+  | "models.list"
   | "logs.tail"
-  | "config.get" | "config.set";
+  | "config.get";
+
+// Writes flow through invokeAction with typed payloads.
+export type RuntimeActionId =
+  | "agents.create" | "agents.update" | "agents.delete"
+  | "channels.connect" | "channels.disconnect"
+  | "tools.invoke"
+  | "cron.write" | "cron.delete" | "cron.run"
+  | "claudeCode.ask"
+  | "sessions.create" | "sessions.send" | "sessions.reset" | "sessions.abort" | "sessions.compact" | "sessions.delete"
+  | "memory.write"
+  | "skills.install"
+  | "config.set";
+
+// Every capability id (read OR action) is gated through the same matrix.
+export type CapabilityId = RuntimeReadCapabilityId | RuntimeActionId;
 
 // A partial capability must explain *why* so the dashboard can render honest
 // degradation instead of a silent amber badge. Examples:
@@ -79,10 +96,12 @@ export type RuntimeConfigSnapshot = {
 export type RuntimeConfigPatch = {
   configuredPrimaryRuntimeId?: string;
   enabled?: { [runtimeId: string]: boolean };
+  upsertRuntime?: RuntimeDescriptor;
+  removeRuntimeId?: string;
 };
 
 export type RuntimeEntityKind =
-  | "agent" | "session" | "channel" | "skill" | "tool" | "cron" | "memory";
+  | "agent" | "session" | "channel" | "skill" | "tool" | "cron" | "memory" | "model";
 
 export type RuntimeEntity = {
   runtimeKind: RuntimeKind;
@@ -148,13 +167,84 @@ export type InvokeActionResult<T extends JsonValue = JsonValue> =
   | { ok: true; nativeResult: T; projectionMode: ProjectionMode }
   | { ok: false; error: string; projectionMode: ProjectionMode };
 
+// Result type for the typed invokeAction surface. Same shape as the legacy
+// InvokeActionResult; aliased here so adapters can express intent without
+// pulling the JsonValue generic.
+export type RuntimeActionResult = InvokeActionResult;
+
+// Per-action payload contract. Every entry in RuntimeActionId must have
+// exactly one entry here. Bridge route layer validates input against this
+// shape via runtimeActionSchemas before dispatching to the adapter.
+export type RuntimeActionPayload = {
+  "agents.create": { name: string; workspace: string; emoji?: string; avatar?: string; model?: string };
+  "agents.update": { name: string; updates: Record<string, unknown> };
+  "agents.delete": { name: string };
+  "channels.connect": { channelId: string; config?: JsonValue };
+  "channels.disconnect": { channelId: string };
+  "tools.invoke": { toolId: string; input: JsonValue };
+  "cron.write": { id?: string; spec: { cron: string; payload: JsonValue; enabled: boolean } };
+  "cron.delete": { id: string };
+  "claudeCode.ask": {
+    ide: string; workspace: string; msgId: string; question: string;
+    sessionId?: string;
+    /** Bridge-orchestrator-derived OpenClaw gateway session key
+     *  ("agent:<agentId>:<openclawSessionId>"). When present, adapter
+     *  uses this verbatim; otherwise falls back to defaults. */
+    gatewayKey?: string;
+    /** Pre-wrapped form for the very first turn of a new session
+     *  (bridge-owned preamble). Adapter sends this only when the
+     *  gateway session has no prior messages; otherwise it sends the
+     *  raw `question`. */
+    firstTurnMessage?: string;
+    /** Polling tuning for the assistant reply. Defaults match the
+     *  legacy orchestrator (intervalMs=500, timeoutMs=120000). */
+    replyPollIntervalMs?: number;
+    replyTimeoutMs?: number;
+  };
+  "sessions.create": { agentName?: string };
+  "sessions.send": {
+    sessionKey: string;
+    message: string;
+    /**
+     * When true, adapter waits for terminal status and returns
+     * `{ assistantText, elapsedMs, sessionKey }` in nativeResult.
+     * When false/undefined, adapter returns `{ ack: true, sessionKey }`
+     * (existing fire-and-forget shape).
+     */
+    awaitCompletion?: boolean;
+    /** Default 120000. Only used when awaitCompletion=true. */
+    timeoutMs?: number;
+  };
+  "sessions.reset":   { sessionKey: string };
+  "sessions.abort":   { sessionKey: string };
+  "sessions.compact": { sessionKey: string };
+  "sessions.delete":  { sessionKey: string };
+  "cron.run":         { id: string };
+  "memory.write": { key: string; value: JsonValue };
+  "skills.install": { ref: string };
+  "config.set": { path: string; value: JsonValue };
+};
+
+// Action context: bridge-stamped, never caller-supplied.
+export type RuntimeActionContext = {
+  actor: ActorAssertionRef;
+  resourceRuntimeId?: string; // when mutating an existing resource
+};
+
 export interface RuntimeAdapter {
   describeRuntime(): Promise<RuntimeDescriptor>;
   getCapabilities(): Promise<CapabilitySnapshot>;
   listEntities(kind: RuntimeEntityKind, filters?: JsonValue): Promise<RuntimeEntity[]>;
   getEntity(kind: RuntimeEntityKind, id: string): Promise<RuntimeEntity | null>;
   listActivity(sinceMs?: number, limit?: number): Promise<RuntimeActivityEvent[]>;
-  invokeAction(req: InvokeActionRequest): Promise<InvokeActionResult>;
+  // Typed mutation surface. Action ids are a closed union; payload shape is
+  // dictated by RuntimeActionPayload[A]; context is bridge-stamped. Bridge
+  // routes validate the payload against the shared schemas before calling.
+  invokeAction<A extends RuntimeActionId>(
+    action: A,
+    payload: RuntimeActionPayload[A],
+    context: RuntimeActionContext,
+  ): Promise<RuntimeActionResult>;
   getAuthModes(): Promise<RuntimeAuthMode[]>;
   getExtensions(): Promise<string[]>;
   health(): Promise<{ ok: boolean; detail?: string }>;
@@ -162,4 +252,13 @@ export interface RuntimeAdapter {
   // must implement dispose(). Others may leave it undefined; the registry
   // treats undefined as no-op.
   dispose?(): Promise<void>;
+  /**
+   * Optional per-capability read surface. Used for read capabilities that
+   * don't fit `listEntities` (e.g. sessions.usage on a single session,
+   * cron.status, tools.effective). Adapters that support a given read
+   * capability implement this; routes call requireCapability first then
+   * dispatch through here. Adapters that don't implement read are treated
+   * as not supporting any read capability beyond listEntities.
+   */
+  read?(capabilityId: RuntimeReadCapabilityId, params?: JsonValue): Promise<JsonValue>;
 }

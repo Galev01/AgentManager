@@ -91,8 +91,10 @@ router.patch("/reviews/projects/:id", async (req: Request, res: Response) => {
   try {
     const existing = await getProject(id);
     if (!existing) return void res.status(404).json({ error: "not found" });
-    const patch: { enabled?: boolean } = {};
+    const patch: { enabled?: boolean; runtimeId?: string; agentName?: string } = {};
     if (typeof req.body?.enabled === "boolean") patch.enabled = req.body.enabled;
+    if (typeof req.body?.runtimeId === "string") patch.runtimeId = req.body.runtimeId;
+    if (typeof req.body?.agentName === "string") patch.agentName = req.body.agentName;
     const next = await updateProject(id, patch);
     res.json({ project: next });
   } catch (err: any) {

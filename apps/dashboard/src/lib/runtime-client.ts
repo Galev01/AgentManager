@@ -7,10 +7,43 @@ import type {
   RuntimeActivityEvent,
   InvokeActionResult,
   InvokeActionHttpRequest,
+  RuntimeKind,
+  PartialCapability,
+  CapabilityId,
 } from "@openclaw-manager/types";
 
 const BRIDGE_URL = process.env.OPENCLAW_BRIDGE_URL || "http://localhost:3100";
 const BRIDGE_TOKEN = process.env.OPENCLAW_BRIDGE_TOKEN || "";
+
+// Aggregate /runtimes/health response shape — mirrors apps/bridge runtimes-health route.
+export type RuntimeHealthEntry =
+  | {
+      runtimeId: string;
+      ok: true;
+      status: "healthy";
+      capabilities: CapabilitySnapshot;
+    }
+  | {
+      runtimeId: string;
+      ok: false;
+      status: "unhealthy";
+      error: string;
+      capabilities?: CapabilitySnapshot;
+    }
+  | {
+      runtimeId: string;
+      ok: true;
+      status: "disabled";
+    };
+
+export type RuntimeHealthSnapshot = {
+  ok: boolean;
+  primaryRuntimeId: string | null;
+  runtimes: RuntimeHealthEntry[];
+};
+
+// Helper kept here so all runtime-aware bridge calls reach for the same shape.
+export type { CapabilityId, PartialCapability, RuntimeKind };
 
 async function bridgeGet<T>(path: string): Promise<T> {
   const actor = await actorHeaders();
@@ -84,4 +117,19 @@ export async function invokeRuntimeAction(
   req: InvokeActionHttpRequest,
 ): Promise<InvokeActionResult> {
   return bridgePost(`/runtimes/${encodeURIComponent(id)}/actions`, req);
+}
+
+// Aggregate /runtimes/health — used by SSR pages and the API proxy that backs
+// the client-side useRuntimeHealth hook.
+export async function fetchRuntimeHealth(): Promise<RuntimeHealthSnapshot> {
+  return bridgeGet<RuntimeHealthSnapshot>("/runtimes/health");
+}
+
+// Append a `?runtimeId=` selector to an existing path. Pages that have opted
+// into runtime-aware fetching pass this through to bridge-client calls so the
+// bridge knows which runtime to project the catalog against.
+export function withRuntimeQuery(path: string, runtimeId?: string | null): string {
+  if (!runtimeId) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}runtimeId=${encodeURIComponent(runtimeId)}`;
 }

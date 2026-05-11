@@ -5,26 +5,39 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import { createRuntimesRouter } from "../src/routes/runtimes.js";
 import type { RuntimeRegistry } from "../src/services/runtimes/registry.js";
-import type { InvokeActionRequest, RuntimeAdapter, RuntimeDescriptor, CapabilitySnapshot } from "@openclaw-manager/types";
+import type {
+  RuntimeAdapter, RuntimeDescriptor, CapabilitySnapshot,
+  RuntimeActionId, RuntimeActionContext,
+} from "@openclaw-manager/types";
 
-function fakeRegistry(captured: { last?: InvokeActionRequest }): RuntimeRegistry {
+type CapturedInvoke = { action: RuntimeActionId; payload: unknown; context: RuntimeActionContext };
+
+function fakeRegistry(captured: { last?: CapturedInvoke }): RuntimeRegistry {
   const desc: RuntimeDescriptor = {
     id: "oc-main", kind: "openclaw", displayName: "OC", endpoint: "sdk:",
     transport: "sdk", authMode: "token-env",
   };
-  const caps: CapabilitySnapshot = { supported: ["agents.list"], partial: [], unsupported: [], version: "1.0.0" };
+  const caps: CapabilitySnapshot = {
+    supported: ["agents.list", "agents.create"],
+    partial: [], unsupported: ["memory.write"], version: "1.0.0",
+    source: "static-adapter", stale: false,
+  };
   const adapter: RuntimeAdapter = {
     describeRuntime: async () => desc,
     getCapabilities: async () => caps,
     listEntities: async () => [],
     getEntity: async () => null,
     listActivity: async () => [],
-    invokeAction: async (req) => { captured.last = req; return { ok: true, nativeResult: "fake", projectionMode: "exact" }; },
+    invokeAction: async (action, payload, context) => {
+      captured.last = { action, payload, context };
+      return { ok: true, nativeResult: "fake", projectionMode: "exact" };
+    },
     getAuthModes: async () => [],
     getExtensions: async () => [],
     health: async () => ({ ok: true }),
   };
   return {
+    configPath: () => "/tmp/test-runtime-config.json",
     list: async () => [desc],
     get: async (id) => (id === "oc-main" ? desc : null),
     adapter: async (id) => (id === "oc-main" ? adapter : null),
@@ -44,7 +57,7 @@ function withAuth(userId: string, permissions: string[]) {
   };
 }
 
-async function mkApp(permissions: string[] = ["runtimes.view", "runtimes.invoke"], captured: { last?: InvokeActionRequest } = {}) {
+async function mkApp(permissions: string[] = ["runtimes.view", "runtimes.invoke"], captured: { last?: CapturedInvoke } = {}) {
   const app = express();
   app.use(express.json());
   app.use(withAuth("user-1", permissions));
@@ -101,7 +114,7 @@ test("POST /runtimes/:id/actions requires runtimes.invoke (403 otherwise)", asyn
 });
 
 test("POST /runtimes/:id/actions injects actor from req.auth and ignores body-supplied actor", async () => {
-  const captured: { last?: InvokeActionRequest } = {};
+  const captured: { last?: CapturedInvoke } = {};
   const a = await mkApp(["runtimes.view", "runtimes.invoke"], captured);
   try {
     const r = await fetch(`${a.url}/runtimes/oc-main/actions`, {
@@ -117,9 +130,9 @@ test("POST /runtimes/:id/actions injects actor from req.auth and ignores body-su
     const body = await r.json();
     assert.equal(body.ok, true);
     assert.ok(a.captured.last);
-    assert.equal(a.captured.last!.actor.humanActorUserId, "user-1", "bridge must use req.auth.user.id, not body");
-    assert.equal(a.captured.last!.actor.managerServiceId, "bridge-primary");
-    assert.equal(a.captured.last!.actor.basis, "service-principal");
+    assert.equal(a.captured.last!.context.actor.humanActorUserId, "user-1", "bridge must use req.auth.user.id, not body");
+    assert.equal(a.captured.last!.context.actor.managerServiceId, "bridge-primary");
+    assert.equal(a.captured.last!.context.actor.basis, "service-principal");
   } finally { await a.close(); }
 });
 

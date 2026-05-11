@@ -42,6 +42,7 @@ test("createSession writes and listSessions reads back", async () => {
     ide: "antigravity",
     workspace: "C:\\w\\proj",
     openclawSessionId: "oc-shared",
+    runtimeId: "oc-main",
   });
   assert.equal(s.state, "active");
   assert.equal(s.mode, "agent");
@@ -57,11 +58,13 @@ test("getOrCreateSession is idempotent on ide+workspace", async () => {
     ide: "vscode",
     workspace: "C:\\w\\proj",
     openclawSessionId: "oc-shared",
+    runtimeId: "oc-main",
   });
   const b = await getOrCreateSession(p, {
     ide: "vscode",
     workspace: "c:/w/proj",
     openclawSessionId: "oc-shared",
+    runtimeId: "oc-main",
   });
   assert.equal(a.id, b.id);
   const list = await listSessions(p);
@@ -71,7 +74,7 @@ test("getOrCreateSession is idempotent on ide+workspace", async () => {
 test("setSessionMode flips agent <-> manual", async () => {
   const dir = await tmp();
   const p = path.join(dir, "sessions.json");
-  const s = await createSession(p, { ide: "cli", workspace: "/tmp", openclawSessionId: "oc" });
+  const s = await createSession(p, { ide: "cli", workspace: "/tmp", openclawSessionId: "oc", runtimeId: "oc-main" });
   await setSessionMode(p, s.id, "manual");
   const list = await listSessions(p);
   assert.equal(list[0]!.mode, "manual");
@@ -80,7 +83,7 @@ test("setSessionMode flips agent <-> manual", async () => {
 test("endSession and resurrectSession toggle state", async () => {
   const dir = await tmp();
   const p = path.join(dir, "sessions.json");
-  const s = await createSession(p, { ide: "cli", workspace: "/tmp", openclawSessionId: "oc" });
+  const s = await createSession(p, { ide: "cli", workspace: "/tmp", openclawSessionId: "oc", runtimeId: "oc-main" });
   await endSession(p, s.id);
   assert.equal((await listSessions(p))[0]!.state, "ended");
   await resurrectSession(p, s.id);
@@ -90,7 +93,7 @@ test("endSession and resurrectSession toggle state", async () => {
 test("renameSession updates displayName only", async () => {
   const dir = await tmp();
   const p = path.join(dir, "sessions.json");
-  const s = await createSession(p, { ide: "cli", workspace: "/tmp", openclawSessionId: "oc" });
+  const s = await createSession(p, { ide: "cli", workspace: "/tmp", openclawSessionId: "oc", runtimeId: "oc-main" });
   await renameSession(p, s.id, "my-name");
   assert.equal((await listSessions(p))[0]!.displayName, "my-name");
 });
@@ -98,7 +101,7 @@ test("renameSession updates displayName only", async () => {
 test("touchSession bumps lastActivityAt and messageCount", async () => {
   const dir = await tmp();
   const p = path.join(dir, "sessions.json");
-  const s = await createSession(p, { ide: "cli", workspace: "/tmp", openclawSessionId: "oc" });
+  const s = await createSession(p, { ide: "cli", workspace: "/tmp", openclawSessionId: "oc", runtimeId: "oc-main" });
   const before = s.lastActivityAt;
   await new Promise((r) => setTimeout(r, 5));
   await touchSession(p, s.id);

@@ -1,8 +1,10 @@
 import { AppShell } from "@/components/app-shell";
 import { AgentTable } from "@/components/agent-table";
+import { CapabilityGate } from "@/components/runtime/capability-gate";
 import { listAgents, listAgentSessions } from "@/lib/bridge-client";
 import { getModelsCatalog } from "@/lib/agent-models-client";
 import { requirePermission } from "@/lib/auth/current-user";
+import { resolveActiveRuntimeId } from "@/lib/runtime-active";
 import type { Agent, AgentSession, ModelDescriptor } from "@openclaw-manager/types";
 
 export const metadata = { title: "Agents" };
@@ -13,8 +15,12 @@ export type AgentActivity = {
   lastUsedAt: number | null;
 };
 
-export default async function AgentsPage() {
+export default async function AgentsPage(props: {
+  searchParams: Promise<{ runtimeId?: string }>;
+}) {
   await requirePermission("agents.view");
+  const sp = await props.searchParams;
+  const runtimeId = await resolveActiveRuntimeId(sp.runtimeId);
   let agents: Agent[] = [];
   let sessions: AgentSession[] = [];
   let modelCatalog: ModelDescriptor[] = [];
@@ -22,7 +28,7 @@ export default async function AgentsPage() {
 
   try {
     const [agentRows, sessionRows, catalog] = await Promise.all([
-      listAgents(),
+      listAgents(runtimeId),
       listAgentSessions().catch(() => [] as AgentSession[]),
       getModelsCatalog().catch(() => ({ models: [] as ModelDescriptor[], status: "unavailable" as const })),
     ]);
@@ -50,12 +56,14 @@ export default async function AgentsPage() {
   return (
     <AppShell title="Agents">
       <div className="content">
-        <AgentTable
-          initial={agents}
-          activity={activity}
-          modelCatalog={modelCatalog}
-          modelCatalogStatus={modelCatalogStatus}
-        />
+        <CapabilityGate runtimeId={runtimeId ?? ""} capabilityId="agents.list">
+          <AgentTable
+            initial={agents}
+            activity={activity}
+            modelCatalog={modelCatalog}
+            modelCatalogStatus={modelCatalogStatus}
+          />
+        </CapabilityGate>
       </div>
     </AppShell>
   );

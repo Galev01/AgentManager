@@ -7,10 +7,38 @@ import type {
   CopilotSessionSnapshot, CopilotMessage, CopilotPendingTurn, BackendKind,
 } from "@openclaw-manager/types";
 
+/**
+ * Resolves a `runtimeId` from a legacy `backend` value. Returns null when no
+ * runtime of the requested kind is configured. Implementations consult the
+ * runtime registry; tests pass an inline stub.
+ */
+export type CopilotBackendToRuntimeResolver = (backend: BackendKind) => Promise<string | null>;
+
+/**
+ * Returns the kind of the runtime named by `runtimeId`. Returns null for
+ * unknown ids. Used to derive the legacy `backend` field on writes that
+ * supply only `runtimeId`.
+ */
+export type CopilotRuntimeToKindResolver = (runtimeId: string) => Promise<BackendKind | null>;
+
 export type CopilotRouterDeps = {
   store: CopilotStore;
   orchestrator: CopilotOrchestrator;
-  backendCreator?: (sessionId: string, ownerUserId: string, backend: BackendKind) => Promise<{ openclawSessionKey?: string }>;
+  /**
+   * Called once after `store.createSession` so the appropriate adapter can
+   * bootstrap backend-side state (e.g. OpenClaw `sessions.create`).
+   */
+  backendCreator?: (sessionId: string, ownerUserId: string, backend: BackendKind, runtimeId: string) => Promise<{ openclawSessionKey?: string }>;
+  /**
+   * Maps legacy `body.backend` → `runtimeId`. Tests typically omit this;
+   * production wires it from the runtime registry.
+   */
+  resolveRuntimeIdForBackend?: CopilotBackendToRuntimeResolver;
+  /**
+   * Validates a body-supplied `runtimeId` and reports its kind. Tests
+   * typically omit this.
+   */
+  resolveKindForRuntimeId?: CopilotRuntimeToKindResolver;
   log?: (event: string, data: Record<string, unknown>) => void;
 };
 
@@ -53,21 +81,61 @@ export function createCopilotRouter(deps: CopilotRouterDeps): ExpressRouter {
     const owner = userId(req);
     if (!owner) { res.status(401).json({ error: "unauthorized" }); return; }
     const body = (req.body ?? {}) as CopilotSessionCreateInput;
-    if (body.backend !== "openclaw" && body.backend !== "hermes") {
-      res.status(400).json({ error: "invalid_backend" });
-      return;
+    const rawRuntimeId = typeof body.runtimeId === "string" && body.runtimeId.length > 0
+      ? body.runtimeId
+      : undefined;
+    const rawBackend = body.backend;
+
+    // Resolve the (runtimeId, backend) pair. `runtimeId` wins when both are
+    // present; otherwise we derive runtimeId from the legacy `backend` value.
+    let runtimeId: string;
+    let backend: BackendKind;
+
+    if (rawRuntimeId) {
+      // Body-supplied runtimeId. Look up its kind for the UI-display alias.
+      let kind: BackendKind | null = null;
+      if (deps.resolveKindForRuntimeId) {
+        kind = await deps.resolveKindForRuntimeId(rawRuntimeId);
+        if (!kind) { res.status(400).json({ error: "unknown_runtime_id", runtimeId: rawRuntimeId }); return; }
+      } else if (rawBackend === "openclaw" || rawBackend === "hermes") {
+        // No registry resolver wired — trust the legacy hint if present.
+        kind = rawBackend;
+      } else {
+        // Without a resolver and without a backend hint, default to openclaw
+        // for back-compat with existing callers.
+        kind = "openclaw";
+      }
+      runtimeId = rawRuntimeId;
+      backend = kind;
+    } else {
+      if (rawBackend !== "openclaw" && rawBackend !== "hermes") {
+        res.status(400).json({ error: "invalid_backend" });
+        return;
+      }
+      backend = rawBackend;
+      if (deps.resolveRuntimeIdForBackend) {
+        const resolved = await deps.resolveRuntimeIdForBackend(rawBackend);
+        if (!resolved) { res.status(400).json({ error: "no_runtime_for_backend", backend: rawBackend }); return; }
+        runtimeId = resolved;
+      } else {
+        // No registry resolver wired — fall back to using the kind as a
+        // synthetic runtime id. Tests that don't care about runtime selection
+        // still see a stable, persistable string.
+        runtimeId = rawBackend;
+      }
     }
+
     const meta = await deps.store.createSession({
-      ownerUserId: owner, backend: body.backend, title: body.title,
+      ownerUserId: owner, runtimeId, backend, title: body.title,
     });
     if (deps.backendCreator) {
-      const boot = await deps.backendCreator(meta.id, owner, body.backend);
+      const boot = await deps.backendCreator(meta.id, owner, backend, runtimeId);
       if (boot.openclawSessionKey) {
         await deps.store.updateMeta(meta.id, { openclawSessionKey: boot.openclawSessionKey });
       }
     }
     const final = (await deps.store.readMeta(meta.id))!;
-    log("session.created", { user: owner, sessionId: final.id, backend: final.backend });
+    log("session.created", { user: owner, sessionId: final.id, backend: final.backend, runtimeId: final.runtimeId });
     res.json(final);
   });
 

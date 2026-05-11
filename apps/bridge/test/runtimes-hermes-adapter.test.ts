@@ -15,9 +15,11 @@ const desc: RuntimeDescriptor = {
 
 function fakeHttp(routes: Record<string, unknown>): HttpClient {
   return {
-    async json(url, _req) {
+    async json(url, req) {
       const path = url.replace(/^https?:\/\/[^/]+/, "");
       if (!(path in routes)) throw new Error(`no fake for ${path}`);
+      const handler = routes[path];
+      if (typeof handler === "function") return (handler as (req: unknown) => unknown)(req);
       return routes[path] as any;
     },
   };
@@ -71,14 +73,76 @@ test("listEntities('agent') returns []", async () => {
   assert.deepEqual(await a.listEntities("agent"), []);
 });
 
-test("invokeAction always returns ok:false in Phase 1", async () => {
-  const a = createHermesAdapter({ descriptor: desc, bearer: "tok", http: fakeHttp({}) });
-  const r = await a.invokeAction({
-    action: "sessions.send",
-    payload: {},
-    actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" },
+test("invokeAction sessions.send calls /v1/chat and returns assistantText", async () => {
+  const a = createHermesAdapter({
+    descriptor: desc,
+    bearer: "tok",
+    http: fakeHttp({
+      "/v1/chat": (req: any) => {
+        assert.deepEqual(req.body, { session_id: "s1", message: "hello" });
+        return { ok: true, assistant_text: "Hello back", session_id: "s1", elapsed_ms: 12 };
+      },
+    }),
   });
+  const r = await a.invokeAction(
+    "sessions.send",
+    { sessionKey: "s1", message: "hello" },
+    { actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" } },
+  );
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    const result = r.nativeResult as { assistantText: string; sessionKey: string; elapsedMs: number };
+    assert.equal(result.assistantText, "Hello back");
+    assert.equal(result.sessionKey, "s1");
+    assert.equal(result.elapsedMs, 12);
+  }
+});
+
+test("invokeAction sessions.send returns ok:false when /v1/chat errors", async () => {
+  const a = createHermesAdapter({
+    descriptor: desc,
+    bearer: "tok",
+    http: { json: async () => { throw new Error("upstream failure"); } },
+  });
+  const r = await a.invokeAction(
+    "sessions.send",
+    { sessionKey: "s1", message: "hello" },
+    { actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" } },
+  );
   assert.equal(r.ok, false);
+  if (!r.ok) {
+    assert.match(r.error, /upstream failure/);
+  }
+});
+
+test("invokeAction surfaces action name in error for any unsupported action", async () => {
+  const a = createHermesAdapter({ descriptor: desc, bearer: "tok", http: fakeHttp({}) });
+  const r = await a.invokeAction(
+    "agents.create",
+    { name: "n", workspace: "w" },
+    { actor: { humanActorUserId: "u", managerServiceId: "m", basis: "service-principal" } },
+  );
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.error, /agents\.create/);
+});
+
+test("getCapabilities static fallback declares new session lifecycle + cron ids unsupported", async () => {
+  const a = createHermesAdapter({
+    descriptor: desc,
+    bearer: "tok",
+    http: { json: async () => { throw new Error("network down"); } },
+  });
+  const caps = await a.getCapabilities();
+  // sessions.send is now supported on Hermes via /v1/chat.
+  assert.ok(caps.supported.includes("sessions.send" as any), "sessions.send should be in supported");
+  // New session lifecycle ids that Hermes does NOT support:
+  for (const action of [
+    "agents.create", "channels.connect", "tools.invoke", "cron.write", "claudeCode.ask",
+    "sessions.create", "sessions.reset", "sessions.abort", "sessions.compact", "sessions.delete",
+    "cron.run", "sessions.usage", "cron.status", "tools.effective",
+  ]) {
+    assert.ok(caps.unsupported.includes(action as any), `${action} should be unsupported`);
+  }
 });
 
 test("health hits /v1/health", async () => {

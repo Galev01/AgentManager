@@ -1,13 +1,33 @@
 import crypto from "node:crypto";
 import type {
-  CopilotMessage, CopilotPendingTurn, BackendKind,
+  CopilotMessage, CopilotPendingTurn, BackendKind, CopilotSessionMeta,
 } from "@openclaw-manager/types";
 import type { ChatBackendAdapter } from "./backend.js";
 import type { CopilotStore } from "./store.js";
 
+/**
+ * Resolves a chat backend for the given session. The orchestrator owns the
+ * session lookup; the host picks the dispatch strategy:
+ *   - new world: look up the runtime adapter by `meta.runtimeId`, route by
+ *     its `kind` (openclaw → openclaw chat backend, hermes → hermes chat
+ *     backend);
+ *   - legacy world: fall back to switching on `meta.backend` (kept here for
+ *     test convenience).
+ */
+export type ChatBackendResolver = (meta: CopilotSessionMeta) => Promise<ChatBackendAdapter> | ChatBackendAdapter;
+
 export type CopilotOrchestratorDeps = {
   store: CopilotStore;
-  backendFor: (kind: BackendKind) => ChatBackendAdapter;
+  /**
+   * Preferred. Receives the full session meta — the resolver can branch on
+   * `runtimeId` (registry lookup) or fall back to `backend` for tests.
+   */
+  resolveBackend?: ChatBackendResolver;
+  /**
+   * Legacy switch-on-kind hook. Kept for back-compat with existing tests.
+   * If both are provided, `resolveBackend` wins.
+   */
+  backendFor?: (kind: BackendKind) => ChatBackendAdapter;
   pendingTimeoutMs?: number;     // default 180_000
   onAudit?: (line: { event: string; data: Record<string, unknown> }) => void;
 };
@@ -33,10 +53,16 @@ export function createCopilotOrchestrator(deps: CopilotOrchestratorDeps): Copilo
     deps.onAudit?.({ event, data });
   }
 
+  async function pickBackend(meta: CopilotSessionMeta): Promise<ChatBackendAdapter> {
+    if (deps.resolveBackend) return deps.resolveBackend(meta);
+    if (deps.backendFor) return deps.backendFor(meta.backend);
+    throw new Error("copilot orchestrator: no backend resolver configured");
+  }
+
   async function dispatch(sessionId: string, msgId: string, userText: string, startedAt: number): Promise<void> {
     const meta = await deps.store.readMeta(sessionId);
     if (!meta) throw new Error(`copilot session not found: ${sessionId}`);
-    const backend = deps.backendFor(meta.backend);
+    const backend = await pickBackend(meta);
 
     await deps.store.writePending(sessionId, { msg_id: msgId, state: "running", startedAt });
 

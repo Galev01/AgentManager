@@ -10,15 +10,17 @@ import messagesRouter from "./routes/messages.js";
 import settingsRouter from "./routes/settings.js";
 import commandsRouter from "./routes/commands.js";
 import gatewayRouter from "./routes/gateway.js";
-import logsRouter from "./routes/logs.js";
+import { createLogsRouter } from "./routes/logs.js";
 import relayRouter from "./routes/relay.js";
 import routingRouter from "./routes/routing.js";
 import composeRouter from "./routes/compose.js";
 import { createAgentsRouter } from "./routes/agents.js";
-import agentSessionsRouter from "./routes/agent-sessions.js";
-import cronRouter from "./routes/cron.js";
-import channelsRouter from "./routes/channels.js";
-import toolsRouter from "./routes/tools.js";
+import { createAgentSessionsRouter } from "./routes/agent-sessions.js";
+import { createCronRouter } from "./routes/cron.js";
+import { createCronStore } from "./services/cron-store.js";
+import { createAgentSessionsIndex } from "./services/agent-sessions-index.js";
+import { createChannelsRouter } from "./routes/channels.js";
+import { createToolsRouter } from "./routes/tools.js";
 import gatewayConfigRouter from "./routes/gateway-config.js";
 import gatewayControlRouter from "./routes/gateway-control.js";
 import brainRouter from "./routes/brain.js";
@@ -33,6 +35,7 @@ import { createAgentModelsRouter } from "./routes/agent-models.js";
 import { createRuntimeRegistry } from "./services/runtimes/registry.js";
 import { realFactories } from "./services/runtimes/factories.js";
 import { createRuntimesRouter } from "./routes/runtimes.js";
+import { createRuntimesHealthRouter } from "./routes/runtimes-health.js";
 import { createRuntimeConfigRouter } from "./routes/runtime-config.js";
 import { createRuntimeConfigService, probeFromRegistry } from "./services/runtime-config.js";
 import { createCopilotRouter } from "./routes/copilot.js";
@@ -42,9 +45,10 @@ import { createOpenclawChatBackend } from "./services/copilot/backends/openclaw.
 import { createHermesChatBackend } from "./services/copilot/backends/hermes.js";
 import { callGateway } from "./services/gateway.js";
 import path from "node:path";
-import { repairOnStartup } from "./services/codebase-reviewer/worker.js";
+import { repairOnStartup, configureCodebaseReviewerWorker } from "./services/codebase-reviewer/worker.js";
 import { scanProjects } from "./services/codebase-reviewer/discovery.js";
 import { repairOnStartup as repairYoutubeOnStartup } from "./services/youtube-worker.js";
+import { configureYoutubeChatWorker } from "./services/youtube-chat-worker.js";
 import { attachWebSocket } from "./ws.js";
 
 const app: Express = express();
@@ -63,14 +67,28 @@ const authService = await createAuthService({
 });
 await authService.ensureSystemRoles();
 
+app.get("/health", (_req, res) => { res.json({ ok: true, uptime: process.uptime() }); });
+
+// Public /auth/* requires service bearer only.
+app.use(bearerAuth);
+app.use(createPublicAuthRouter(authService));
+
+// Multi-runtime control plane. Initialized before the claude-code router so
+// the orchestrator can dispatch through non-OpenClaw adapters. Also mounted
+// before strict actor-assertion so catalog-read route factories below can
+// resolve runtimes through the registry; the requirePerm gate inside each
+// factory router still fires per-request after strict auth.
 const runtimeRegistry = await createRuntimeRegistry({
   configPaths: config.runtimesConfigPaths,
   factories: realFactories,
 });
-const openclawChatBackend = createOpenclawChatBackend({ callGateway });
+const runtimeConfigService = createRuntimeConfigService({
+  configPath: runtimeRegistry.configPath(),
+  probeStatus: probeFromRegistry(runtimeRegistry),
+});
 
-// Hermes is optional. If HERMES_BASE_URL isn't configured, pass null so the
-// factory returns a disabled adapter and the bridge boots cleanly.
+// Shared chat backends for Copilot and Claude Code (e.g. hermes_say on MCP).
+const openclawChatBackend = createOpenclawChatBackend({ callGateway });
 const hermesShimEndpoint = config.hermesEnabled
   ? (process.env.HERMES_SHIM_URL
       ?? (await runtimeRegistry.get("hermes-remote"))?.endpoint
@@ -83,22 +101,34 @@ const hermesChatBackend = hermesShimEndpoint
       token: config.hermesToken ?? null,
     })
   : createHermesChatBackend(null);
-
-app.get("/health", (_req, res) => { res.json({ ok: true, uptime: process.uptime() }); });
-
-// Public /auth/* requires service bearer only.
-app.use(bearerAuth);
-app.use(createPublicAuthRouter(authService));
+console.log(
+  "[bridge] chat backends initialized",
+  JSON.stringify({
+    openclaw: true,
+    hermesEnabled: config.hermesEnabled,
+    hermesShimEndpoint: hermesShimEndpoint ?? null,
+  })
+);
 
 // Claude Code MCP bridge: headless agent traffic carves identity from the
 // request body (ide/workspace/clientId). Actor assertion is optional so the
 // stdio MCP can talk without a user session; dashboard callers still sign and
 // req.auth is populated when they do.
-app.use(actorAssertionAuth(authService, { strict: false }), createClaudeCodeRouter({ hermesChatBackend }));
+app.use(
+  actorAssertionAuth(authService, { strict: false }),
+  createClaudeCodeRouter({
+    registry: runtimeRegistry,
+    runtimeConfig: runtimeConfigService,
+    hermesChatBackend,
+  })
+);
 
 // Strict actor assertion required for authenticated routes.
 app.use(actorAssertionAuth(authService, { strict: true }));
 app.use(createAuthRouter(authService));
+
+configureYoutubeChatWorker({ registry: runtimeRegistry, runtimeConfig: runtimeConfigService });
+configureCodebaseReviewerWorker({ registry: runtimeRegistry, runtimeConfig: runtimeConfigService });
 
 app.use(overviewRouter);
 app.use(conversationsRouter);
@@ -106,17 +136,21 @@ app.use(messagesRouter);
 app.use(settingsRouter);
 app.use(commandsRouter);
 app.use(gatewayRouter);
-app.use(logsRouter);
+app.use(createLogsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 app.use(relayRouter);
 app.use(routingRouter);
 app.use(composeRouter);
-app.use(createAgentsRouter({ callGateway }));
-app.use(createModelsRouter({ callGateway }));
-app.use(createAgentModelsRouter({ callGateway }));
-app.use(agentSessionsRouter);
-app.use(cronRouter);
-app.use(channelsRouter);
-app.use(toolsRouter);
+app.use(createAgentsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+app.use(createModelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+app.use(createAgentModelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+const agentSessionsIndex = createAgentSessionsIndex({
+  filePath: path.join(config.managementDir, "agent-sessions-index.json"),
+});
+app.use(createAgentSessionsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService, agentSessionsIndex }));
+const cronStore = createCronStore({ filePath: path.join(config.managementDir, "cron-jobs.json") });
+app.use(createCronRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService, cronStore }));
+app.use(createChannelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+app.use(createToolsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 app.use(gatewayConfigRouter);
 app.use(gatewayControlRouter);
 app.use(brainRouter);
@@ -130,26 +164,48 @@ app.use(createTelemetryRouter({
   maxDiskMB: config.telemetryMaxDiskMB,
 }));
 
-// Multi-runtime control plane. Mounted AFTER strict actor-assertion so
-// req.auth is populated before the router's requirePerm gate runs, and so the
-// bridge can stamp humanActorUserId from req.auth.user.id instead of trusting
-// the request body.
 app.use(createRuntimesRouter({
   registry: runtimeRegistry,
   managerServiceId: process.env.BRIDGE_SERVICE_ID ?? "bridge-primary",
 }));
-
-const runtimeConfigService = createRuntimeConfigService({
-  configPath: runtimeRegistry.configPath(),
-  probeStatus: probeFromRegistry(runtimeRegistry),
-});
 app.use(createRuntimeConfigRouter({ service: runtimeConfigService }));
+app.use(createRuntimesHealthRouter({
+  registry: runtimeRegistry,
+  runtimeConfig: runtimeConfigService,
+}));
 
 const copilotRoot = path.join(config.managementDir, "copilot");
-const copilotStore = createCopilotStore({ rootDir: copilotRoot });
+
+// Read-time backfill resolver: for legacy meta files written before Phase E
+// (no `runtimeId` field), we map `backend` → first runtime of that kind in
+// the registry, falling back to the effective primary id.
+async function resolveRuntimeIdForCopilotBackend(backend: "openclaw" | "hermes"): Promise<string | null> {
+  const all = await runtimeRegistry.list();
+  const match = all.find((d) => d.kind === backend && (d.enabled ?? true));
+  if (match) return match.id;
+  const snap = await runtimeConfigService.read();
+  return snap.effectivePrimaryRuntimeId ?? null;
+}
+
+const copilotStore = createCopilotStore({
+  rootDir: copilotRoot,
+  resolveRuntimeId: resolveRuntimeIdForCopilotBackend,
+});
 const copilotOrchestrator = createCopilotOrchestrator({
   store: copilotStore,
-  backendFor: (kind) => (kind === "openclaw" ? openclawChatBackend : hermesChatBackend),
+  // Dispatch by runtime kind via registry lookup (Phase E). Falls back to
+  // the legacy `backend` field if the registry has no entry for the
+  // session's runtime — keeps older sessions routable while their on-disk
+  // metadata is still being backfilled.
+  resolveBackend: async (meta) => {
+    if (meta.runtimeId) {
+      const desc = await runtimeRegistry.get(meta.runtimeId);
+      if (desc) {
+        return desc.kind === "hermes" ? hermesChatBackend : openclawChatBackend;
+      }
+    }
+    return meta.backend === "hermes" ? hermesChatBackend : openclawChatBackend;
+  },
   onAudit: ({ event, data }) => console.log(`copilot.${event}`, JSON.stringify(data)),
 });
 app.use(createCopilotRouter({
@@ -158,6 +214,14 @@ app.use(createCopilotRouter({
   backendCreator: async (sessionId, ownerUserId, backend) => {
     const adapter = backend === "openclaw" ? openclawChatBackend : hermesChatBackend;
     return adapter.createSession({ sessionId, ownerUserId });
+  },
+  resolveRuntimeIdForBackend: resolveRuntimeIdForCopilotBackend,
+  resolveKindForRuntimeId: async (runtimeId) => {
+    const desc = await runtimeRegistry.get(runtimeId);
+    if (!desc) return null;
+    if (desc.kind === "openclaw" || desc.kind === "hermes") return desc.kind;
+    // Other kinds (zeroclaw/nanobot) aren't valid copilot backends today.
+    return null;
   },
 }));
 

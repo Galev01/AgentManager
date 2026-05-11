@@ -127,3 +127,106 @@ test("DELETE removes session", async () => {
   assert.equal(get.status, 404);
   a.close();
 });
+
+// --- Phase E: runtimeId migration ----------------------------------------
+
+/**
+ * Boots an app with explicit runtime resolvers wired in. Mimics what the
+ * production server does when it has a registry to consult.
+ */
+async function bootAppWithResolvers(opts: {
+  resolveKindForRuntimeId?: (runtimeId: string) => Promise<"openclaw" | "hermes" | null>;
+  resolveRuntimeIdForBackend?: (backend: "openclaw" | "hermes") => Promise<string | null>;
+}, perms: string[] = ["copilot.chat"], userId = "u1") {
+  const root = await mkdtemp(path.join(tmpdir(), "copilot-rt-"));
+  const store = createCopilotStore({ rootDir: root });
+  const orch = createCopilotOrchestrator({ store, backendFor: () => okBackend });
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    (req as any).auth = { user: { id: userId }, permissions: perms };
+    next();
+  });
+  app.use(createCopilotRouter({
+    store, orchestrator: orch,
+    resolveKindForRuntimeId: opts.resolveKindForRuntimeId,
+    resolveRuntimeIdForBackend: opts.resolveRuntimeIdForBackend,
+  }));
+  const server = http.createServer(app).listen(0);
+  const addr = server.address() as { port: number };
+  return { url: `http://127.0.0.1:${addr.port}`, close: () => server.close() };
+}
+
+test("POST /copilot/sessions accepts runtimeId directly and derives backend", async () => {
+  const a = await bootAppWithResolvers({
+    resolveKindForRuntimeId: async (id) => (id === "oc-main" ? "openclaw" : id === "hermes-prod" ? "hermes" : null),
+  });
+  const r = await fetch(`${a.url}/copilot/sessions`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ runtimeId: "hermes-prod" }),
+  });
+  const body = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(body.runtimeId, "hermes-prod");
+  assert.equal(body.backend, "hermes");
+  a.close();
+});
+
+test("POST /copilot/sessions: runtimeId wins when both runtimeId and backend present", async () => {
+  const a = await bootAppWithResolvers({
+    resolveKindForRuntimeId: async (id) => (id === "oc-main" ? "openclaw" : id === "hermes-prod" ? "hermes" : null),
+  });
+  const r = await fetch(`${a.url}/copilot/sessions`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ runtimeId: "hermes-prod", backend: "openclaw" }),
+  });
+  const body = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(body.runtimeId, "hermes-prod");
+  assert.equal(body.backend, "hermes"); // derived from runtime kind, not body.backend
+  a.close();
+});
+
+test("POST /copilot/sessions: legacy backend-only path resolves runtimeId via registry", async () => {
+  const a = await bootAppWithResolvers({
+    resolveRuntimeIdForBackend: async (backend) => (backend === "openclaw" ? "oc-main" : "hermes-prod"),
+  });
+  const r = await fetch(`${a.url}/copilot/sessions`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ backend: "openclaw" }),
+  });
+  const body = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(body.runtimeId, "oc-main");
+  assert.equal(body.backend, "openclaw");
+  a.close();
+});
+
+test("POST /copilot/sessions returns 400 for unknown runtimeId when resolver is wired", async () => {
+  const a = await bootAppWithResolvers({
+    resolveKindForRuntimeId: async () => null,
+  });
+  const r = await fetch(`${a.url}/copilot/sessions`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ runtimeId: "bogus" }),
+  });
+  const body = await r.json();
+  assert.equal(r.status, 400);
+  assert.equal(body.error, "unknown_runtime_id");
+  a.close();
+});
+
+test("POST /copilot/sessions: legacy backend path persists synthetic runtimeId when no resolver wired", async () => {
+  // Default test bootApp wires neither resolver — the route should still
+  // accept legacy `backend` and persist a stable `runtimeId` (= the kind).
+  const a = await bootApp(["copilot.chat"]);
+  const r = await fetch(`${a.url}/copilot/sessions`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ backend: "openclaw" }),
+  });
+  const body = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(body.runtimeId, "openclaw");
+  assert.equal(body.backend, "openclaw");
+  a.close();
+});

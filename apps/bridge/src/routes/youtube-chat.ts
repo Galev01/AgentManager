@@ -55,8 +55,10 @@ router.post("/youtube/chat/:videoId", async (req: Request, res: Response) => {
       createdAt: new Date().toISOString(),
       status: "complete",
     };
+    const runtimeId = typeof req.body?.runtimeId === "string" ? req.body.runtimeId : undefined;
+    const agentName = typeof req.body?.agentName === "string" ? req.body.agentName : undefined;
     await appendChatRow(userRow);
-    enqueueChatJob({ videoId, chatSessionId, userRow, assistantRowId });
+    enqueueChatJob({ videoId, chatSessionId, userRow, assistantRowId, runtimeId, agentName });
     res.status(202).json({ ok: true, videoId, chatSessionId, queued: true });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err?.message || "failed" });

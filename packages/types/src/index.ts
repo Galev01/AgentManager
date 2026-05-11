@@ -310,6 +310,10 @@ export type ReviewProject = {
   lastError: string | null;
   missing?: boolean;
   adhoc?: boolean;
+  /** Runtime to use for AI review sessions. Defaults to the primary runtime. */
+  runtimeId?: string;
+  /** Agent to use for AI review sessions. Defaults to config.reviewerAgent. */
+  agentName?: string;
 };
 
 export type ReviewerState = {
@@ -465,7 +469,29 @@ export type ClaudeCodeSession = {
   clientId?: string;
   mode: ClaudeCodeSessionMode;
   state: ClaudeCodeSessionState;
+  /**
+   * Runtime that backs this Claude Code session — used by the bridge to
+   * route /claude-code/ask through the right adapter. Required on
+   * records written from Phase D onward; legacy records get backfilled
+   * from the runtime-config primary at read time and committed on next
+   * write. Sessions without runtimeId implicitly default to "openclaw"
+   * at use-time for back-compat.
+   */
+  runtimeId: string;
+  /**
+   * Agent name to use when dispatching through a non-OpenClaw adapter.
+   * Absent for OpenClaw sessions (those use the bridge config's
+   * claudeCodeOpenclawAgentId instead).
+   */
+  agentName?: string;
   openclawSessionId: string;
+  /**
+   * Opaque runtime-native session key allocated by the adapter on the
+   * first turn of a non-OpenClaw session (via sessions.create). Reused
+   * on subsequent turns so the adapter can maintain conversation state.
+   * Absent for OpenClaw sessions (those use openclawSessionId instead).
+   */
+  runtimeSessionKey?: string;
   createdAt: string;
   lastActivityAt: string;
   messageCount: number;
@@ -531,6 +557,13 @@ export type ClaudeCodeAskRequest = {
   priority?: CCPriority;
   refs?: CCRef[];
   parentMsgId?: string;
+  /**
+   * Runtime hint for new sessions — e.g. forwarded from the MCP server's
+   * OPENCLAW_RUNTIME_ID env var. Honored only when the session does not
+   * already exist; existing sessions always use their stored runtimeId.
+   * If absent, new sessions inherit the bridge primary runtime.
+   */
+  runtimeId?: string;
 };
 
 export type ClaudeCodeAskResponse = {
@@ -632,7 +665,9 @@ export type YoutubeChatMessageRow = {
   presetId?: YoutubePromptPresetId;
   parentMessageId?: string;
   retrievedChunkIds?: string[];
-  openclawSessionKey?: string;
+  openclawSessionKey?: string;        // back-compat; mirrored from runtimeSessionKey when runtime=openclaw
+  runtimeSessionKey?: string;
+  runtimeId?: string;
   status: "streaming" | "complete" | "error";
   errorMessage?: string;
 };
@@ -640,7 +675,10 @@ export type YoutubeChatMessageRow = {
 export type YoutubeChatMetaFile = {
   videoId: string;
   chatSessionId: string;
-  openclawSessionKey?: string;
+  openclawSessionKey?: string;        // back-compat; mirrored from runtimeSessionKey when runtime=openclaw
+  runtimeSessionKey?: string;
+  runtimeId?: string;
+  agentName?: string;
   lastReplayedAt?: string;
   distilledMemory?: string;
 };
