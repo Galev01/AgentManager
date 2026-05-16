@@ -1,12 +1,38 @@
+import json
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, tmp_path):
     monkeypatch.setenv("HERMES_SHIM_TOKEN", "secret")
+    monkeypatch.setenv("HERMES_SESSIONS_DIR", str(tmp_path))
     from hermes_shim.server import app
     return TestClient(app)
+
+
+@pytest.fixture
+def sessions_dir(monkeypatch, tmp_path):
+    monkeypatch.setenv("HERMES_SHIM_TOKEN", "secret")
+    monkeypatch.setenv("HERMES_SESSIONS_DIR", str(tmp_path))
+    return tmp_path
+
+
+def _write_session(dirpath, session_id, messages, started="2026-05-16T10:00:00",
+                   updated="2026-05-16T10:05:00", model="gpt-5.5", system_prompt="be terse"):
+    path = os.path.join(str(dirpath), f"session_{session_id}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({
+            "session_id": session_id,
+            "model": model,
+            "session_start": started,
+            "last_updated": updated,
+            "system_prompt": system_prompt,
+            "messages": messages,
+        }, f)
+    return path
 
 
 def test_health_requires_bearer(client):
@@ -44,15 +70,65 @@ def test_sessions_list_requires_auth(client):
     assert r.status_code == 401
 
 
-def test_sessions_list_phase1_stub_returns_empty(client):
+def test_sessions_list_empty_when_no_files(client):
     r = client.get("/v1/sessions", headers={"authorization": "Bearer secret"})
     assert r.status_code == 200
     assert r.json() == []
 
 
-def test_session_detail_phase1_stub_returns_404(client):
-    r = client.get("/v1/sessions/anything", headers={"authorization": "Bearer secret"})
+def test_sessions_list_reads_native_files(sessions_dir, monkeypatch):
+    monkeypatch.setenv("HERMES_SHIM_TOKEN", "secret")
+    _write_session(sessions_dir, "20260516_104201_5d5639", [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "hey"},
+    ])
+    _write_session(sessions_dir, "20260516_134825_edfc95", [
+        {"role": "user", "content": "P locked"},
+    ], started="2026-05-16T13:48:25", updated="2026-05-16T13:50:00")
+
+    from hermes_shim.server import app
+    c = TestClient(app)
+    r = c.get("/v1/sessions", headers={"authorization": "Bearer secret"})
+    assert r.status_code == 200
+    rows = r.json()
+    assert len(rows) == 2
+    # newest first
+    assert rows[0]["id"] == "20260516_134825_edfc95"
+    assert rows[0]["messageCount"] == 1
+    assert rows[0]["model"] == "gpt-5.5"
+    assert isinstance(rows[0]["lastActivityAt"], int)
+    assert rows[1]["id"] == "20260516_104201_5d5639"
+    assert rows[1]["messageCount"] == 2
+
+
+def test_session_detail_404_when_missing(client):
+    r = client.get("/v1/sessions/nope", headers={"authorization": "Bearer secret"})
     assert r.status_code == 404
+
+
+def test_session_detail_returns_messages(sessions_dir):
+    _write_session(sessions_dir, "abc123", [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": [{"type": "text", "text": "world"}]},
+    ])
+    from hermes_shim.server import app
+    c = TestClient(app)
+    r = c.get("/v1/sessions/abc123", headers={"authorization": "Bearer secret"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["summary"]["id"] == "abc123"
+    assert body["summary"]["messageCount"] == 2
+    assert body["systemPrompt"] == "be terse"
+    assert body["messages"][0]["role"] == "user"
+    assert body["messages"][0]["text"] == "hello"
+    assert body["messages"][1]["role"] == "assistant"
+    assert body["messages"][1]["text"] == "world"
+
+
+def test_session_detail_rejects_traversal(client):
+    r = client.get("/v1/sessions/..%2Fetc", headers={"authorization": "Bearer secret"})
+    # FastAPI decodes path param; ensure either 400 or 404, never a 200.
+    assert r.status_code in (400, 404)
 
 
 def test_skills_list_phase1_stub_returns_empty(client):

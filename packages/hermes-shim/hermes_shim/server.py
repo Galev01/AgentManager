@@ -1,8 +1,8 @@
 """FastAPI app for the Hermes shim.
 
-Phase A1 entity endpoints (sessions/skills/activity) remain stubbed (return []
-and 404) until they are reimplemented against native sources
-(~/.hermes/sessions/*.json, hermes sessions export, state.db, ~/.hermes/logs).
+Phase A3 implements /v1/sessions (list) and /v1/sessions/{id} (detail)
+against the native Hermes session store at ~/.hermes/sessions/session_*.json.
+Skills and activity remain stubbed.
 
 Phase A2 added /v1/chat: dispatches a single user turn through `hermes -z`
 in oneshot mode with a stable session id (`--continue <session_id>`) so
@@ -10,10 +10,13 @@ Hermes maintains conversation memory across turns. Default model + provider
 are configurable via env (HERMES_MODEL / HERMES_PROVIDER); falls back to
 gpt-5.5 + openai-codex (verified working on 2026-05-06).
 """
+import glob
+import json
 import os
 import shutil
 import subprocess
 import time
+from datetime import datetime
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -77,15 +80,142 @@ def capabilities(_: None = Depends(require_bearer)) -> dict[str, Any]:
     }
 
 
-# Phase-1 stubs.
+def _sessions_dir() -> str:
+    return os.environ.get(
+        "HERMES_SESSIONS_DIR",
+        os.path.expanduser("~/.hermes/sessions"),
+    )
+
+
+def _iso_to_epoch_ms(value: Any) -> int | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        # Hermes writes naive ISO timestamps in local time.
+        dt = datetime.fromisoformat(value)
+        return int(dt.timestamp() * 1000)
+    except ValueError:
+        return None
+
+
+def _list_session_files() -> list[str]:
+    pattern = os.path.join(_sessions_dir(), "session_*.json")
+    return sorted(glob.glob(pattern))
+
+
+def _project_session_summary(path: str) -> dict[str, Any] | None:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    session_id = data.get("session_id")
+    if not isinstance(session_id, str) or not session_id:
+        # Fall back to filename stem.
+        base = os.path.basename(path)
+        session_id = base[len("session_") : -len(".json")] if base.startswith("session_") else base
+
+    messages = data.get("messages") if isinstance(data.get("messages"), list) else []
+    started_at = _iso_to_epoch_ms(data.get("session_start"))
+    last_activity_at = _iso_to_epoch_ms(data.get("last_updated")) or started_at
+
+    return {
+        "id": session_id,
+        "displayName": session_id,
+        "startedAt": started_at,
+        "lastActivityAt": last_activity_at,
+        "messageCount": len(messages),
+        "model": data.get("model") if isinstance(data.get("model"), str) else None,
+    }
+
+
+def _extract_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                # Common shapes: {type: "text", text: "..."} / {type: "input_text", text: "..."}
+                txt = item.get("text") or item.get("content")
+                if isinstance(txt, str):
+                    parts.append(txt)
+        return "\n".join(parts)
+    if content is None:
+        return ""
+    return json.dumps(content, ensure_ascii=False)
+
+
+def _normalize_role(role: Any) -> str:
+    if isinstance(role, str) and role in ("user", "assistant", "system", "tool"):
+        return role
+    return "unknown"
+
+
 @app.get("/v1/sessions")
 def sessions_list(_: None = Depends(require_bearer)) -> list[Any]:
-    return []
+    out: list[dict[str, Any]] = []
+    for path in _list_session_files():
+        summary = _project_session_summary(path)
+        if summary is not None:
+            out.append(summary)
+    # Most recent first.
+    out.sort(key=lambda s: s.get("lastActivityAt") or 0, reverse=True)
+    return out
 
 
 @app.get("/v1/sessions/{session_id}")
 def session_detail(session_id: str, _: None = Depends(require_bearer)) -> dict[str, Any]:
-    raise HTTPException(status_code=404, detail="session not found (Phase-1 stub)")
+    # session_id may include directory traversal characters — guard.
+    if "/" in session_id or "\\" in session_id or ".." in session_id:
+        raise HTTPException(status_code=400, detail="invalid session_id")
+    # Hermes file naming: session_<id>.json. The chat() endpoint accepts an
+    # arbitrary client-supplied session_id, but the native file is named after
+    # whatever the CLI wrote — so try both the bare id and the session_ prefix.
+    candidates = [
+        os.path.join(_sessions_dir(), f"session_{session_id}.json"),
+        os.path.join(_sessions_dir(), f"{session_id}.json"),
+    ]
+    path = next((p for p in candidates if os.path.exists(p)), None)
+    if path is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        raise HTTPException(status_code=500, detail=f"failed to read session: {e}")
+
+    raw_messages = data.get("messages") if isinstance(data.get("messages"), list) else []
+    messages: list[dict[str, Any]] = []
+    for idx, m in enumerate(raw_messages):
+        if not isinstance(m, dict):
+            continue
+        messages.append({
+            "index": idx,
+            "role": _normalize_role(m.get("role")),
+            "text": _extract_text(m.get("content")),
+            "contentType": "text",
+        })
+
+    summary = _project_session_summary(path) or {
+        "id": session_id,
+        "displayName": session_id,
+        "startedAt": None,
+        "lastActivityAt": None,
+        "messageCount": len(messages),
+        "model": data.get("model") if isinstance(data.get("model"), str) else None,
+    }
+    summary["messageCount"] = len(messages)
+
+    system_prompt = data.get("system_prompt") if isinstance(data.get("system_prompt"), str) else None
+
+    return {
+        "summary": summary,
+        "systemPrompt": system_prompt,
+        "messages": messages,
+    }
 
 
 @app.get("/v1/skills")

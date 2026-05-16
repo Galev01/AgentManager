@@ -114,6 +114,50 @@ export type RuntimeEntity = {
   nativeRef?: JsonValue;           // verbatim runtime payload, for debugging + lossiness inspection
 };
 
+export type RuntimeSessionListItem = {
+  runtimeId: string;
+  runtimeKind: RuntimeKind;
+  sessionId: string;
+  displayName: string;
+  startedAt?: number;       // epoch ms
+  lastActivityAt?: number;  // epoch ms
+  messageCount?: number;
+  model?: string | null;
+  agentId?: string | null;
+  metadata?: Record<string, JsonValue>;
+};
+
+export type RuntimeSessionMessage = {
+  id?: string;
+  index?: number;
+  role: "user" | "assistant" | "system" | "tool" | "unknown";
+  text: string;
+  at?: number;              // epoch ms
+  contentType?: "text" | "markdown" | "json" | "unknown";
+  model?: string;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheCreateTokens?: number;
+  };
+  toolName?: string;
+  metadata?: Record<string, JsonValue>;
+};
+
+export type RuntimeSessionDetail = {
+  list: RuntimeSessionListItem;
+  systemPrompt?: string | null;
+  messages: RuntimeSessionMessage[];
+  totals?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheCreateTokens?: number;
+  };
+  metadata?: Record<string, JsonValue>;
+};
+
 export type RuntimeActivityEvent = {
   runtimeKind: RuntimeKind;
   runtimeId: string;
@@ -261,4 +305,15 @@ export interface RuntimeAdapter {
    * as not supporting any read capability beyond listEntities.
    */
   read?(capabilityId: RuntimeReadCapabilityId, params?: JsonValue): Promise<JsonValue>;
+  /**
+   * Optional rich session surface. Returns the runtime's conversation
+   * sessions in a normalized shape suitable for the dashboard's Claude
+   * Code / agent conversation page. Adapters that implement this become
+   * the source of truth for transcript content under their runtimeId.
+   * Adapters that omit it are treated as having no session view (the
+   * bridge falls back to its legacy openclaw ledger for runtime kind
+   * "openclaw"). Throw or return null/[] for unsupported.
+   */
+  listSessions?(): Promise<RuntimeSessionListItem[]>;
+  getSessionDetail?(sessionId: string): Promise<RuntimeSessionDetail | null>;
 }

@@ -11,15 +11,17 @@
  * async/fire-and-forget mode. Callers that request fire-and-forget
  * (awaitCompletion=false) will still receive assistantText — they may ignore it.
  */
+import crypto from "node:crypto";
 import type {
   RuntimeAdapter, RuntimeActivityEvent,
   RuntimeActionId, RuntimeActionPayload, RuntimeActionContext, RuntimeActionResult,
   RuntimeAuthMode, CapabilitySnapshot, RuntimeEntity, RuntimeEntityKind,
+  RuntimeSessionListItem, RuntimeSessionDetail, RuntimeSessionMessage,
 } from "@openclaw-manager/types";
 import { ADAPTER_CONTRACT_VERSION, defaultHttp, type AdapterConfig } from "./adapter-base.js";
 
 const STATIC_CAPS = {
-  supported: ["sessions.list", "sessions.read", "skills.list", "sessions.send"] as const,
+  supported: ["sessions.list", "sessions.read", "skills.list", "sessions.send", "sessions.create"] as const,
   partial: [{
     id: "logs.tail" as const,
     reason: "lines-only projection of /v1/activity",
@@ -41,7 +43,7 @@ const STATIC_CAPS = {
     "tools.invoke",
     "cron.write", "cron.delete", "cron.run",
     "claudeCode.ask",
-    "sessions.create", "sessions.reset", "sessions.abort", "sessions.compact", "sessions.delete",
+    "sessions.reset", "sessions.abort", "sessions.compact", "sessions.delete",
     "memory.write",
     "skills.install",
     "config.set",
@@ -61,12 +63,18 @@ export function createHermesAdapter(cfg: AdapterConfig): RuntimeAdapter {
     async describeRuntime() { return descriptor; },
 
     async getCapabilities(): Promise<CapabilitySnapshot> {
+      // Capabilities the adapter implements locally, regardless of what the shim reports.
+      const adapterOwned = ["sessions.create"] as const;
       try {
         const live = await get("/v1/capabilities") as any;
+        const liveSupported: string[] = live.supported ?? [];
+        const liveUnsupported: string[] = (live.unsupported ?? []).filter(
+          (c: string) => !adapterOwned.includes(c as typeof adapterOwned[number])
+        );
         return {
-          supported: live.supported ?? [],
+          supported: [...new Set([...liveSupported, ...adapterOwned])] as unknown as CapabilitySnapshot["supported"],
           partial: live.partial ?? [],
-          unsupported: live.unsupported ?? [],
+          unsupported: liveUnsupported as unknown as CapabilitySnapshot["unsupported"],
           version: ADAPTER_CONTRACT_VERSION,
           source: "runtime-reported",
           stale: false,
@@ -148,6 +156,13 @@ export function createHermesAdapter(cfg: AdapterConfig): RuntimeAdapter {
       payload: RuntimeActionPayload[A],
       _context: RuntimeActionContext,
     ): Promise<RuntimeActionResult> {
+      if (action === "sessions.create") {
+        // Hermes creates sessions implicitly on first /v1/chat call.
+        // Generate a stable key; the shim initialises the session on first send.
+        const key = `hermes-${crypto.randomBytes(8).toString("hex")}`;
+        return { ok: true, nativeResult: { key }, projectionMode: "exact" };
+      }
+
       if (action === "sessions.send") {
         const p = payload as RuntimeActionPayload["sessions.send"];
         const started = Date.now();
@@ -200,6 +215,68 @@ export function createHermesAdapter(cfg: AdapterConfig): RuntimeAdapter {
     },
 
     async getExtensions() { return ["sessions", "skills", "activity"]; },
+
+    async listSessions(): Promise<RuntimeSessionListItem[]> {
+      const rows = (await get("/v1/sessions")) as Array<{
+        id?: string;
+        displayName?: string;
+        startedAt?: number;
+        lastActivityAt?: number;
+        messageCount?: number;
+        model?: string | null;
+      }>;
+      return rows.map((r) => ({
+        runtimeId: descriptor.id,
+        runtimeKind: "hermes" as const,
+        sessionId: String(r.id ?? ""),
+        displayName: String(r.displayName ?? r.id ?? ""),
+        startedAt: typeof r.startedAt === "number" ? r.startedAt : undefined,
+        lastActivityAt: typeof r.lastActivityAt === "number" ? r.lastActivityAt : undefined,
+        messageCount: typeof r.messageCount === "number" ? r.messageCount : undefined,
+        model: r.model ?? null,
+        agentId: null,
+      }));
+    },
+
+    async getSessionDetail(sessionId: string): Promise<RuntimeSessionDetail | null> {
+      let body: any;
+      try {
+        body = await get(`/v1/sessions/${encodeURIComponent(sessionId)}`, 10_000);
+      } catch (e) {
+        // Adapter contract: return null on missing; rethrow on other errors.
+        const msg = (e as Error).message ?? "";
+        if (/\b404\b/.test(msg) || /not found/i.test(msg)) return null;
+        throw e;
+      }
+      const summary = body?.summary ?? {};
+      const list: RuntimeSessionListItem = {
+        runtimeId: descriptor.id,
+        runtimeKind: "hermes",
+        sessionId: String(summary.id ?? sessionId),
+        displayName: String(summary.displayName ?? summary.id ?? sessionId),
+        startedAt: typeof summary.startedAt === "number" ? summary.startedAt : undefined,
+        lastActivityAt: typeof summary.lastActivityAt === "number" ? summary.lastActivityAt : undefined,
+        messageCount: typeof summary.messageCount === "number" ? summary.messageCount : undefined,
+        model: summary.model ?? null,
+        agentId: null,
+      };
+      const rawMessages: any[] = Array.isArray(body?.messages) ? body.messages : [];
+      const messages: RuntimeSessionMessage[] = rawMessages.map((m, idx) => ({
+        index: typeof m?.index === "number" ? m.index : idx,
+        role: ((): RuntimeSessionMessage["role"] => {
+          const r = m?.role;
+          if (r === "user" || r === "assistant" || r === "system" || r === "tool") return r;
+          return "unknown";
+        })(),
+        text: typeof m?.text === "string" ? m.text : "",
+        contentType: m?.contentType ?? "text",
+      }));
+      return {
+        list,
+        systemPrompt: typeof body?.systemPrompt === "string" ? body.systemPrompt : null,
+        messages,
+      };
+    },
 
     async health() {
       try {

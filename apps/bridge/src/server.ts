@@ -29,6 +29,7 @@ import youtubeRouter from "./routes/youtube.js";
 import youtubeChatRouter from "./routes/youtube-chat.js";
 import youtubeRebuildRouter from "./routes/youtube-rebuild.js";
 import { createClaudeCodeRouter } from "./routes/claude-code.js";
+import { createRuntimeSessionsRouter } from "./routes/runtime-sessions.js";
 import { createTelemetryRouter } from "./routes/telemetry.js";
 import { createModelsRouter } from "./routes/models.js";
 import { createAgentModelsRouter } from "./routes/agent-models.js";
@@ -114,6 +115,7 @@ app.use(relayRouter);
 app.use(routingRouter);
 app.use(composeRouter);
 app.use(createAgentsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
+app.use(createRuntimeSessionsRouter({ registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 app.use(createModelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 app.use(createAgentModelsRouter({ callGateway, registry: runtimeRegistry, runtimeConfig: runtimeConfigService }));
 const agentSessionsIndex = createAgentSessionsIndex({
