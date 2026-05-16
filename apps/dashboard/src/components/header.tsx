@@ -5,9 +5,7 @@ import { AutoRefresh } from "./auto-refresh";
 import { GatewayStatus } from "./gateway-status";
 import { Icons } from "./icons";
 import { RuntimeSelector } from "./runtime/runtime-selector";
-import { ThemeSwitcher } from "./theme-switcher";
 
-// Static health-strip items for Task 1 (real data wired in Task 2)
 type PillStatus = "ok" | "warn" | "err" | "checking";
 
 interface HealthItem {
@@ -22,10 +20,10 @@ const STATIC_HEALTH: HealthItem[] = [
 
 function HealthStrip() {
   return (
-    <div className="health">
+    <div className="v2-health">
       {STATIC_HEALTH.map((item) => (
-        <div key={item.label} className={`health-pill ${item.status}`} title={item.label}>
-          <span className="dot" />
+        <div key={item.label} className="v2-health-pill" title={item.label}>
+          <span className={`v2-dot v2-dot-${item.status === "checking" ? "off" : item.status}`} />
           <span>{item.label}</span>
         </div>
       ))}
@@ -33,7 +31,6 @@ function HealthStrip() {
   );
 }
 
-// Single source of pathname truth — consolidates usePathname() calls
 const SECTION_FOR: Record<string, string> = {
   "": "Monitor",
   "claude-code": "Monitor",
@@ -75,7 +72,7 @@ function useNavState() {
   return { crumbs, isHome, isRoot, parentPath };
 }
 
-export function Header({ title }: { title: string }) {
+export function Header({ title: _title }: { title: string }) {
   const router = useRouter();
   const { crumbs, isHome, isRoot, parentPath } = useNavState();
 
@@ -86,57 +83,39 @@ export function Header({ title }: { title: string }) {
   };
 
   return (
-    <header className="hd">
-      {/* Back / Home nav buttons */}
+    <header className="v2-hd">
       {!isHome && (
-        <button className="hd-btn" onClick={() => router.push("/")} title="Go home">
+        <button className="v2-hd-btn" onClick={() => router.push("/")} title="Go home">
           <Icons.home />
         </button>
       )}
       {!isHome && !isRoot && (
-        <button className="hd-btn" onClick={() => router.push(parentPath)} title="Go back">
-          <span className="rotate-180 inline-flex"><Icons.right /></span>
+        <button className="v2-hd-btn" onClick={() => router.push(parentPath)} title="Go back">
+          <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}><Icons.right /></span>
         </button>
       )}
 
-      {/* Breadcrumbs */}
-      <div className="hd-crumb">
+      <div className="v2-hd-crumb">
         {crumbs.map((crumb, i) => (
           <span key={i} style={{ display: "contents" }}>
-            {i > 0 && <span className="sep">/</span>}
-            <span
-              style={{
-                color: i === crumbs.length - 1 ? "var(--text)" : undefined,
-                fontWeight: i === crumbs.length - 1 ? 600 : undefined,
-              }}
-            >
-              {crumb}
-            </span>
+            {i > 0 && <span className="v2-hd-crumb-sep">/</span>}
+            <span className={i === crumbs.length - 1 ? "v2-hd-crumb-cur" : undefined}>{crumb}</span>
           </span>
         ))}
       </div>
 
-      <div className="hd-spacer" />
+      <div className="v2-hd-spacer" />
 
-      {/* Health strip (static — Task 2 will wire real data) */}
       <HealthStrip />
 
-      {/* Active-runtime selector (Phase F) */}
       <Suspense fallback={null}>
         <RuntimeSelector />
       </Suspense>
 
-      {/* Gateway status (existing component kept) */}
       <GatewayStatus />
-
-      {/* AutoRefresh (existing, preserved) */}
       <AutoRefresh />
 
-      {/* Theme switcher */}
-      <ThemeSwitcher />
-
-      {/* Logout */}
-      <button className="hd-btn" onClick={handleLogout} title="Logout">
+      <button className="v2-hd-btn" onClick={handleLogout} title="Logout">
         <Icons.x />
         <span>Logout</span>
       </button>

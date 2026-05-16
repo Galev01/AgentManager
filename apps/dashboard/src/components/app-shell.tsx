@@ -15,18 +15,11 @@ export async function AppShell({ title, children }: { title: string; children: R
     decisionCount > 0 ? { claude_code: decisionCount } : {};
   return (
     <PermissionProvider permissions={permissions}>
-      <div
-        className="app"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "var(--sb-w) 1fr",
-          minHeight: "100vh",
-        }}
-      >
+      <div className="v2-app">
         <Sidebar badges={badges} currentUser={currentUser} permissions={permissions} />
-        <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+        <div className="v2-main">
           <Header title={title} />
-          <main style={{ flex: 1 }}>{children}</main>
+          <main className="v2-content">{children}</main>
         </div>
         <CopilotLauncher defaultBackend={currentUser?.preferences?.copilot?.defaultBackend ?? "openclaw"} />
       </div>

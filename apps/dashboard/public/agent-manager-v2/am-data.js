@@ -1,0 +1,96 @@
+window.AM_DATA = {
+  system: {
+    gateway: { status: "ok",   label: "gateway",  detail: "127.0.0.1:7321 · 38ms" },
+    bridge:  { status: "ok",   label: "bridge",   detail: "3 sessions healthy" },
+    relay:   { status: "warn", label: "yt-relay", detail: "rate-limit backoff 30s" },
+    llm:     { status: "ok",   label: "llm",      detail: "claude-sonnet-4.5" },
+  },
+
+  overview: {
+    inbox: 4,
+    pending: [
+      { id: "rv_01JH8F", agent: "concierge",   who: "+1 415 ••• 7782",  snippet: "send me the new pricing doc when you get a sec", flags: "PII · pricing" },
+      { id: "rv_01JH8G", agent: "support_hub", who: "Dario (Patreon)",   snippet: "is the v2 webhook actually stable yet?",         flags: "uncertain" },
+      { id: "rv_01JH8H", agent: "concierge",   who: "+49 170 ••• 4419",  snippet: "can you book a 30min with karan tuesday",         flags: "calendar action" },
+      { id: "rv_01JH8J", agent: "yt_mod",      who: "youtube:@kz-live", snippet: "mod this user? theyre spamming the live chat",    flags: "moderation" },
+    ],
+    stats: [
+      { label: "Active Sessions", value: "2",      sub: "+1 since yesterday", spark: [3,3,2,2,3,2,2,1,2,2,2], unit: null },
+      { label: "Msgs / 24h",      value: "1,284",  sub: "+18.2%",             spark: [20,34,44,51,30,48,66,71,58,63,80], unit: null },
+      { label: "Reply p95",       value: "4.8",    sub: "−0.4s faster",       spark: [6,5.5,5.8,5.2,4.9,5,4.7,4.8,4.9,4.8,4.8], unit: "s" },
+      { label: "Agent Uptime",    value: "99.6",   sub: "7d · 1 incident",    spark: [100,100,99,100,100,98,100,100,100,100,100], unit: "%" },
+    ],
+    activity: [
+      { t: "14:42:03", lv: "i", msg: "agent=<b>concierge</b> received msg from <b>+14155551234</b>" },
+      { t: "14:42:03", lv: "o", msg: "router matched <b>inbound.dm</b> → concierge" },
+      { t: "14:42:04", lv: "i", msg: "tool call <b>brain.lookup</b>(phone=…7782) hit=1" },
+      { t: "14:42:05", lv: "o", msg: "llm=<b>sonnet-4.5</b> tokens=in:412 out:98 lat=1.2s" },
+      { t: "14:42:06", lv: "o", msg: "reply sent <b>wamid.HBgN…0A</b> delivered ✓" },
+      { t: "14:42:12", lv: "w", msg: "yt-relay: <b>quotaExceeded</b> backing off 30s" },
+      { t: "14:42:21", lv: "o", msg: "session=<b>wa.kz.main</b> heartbeat ok (38ms)" },
+      { t: "14:42:27", lv: "i", msg: "review <b>rv_01JH8G</b> created (uncertain · support_hub)" },
+    ],
+  },
+
+  conversations: [
+    { id:"c1", name:"Maya Rhen",        phone:"+1 415 ••• 7782",  at:"now", snippet:"send me the new pricing doc",        color:"oklch(0.68 0.14 20)",  av:"MR", unread:2, agent:"concierge",   review:true  },
+    { id:"c2", name:"Dario (Patreon)",  phone:"+44 7911 ••• 229", at:"2m",  snippet:"is the v2 webhook stable yet?",      color:"oklch(0.72 0.14 150)", av:"DP", unread:1, agent:"support_hub"              },
+    { id:"c3", name:"Jonas Eber",       phone:"+49 170 ••• 4419", at:"6m",  snippet:"can you book a 30min tuesday",       color:"oklch(0.65 0.15 280)", av:"JE", unread:0, agent:"concierge"                },
+    { id:"c4", name:"@kz-live (YT)",    phone:"youtube superchat",at:"11m", snippet:"mod this user? spamming",            color:"oklch(0.66 0.18 30)",  av:"YT", unread:0, agent:"yt_mod"                   },
+    { id:"c5", name:"Karan (self)",     phone:"+1 628 ••• 0041",  at:"34m", snippet:"remind me to push the deployment",  color:"oklch(0.70 0.12 240)", av:"KV", unread:0, agent:"concierge"                },
+    { id:"c6", name:"Elena Vasquez",    phone:"+34 612 ••• 5580", at:"1h",  snippet:"ok that worked, one more q",        color:"oklch(0.72 0.15 85)",  av:"EV", unread:0, agent:"support_hub"              },
+    { id:"c7", name:"Noah Liang",       phone:"+65 9123 ••• 004", at:"2h",  snippet:"circle back tomorrow?",             color:"oklch(0.68 0.14 200)", av:"NL", unread:0, agent:"concierge"                },
+    { id:"c8", name:"Priya Sundaram",   phone:"+91 98450 ••• 18", at:"3h",  snippet:"audio note received (0:42)",        color:"oklch(0.66 0.16 340)", av:"PS", unread:0, agent:"support_hub"              },
+  ],
+
+  thread: {
+    name:"Maya Rhen", av:"MR", color:"oklch(0.68 0.14 20)",
+    phone:"+1 415 ••• 7782", session:"wa.kz.main",
+    tags:["customer","priority","us-west"],
+    msgs:[
+      { k:"sys",  text:"Thread opened · routed to <b>concierge</b>" },
+      { k:"them", text:"hey! quick q — did the march invoice go out?",                                                                                              t:"14:38" },
+      { k:"us",   text:"Hey Maya — yes, invoice #INV-0381 sent Mar 28 to maya@rhen.co. Want me to resend the PDF here?",                                           t:"14:38", by:"concierge", lat:"1.2s" },
+      { k:"them", text:"yes please 🙏",                                                                                                                             t:"14:39" },
+      { k:"us",   text:"Sent. Also — plan renews in 6 days. Happy to lock in the annual rate (17% off) if you're interested.",                                     t:"14:39", by:"concierge", lat:"0.9s" },
+      { k:"them", text:"nice, let me think. also send me the new pricing doc when you get a sec",                                                                   t:"14:42" },
+    ],
+    draft:"Here's the updated pricing sheet — v0.6 went live last week: https://example.co/pricing. Happy to walk through the enterprise tier.",
+    flags:["external URL","unreleased tier reference"],
+    contact:[["phone","+1 415 ••• 7782"],["brain","people_01H8X2…"],["since","2024-11-02"],["msgs","148"],["plan","Pro · renews 6d"]],
+    brainNotes:[
+      "prefers PDF over paste · confirmed 2×",
+      "works PT timezone; don't message before 10am PT",
+      "asked about enterprise tier Mar 12 — not ready to upgrade",
+    ],
+  },
+
+  sessions:[
+    { id:"wa.kz.main",      kind:"whatsapp", status:"ok",   phone:"+1 415 224 7781", device:"MacBook M2",     agent:"concierge",   uptime:99.8, hb:"38ms",    msgs:842,  started:"4d 11h ago"       },
+    { id:"wa.kz.support",   kind:"whatsapp", status:"ok",   phone:"+1 415 224 8892", device:"VPS · fra1",     agent:"support_hub", uptime:99.4, hb:"62ms",    msgs:312,  started:"11d 2h ago"       },
+    { id:"yt.relay.live",   kind:"youtube",  status:"warn", phone:"@karan-live",     device:"VPS · fra1",     agent:"yt_mod",      uptime:96.2, hb:"—",       msgs:104,  started:"6h 14m ago"       },
+    { id:"wa.kz.archive",   kind:"whatsapp", status:"off",  phone:"+1 628 224 0990", device:"Raspberry Pi 5", agent:"—",           uptime:null, hb:"—",       msgs:0,    started:"stopped 2d ago"   },
+    { id:"yt.relay.shorts", kind:"youtube",  status:"err",  phone:"@karan-shorts",   device:"VPS · fra1",     agent:"yt_mod",      uptime:82.1, hb:"timeout", msgs:26,   started:"crash loop · 14m" },
+  ],
+
+  agents:[
+    { id:"concierge",   name:"Concierge",   model:"sonnet-4.5", av:"C", color:"oklch(0.65 0.15 280)", on:true,  msgs:842, p50:"1.8s", conf:94,  primary:true,
+      desc:"Primary agent. Handles DMs, calendar, light sales, and routes to brain for context.",
+      caps:["brain.read","brain.write","calendar","links.unfurl","handoff"] },
+    { id:"support_hub", name:"Support Hub", model:"sonnet-4.5", av:"S", color:"oklch(0.68 0.14 150)", on:true,  msgs:312, p50:"2.4s", conf:89,
+      desc:"Customer-support specialist with ticket tooling, billing lookups, and bug-repro capture.",
+      caps:["billing.read","ticket.create","repro.capture","handoff"] },
+    { id:"yt_mod",      name:"YT Mod",      model:"haiku-4.5",  av:"Y", color:"oklch(0.66 0.17 30)",  on:true,  msgs:104, p50:"0.4s", conf:97,
+      desc:"Moderates YouTube live chat. Timeout / hide / escalate. Relays flagged items to WhatsApp.",
+      caps:["yt.mod","yt.relay","pattern.match"] },
+    { id:"sentinel",    name:"Sentinel",    model:"haiku-4.5",  av:"▲", color:"oklch(0.70 0.12 240)", on:true,  msgs:0,   p50:"—",    conf:100,
+      desc:"Watchdog — never replies, just observes. Flags anomalies in other agents' outputs.",
+      caps:["observe","anomaly.flag"] },
+    { id:"scribe",      name:"Scribe",      model:"sonnet-4.5", av:"§", color:"oklch(0.68 0.13 85)",  on:true,  msgs:8,   p50:"18s",  conf:96,
+      desc:"Compacts long threads into brain memory nodes. Runs nightly on cron.",
+      caps:["brain.compact","cron"] },
+    { id:"playground",  name:"Playground",  model:"sonnet-4.5", av:"·", color:"oklch(0.55 0.04 60)",  on:false, msgs:0,   p50:"—",    conf:null,
+      desc:"Dev sandbox. Disabled in prod. Use for testing new prompts and tool chains.",
+      caps:["*"] },
+  ],
+};

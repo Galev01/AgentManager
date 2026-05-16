@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { AuthUserPublic, PermissionId, RuntimeKind } from "@openclaw-manager/types";
@@ -45,7 +45,7 @@ const NAV: NavSection[] = [
   },
   {
     id: "openclaw",
-    group: "OpenClaw Integrations",
+    group: "OpenClaw",
     runtimeKind: "openclaw",
     items: [
       { id: "conversations", label: "Conversations", href: "/conversations", icon: "chat",     perm: "conversations.view" },
@@ -86,36 +86,14 @@ const NAV: NavSection[] = [
   },
 ];
 
-const STORAGE_KEY = "openclaw.dashboard.sidebar.sections";
-
-function getDefaultOpen(sectionId: string, activeKind: RuntimeKind | null): boolean {
-  if (sectionId === "openclaw") return activeKind === "openclaw";
-  if (sectionId === "advanced" || sectionId === "admin") return false;
-  return true;
-}
-
 function isActivePath(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
-// Chevron SVG — inline to avoid icon-map coupling
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <svg
-      className={`sb-sec-chevron${open ? " sb-sec-chevron--open" : ""}`}
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
+interface FlatItem extends NavItem {
+  badge?: number;
+  dim: boolean;
+  sectionId: string;
 }
 
 export function Sidebar({
@@ -127,145 +105,84 @@ export function Sidebar({
   currentUser?: AuthUserPublic | null;
   permissions?: PermissionId[];
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/";
   const have = new Set(permissions ?? []);
   const active = useActiveRuntime();
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setOpenSections(JSON.parse(raw));
-    } catch {}
-    setMounted(true);
-  }, []);
-
-  function toggleSection(id: string) {
-    setOpenSections((prev) => {
-      const currentDefault = getDefaultOpen(id, active.kind);
-      const next = { ...prev, [id]: !(prev[id] ?? currentDefault) };
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {}
-      return next;
+  const groups: { sectionId: string; items: FlatItem[] }[] = [];
+  for (const sec of NAV) {
+    const items = sec.items.filter((it) => have.has(it.perm));
+    if (!items.length) continue;
+    const dim =
+      sec.runtimeKind != null &&
+      active.kind != null &&
+      active.kind !== sec.runtimeKind;
+    groups.push({
+      sectionId: sec.id,
+      items: items.map((it) => ({ ...it, badge: badges[it.id], dim, sectionId: sec.id })),
     });
   }
 
   return (
-    <aside className="sb">
-      {/* Brand */}
-      <div className="sb-brand">
-        {/* Icon-only mark (themes A + C) */}
-        <div className="sb-logo-mark">AM</div>
-        {/* Full logo (theme B wide sidebar) */}
-        <img src="/ManageClaw-TB-DarkMode.png" alt="AgentManager" className="sb-logo-img" />
-        <div className="sb-name">AgentManager</div>
-      </div>
+    <nav className="v2-sb" aria-label="Primary">
+      <Link href="/" className="v2-sb-mark" title="AgentManager">AM</Link>
 
-      {/* Nav groups */}
-      <div className="sb-scroll">
-        {NAV.map((sec) => {
-          const items = sec.items.filter((it) => have.has(it.perm));
-          if (items.length === 0) return null;
-
-          const dim =
-            sec.runtimeKind != null &&
-            active.kind != null &&
-            active.kind !== sec.runtimeKind;
-
-          const hasActiveItem = items.some((it) => isActivePath(pathname, it.href));
-          const forcedOpen = hasActiveItem;
-          const userPref = mounted ? openSections[sec.id] : undefined;
-          const defaultOpen = getDefaultOpen(sec.id, active.kind);
-          const isOpen = forcedOpen || (userPref ?? defaultOpen);
-
-          // Sum badges for items in this section (shown on collapsed header)
-          const sectionBadgeTotal = items.reduce((sum, it) => sum + (badges[it.id] ?? 0), 0);
-
-          const sectionTitle =
-            sec.runtimeKind != null && dim
-              ? `${sec.group} — only available when active runtime is ${sec.runtimeKind}`
-              : undefined;
-
-          return (
-            <div
-              className="sb-sec"
-              key={sec.id}
-              style={dim && !hasActiveItem ? { opacity: 0.55 } : undefined}
-            >
-              <button
-                type="button"
-                className="sb-sec-h"
-                onClick={() => toggleSection(sec.id)}
-                aria-expanded={isOpen}
-                aria-controls={`sb-sec-${sec.id}`}
-                title={sectionTitle}
-              >
-                <span>{sec.group}</span>
-                {!isOpen && sectionBadgeTotal > 0 && (
-                  <span className="sb-sec-badge">{sectionBadgeTotal}</span>
-                )}
-                <Chevron open={isOpen} />
-              </button>
-
-              <div
-                id={`sb-sec-${sec.id}`}
-                className={`sb-sec-body${isOpen ? " sb-sec-body--open" : ""}`}
-              >
-                {items.map((item) => {
-                  const itemActive = isActivePath(pathname, item.href);
-                  const IconComponent = Icons[item.icon];
-                  return (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      className={`sb-item${itemActive ? " active" : ""}`}
-                      title={item.label}
+      <div className="v2-sb-nav">
+        {groups.map((g, gi) => (
+          <div
+            key={g.sectionId}
+            style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 4 }}
+          >
+            {gi > 0 && <div className="v2-sb-divider" />}
+            {g.items.map((it) => {
+              const Icon = Icons[it.icon];
+              const itActive = isActivePath(pathname, it.href);
+              return (
+                <Link
+                  key={it.id}
+                  href={it.href}
+                  className={`v2-nav-item${itActive ? " active" : ""}`}
+                  style={it.dim ? { opacity: 0.55 } : undefined}
+                  onMouseEnter={() => setHoverId(it.id)}
+                  onMouseLeave={() => setHoverId((p) => (p === it.id ? null : p))}
+                >
+                  <Icon />
+                  {it.badge ? (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 2, right: 2,
+                        background: "var(--warn)",
+                        color: "var(--bg)",
+                        fontSize: 9,
+                        fontWeight: 700,
+                        minWidth: 14, height: 14,
+                        borderRadius: 999,
+                        display: "grid",
+                        placeItems: "center",
+                        padding: "0 4px",
+                        fontFamily: "var(--mono)",
+                      }}
                     >
-                      <IconComponent />
-                      <span>{item.label}</span>
-                      {badges[item.id] ? (
-                        <span
-                          className="sb-badge"
-                          style={{
-                            marginLeft: "auto",
-                            background: "var(--warn-dim)",
-                            color: "var(--warn)",
-                            fontSize: 10,
-                            padding: "1px 6px",
-                            borderRadius: 999,
-                            fontFamily: "var(--font-mono, JetBrains Mono), monospace",
-                            fontWeight: 500,
-                          }}
-                        >
-                          {badges[item.id]}
-                        </span>
-                      ) : null}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+                      {it.badge}
+                    </span>
+                  ) : null}
+                  {hoverId === it.id && <span className="v2-tooltip">{it.label}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
-      {/* Footer */}
-      <div className="sb-foot">
+      <div className="v2-sb-foot">
         {currentUser ? (
           <UserMenu username={currentUser.username} displayName={currentUser.displayName} />
         ) : (
-          <>
-            <div className="sb-foot-avatar">AM</div>
-            <div className="sb-foot-text">
-              <div className="n">AgentManager</div>
-              <div className="s mono">local · :7321</div>
-            </div>
-          </>
+          <div className="v2-sb-mark" style={{ width: 32, height: 32, fontSize: 10 }}>·</div>
         )}
       </div>
-    </aside>
+    </nav>
   );
 }
