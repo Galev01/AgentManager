@@ -53,6 +53,34 @@
 .stat-v { font-family: var(--font-mono); }
 .page-title { font-family: var(--font-mono); letter-spacing: -0.025em; }
 .tbl td { font-family: var(--font-mono); font-size: 11.5px; }
+.attn-big { font-family: var(--font-mono); }
+.agent-stat .v { font-family: var(--font-mono); }
+.page-sub { font-family: var(--font-mono); font-size: 11.5px; }
+
+/* Sidebar icon-mode: visible group dividers (default state) */
+html:not(.theme-b) .sb-sec + .sb-sec {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+html:not(.theme-b) .sb-scroll { padding: 6px 0 12px; }
+html:not(.theme-b) .sb-sec { padding: 0 6px; margin-top: 4px; }
+html:not(.theme-b) .sb-sec-body { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+html:not(.theme-b) .sb-item {
+  width: 38px; height: 38px;
+  padding: 0;
+  justify-content: center;
+  border-radius: var(--radius);
+}
+html:not(.theme-b) .sb-item.active { background: var(--accent-dim); color: var(--accent); }
+html:not(.theme-b) .sb-item.active::before {
+  content: "";
+  position: absolute;
+  left: -6px; top: 8px; bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
 
 /* ---------- Base Reset ---------- */
 *, *::before, *::after { box-sizing: border-box; }

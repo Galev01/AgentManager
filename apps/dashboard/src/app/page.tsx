@@ -4,7 +4,9 @@ import { AttentionCard } from "@/components/overview/attention-card";
 import { SystemStatus } from "@/components/overview/system-status";
 import { ActivityFeed } from "@/components/overview/activity-feed";
 import { StatRow } from "@/components/overview/stat-row";
+import Link from "next/link";
 import { PageHeader } from "@/components/ui";
+import { Icons } from "@/components/icons";
 import { getOverview, getReviewInbox, callGatewayMethod } from "@/lib/bridge-client";
 import { requirePermission } from "@/lib/auth/current-user";
 
@@ -88,18 +90,31 @@ export default async function OverviewPage() {
 
   const totalConversations = data?.totalConversations ?? 0;
   const activeCount = data?.activeCount ?? 0;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const sub = [
+    dateStr,
     `${totalConversations} thread${totalConversations === 1 ? "" : "s"}`,
     `${activeCount} active`,
     pendingCount > 0 && `${pendingCount} need review`,
+    tz,
   ].filter(Boolean).join(" · ");
+
+  const actions = (
+    <>
+      <Link href="/" className="btn" title="Refresh"><Icons.refresh /> Refresh</Link>
+      <Link href="/reviews/inbox" className="btn"><Icons.review /> Review inbox</Link>
+      <Link href="/agents" className="btn btn-pri"><Icons.plus /> New agent</Link>
+    </>
+  );
 
   return (
     <AppShell title="Overview">
       <div className="content">
         {bridgeError && <DegradedBanner />}
 
-        <PageHeader title="Overview" sub={sub} />
+        <PageHeader title="Overview" sub={sub} actions={actions} />
 
         <div className="attn">
           <AttentionCard

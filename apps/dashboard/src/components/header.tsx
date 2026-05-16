@@ -34,13 +34,41 @@ function HealthStrip() {
 }
 
 // Single source of pathname truth — consolidates usePathname() calls
+const SECTION_FOR: Record<string, string> = {
+  "": "Monitor",
+  "claude-code": "Monitor",
+  reviews: "Monitor",
+  runtimes: "Runtime",
+  agents: "Runtime",
+  sessions: "Runtime",
+  youtube: "Runtime",
+  cron: "Runtime",
+  conversations: "OpenClaw",
+  channels: "OpenClaw",
+  relay: "OpenClaw",
+  routing: "OpenClaw",
+  tools: "Configure",
+  brain: "Configure",
+  capabilities: "Advanced",
+  commands: "Advanced",
+  config: "Advanced",
+  settings: "Advanced",
+  logs: "Advanced",
+  admin: "Admin",
+};
+
 function useNavState() {
   const pathname = usePathname() ?? "/";
   const segments = pathname.split("/").filter(Boolean);
-  const crumbs =
+  const root = segments[0] ?? "";
+  const section = SECTION_FOR[root] ?? "Monitor";
+  const leaf =
     segments.length === 0
-      ? ["Overview"]
-      : segments.map((p) => p.charAt(0).toUpperCase() + p.slice(1).replace(/-/g, " "));
+      ? "Overview"
+      : segments
+          .map((p) => p.charAt(0).toUpperCase() + p.slice(1).replace(/-/g, " "))
+          .join(" / ");
+  const crumbs = [section, leaf];
   const isHome = segments.length === 0;
   const isRoot = segments.length <= 1;
   const parentPath = "/" + segments.slice(0, -1).join("/");
@@ -73,15 +101,13 @@ export function Header({ title }: { title: string }) {
 
       {/* Breadcrumbs */}
       <div className="hd-crumb">
-        <img src="/ManageClaw-TB-DarkMode.png" alt="AgentManager" className="hd-logo-img" />
-        <span>AgentManager</span>
         {crumbs.map((crumb, i) => (
           <span key={i} style={{ display: "contents" }}>
-            <span className="sep">/</span>
+            {i > 0 && <span className="sep">/</span>}
             <span
               style={{
                 color: i === crumbs.length - 1 ? "var(--text)" : undefined,
-                fontWeight: i === crumbs.length - 1 ? 500 : undefined,
+                fontWeight: i === crumbs.length - 1 ? 600 : undefined,
               }}
             >
               {crumb}
