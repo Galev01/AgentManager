@@ -52,6 +52,8 @@ import type {
   GlobalBrainUpdate,
   BrainInjectionPreview,
   CCEnvelope,
+  RuntimeSessionListItem,
+  RuntimeSessionDetail,
 } from "@openclaw-manager/types";
 import { actorHeaders } from "./auth/bridge-actor";
 
@@ -744,6 +746,24 @@ export async function getClaudeCodeEscalationCount(): Promise<number> {
 
 export async function getClaudeCodeTranscript(id: string): Promise<ClaudeCodeTranscriptEvent[]> {
   return bridgeFetch<ClaudeCodeTranscriptEvent[]>(`/claude-code/transcripts/${id}`);
+}
+
+export async function getRuntimeSessions(runtimeId?: string | null): Promise<RuntimeSessionListItem[]> {
+  return bridgeFetch<RuntimeSessionListItem[]>(withRuntimeId("/runtime-sessions", runtimeId));
+}
+
+export async function getRuntimeSessionDetail(
+  runtimeId: string,
+  sessionId: string,
+): Promise<RuntimeSessionDetail | null> {
+  try {
+    return await bridgeFetch<RuntimeSessionDetail>(
+      `/runtime-sessions/${encodeURIComponent(runtimeId)}/${encodeURIComponent(sessionId)}`,
+    );
+  } catch (e) {
+    if (/\b404\b/.test((e as Error).message)) return null;
+    throw e;
+  }
 }
 
 export async function getClaudeCodePending(): Promise<ClaudeCodePendingItem[]> {

@@ -2,6 +2,7 @@ import type {
   RuntimeAdapter, RuntimeEntity, RuntimeEntityKind, RuntimeActivityEvent,
   RuntimeActionId, RuntimeActionPayload, RuntimeActionContext, RuntimeActionResult,
   RuntimeAuthMode, CapabilitySnapshot, JsonValue, RuntimeReadCapabilityId,
+  RuntimeSessionListItem, RuntimeSessionDetail, RuntimeSessionMessage,
 } from "@openclaw-manager/types";
 import { ADAPTER_CONTRACT_VERSION, type AdapterConfig } from "./adapter-base.js";
 import {
@@ -465,6 +466,99 @@ export function createOpenclawAdapter(cfg: AdapterConfig, deps: OpenclawAdapterD
       } catch (e) {
         return { ok: false, error: (e as Error).message, projectionMode: "exact" };
       }
+    },
+    async listSessions(): Promise<RuntimeSessionListItem[]> {
+      const res = (await callGateway("sessions.list")) as {
+        sessions?: Array<Record<string, unknown>>;
+      };
+      const rows = res?.sessions ?? [];
+      return rows.map((s) => {
+        const key = String(s.key ?? s.sessionId ?? "");
+        const agentName = typeof s.agentName === "string"
+          ? s.agentName
+          : typeof s.agentId === "string"
+            ? s.agentId
+            : null;
+        return {
+          runtimeId: descriptor.id,
+          runtimeKind: "openclaw" as const,
+          sessionId: key,
+          displayName: key,
+          lastActivityAt: typeof s.updatedAt === "number" ? (s.updatedAt as number) : undefined,
+          messageCount: typeof s.messageCount === "number" ? (s.messageCount as number) : undefined,
+          model: typeof s.model === "string" ? (s.model as string) : null,
+          agentId: agentName,
+        };
+      });
+    },
+    async getSessionDetail(sessionId: string): Promise<RuntimeSessionDetail | null> {
+      let state: any;
+      try {
+        state = await callGateway("sessions.get", { key: sessionId });
+      } catch {
+        return null;
+      }
+      if (!state || typeof state !== "object") return null;
+      const rawMessages: any[] = Array.isArray(state.messages) ? state.messages : [];
+      let totalInput = 0, totalOutput = 0, totalCacheRead = 0, totalCacheCreate = 0;
+      let lastModel: string | null = null;
+      const messages: RuntimeSessionMessage[] = rawMessages.map((m, idx) => {
+        const role = m?.role;
+        const normalizedRole: RuntimeSessionMessage["role"] =
+          role === "user" || role === "assistant" || role === "system" || role === "tool"
+            ? role
+            : "unknown";
+        let text = "";
+        if (typeof m?.content === "string") {
+          text = m.content;
+        } else if (Array.isArray(m?.content)) {
+          text = m.content
+            .map((c: any) => (typeof c === "string" ? c : typeof c?.text === "string" ? c.text : ""))
+            .filter(Boolean)
+            .join("\n");
+        }
+        const usage = m?.usage ?? {};
+        if (normalizedRole === "assistant") {
+          totalInput += Number(usage.input_tokens ?? 0);
+          totalOutput += Number(usage.output_tokens ?? 0);
+          totalCacheRead += Number(usage.cache_read_input_tokens ?? 0);
+          totalCacheCreate += Number(usage.cache_creation_input_tokens ?? 0);
+          if (typeof m?.model === "string") lastModel = m.model;
+        }
+        return {
+          index: idx,
+          role: normalizedRole,
+          text,
+          contentType: "text",
+          model: typeof m?.model === "string" ? m.model : undefined,
+          usage: usage && typeof usage === "object" ? {
+            inputTokens: typeof usage.input_tokens === "number" ? usage.input_tokens : undefined,
+            outputTokens: typeof usage.output_tokens === "number" ? usage.output_tokens : undefined,
+            cacheReadTokens: typeof usage.cache_read_input_tokens === "number" ? usage.cache_read_input_tokens : undefined,
+            cacheCreateTokens: typeof usage.cache_creation_input_tokens === "number" ? usage.cache_creation_input_tokens : undefined,
+          } : undefined,
+        };
+      });
+      const list: RuntimeSessionListItem = {
+        runtimeId: descriptor.id,
+        runtimeKind: "openclaw",
+        sessionId,
+        displayName: sessionId,
+        messageCount: messages.length,
+        model: lastModel ?? (typeof state.model === "string" ? state.model : null),
+        agentId: null,
+      };
+      return {
+        list,
+        systemPrompt: typeof state.systemPrompt === "string" ? state.systemPrompt : null,
+        messages,
+        totals: {
+          inputTokens: totalInput,
+          outputTokens: totalOutput,
+          cacheReadTokens: totalCacheRead,
+          cacheCreateTokens: totalCacheCreate,
+        },
+      };
     },
     async getAuthModes(): Promise<RuntimeAuthMode[]> {
       return [{ id: "service", label: "Service principal", description: "Bridge-side OPENCLAW_GATEWAY_TOKEN." }];
