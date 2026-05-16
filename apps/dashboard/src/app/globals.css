@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 @config "../../tailwind.config.ts";
@@ -44,6 +44,9 @@
 
   --row-pad-y:       12px;
   --row-gap:         16px;
+
+  --font-ui:         "Space Grotesk", ui-sans-serif, sans-serif;
+  --font-mono:       "JetBrains Mono", ui-monospace, monospace;
 }
 
 /* ---------- Base Reset ---------- */
@@ -53,7 +56,7 @@ html, body { margin: 0; padding: 0; height: 100%; }
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
@@ -61,7 +64,7 @@ body {
 }
 
 .mono {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-mono) !important;
   font-feature-settings: "zero";
 }
 
@@ -1008,6 +1011,211 @@ html.compact {
   --row-pad-y: 7px;
   --row-gap:   12px;
 }
+
+/* =====================================================
+   THEME A — "Terminal"
+   Pitch dark · Blue-purple tint · Developer tool
+   Font: Space Grotesk + JetBrains Mono
+   ===================================================== */
+html.theme-a {
+  --bg:          oklch(0.09 0.010 285);
+  --bg-elev:     oklch(0.12 0.012 285);
+  --bg-hover:    oklch(0.15 0.014 285);
+  --bg-sunken:   oklch(0.07 0.008 285);
+  --panel:       oklch(0.12 0.012 285);
+  --border:      oklch(0.22 0.016 285);
+  --border-strong: oklch(0.32 0.020 285);
+  --text:        oklch(0.94 0.006 285);
+  --text-dim:    oklch(0.62 0.010 285);
+  --text-muted:  oklch(0.48 0.008 285);
+  --text-faint:  oklch(0.33 0.008 285);
+  --accent:      oklch(0.72 0.24 295);
+  --accent-dim:  oklch(0.72 0.24 295 / 0.15);
+  --accent-fg:   #fff;
+  --ok-dim:      oklch(0.76 0.17 150 / 0.18);
+  --warn-dim:    oklch(0.80 0.14 75  / 0.18);
+  --err-dim:     oklch(0.68 0.20 25  / 0.18);
+  --info-dim:    oklch(0.74 0.12 240 / 0.18);
+  --radius:      3px;
+  --radius-lg:   5px;
+  --sb-w:        52px;
+  --header-h:    44px;
+  --font-ui:     "Space Grotesk", ui-sans-serif, sans-serif;
+  --font-mono:   "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* =====================================================
+   THEME B — "Studio"
+   Warm light · Editorial · Calm design tool
+   Font: Syne + JetBrains Mono
+   ===================================================== */
+html.theme-b {
+  --bg:          oklch(0.965 0.004 70);
+  --bg-elev:     oklch(1.00 0 0);
+  --bg-hover:    oklch(0.945 0.006 70);
+  --bg-sunken:   oklch(0.930 0.005 70);
+  --panel:       oklch(1.00 0 0);
+  --border:      oklch(0.875 0.007 70);
+  --border-strong: oklch(0.800 0.009 70);
+  --text:        oklch(0.16 0.016 285);
+  --text-dim:    oklch(0.36 0.014 285);
+  --text-muted:  oklch(0.52 0.011 285);
+  --text-faint:  oklch(0.68 0.008 285);
+  --accent:      oklch(0.52 0.27 295);
+  --accent-dim:  oklch(0.52 0.27 295 / 0.10);
+  --accent-fg:   #fff;
+  --ok-dim:      oklch(0.76 0.17 150 / 0.10);
+  --warn-dim:    oklch(0.80 0.14 75  / 0.14);
+  --err-dim:     oklch(0.68 0.20 25  / 0.10);
+  --info-dim:    oklch(0.74 0.12 240 / 0.10);
+  --radius:      7px;
+  --radius-lg:   12px;
+  --sb-w:        230px;
+  --header-h:    54px;
+  --font-ui:     "Syne", ui-sans-serif, sans-serif;
+  --font-mono:   "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* =====================================================
+   THEME C — "Nebula"
+   Dark atmospheric · Glass · Depth layers
+   Font: Plus Jakarta Sans + JetBrains Mono
+   ===================================================== */
+html.theme-c {
+  --bg:          oklch(0.09 0.022 290);
+  --bg-elev:     oklch(0.14 0.026 290);
+  --bg-hover:    oklch(0.18 0.030 290);
+  --bg-sunken:   oklch(0.07 0.018 290);
+  --panel:       oklch(0.14 0.026 290 / 0.55);
+  --border:      oklch(0.72 0.22 295 / 0.14);
+  --border-strong: oklch(0.72 0.22 295 / 0.28);
+  --text:        oklch(0.96 0.006 285);
+  --text-dim:    oklch(0.70 0.014 285);
+  --text-muted:  oklch(0.54 0.013 285);
+  --text-faint:  oklch(0.38 0.012 285);
+  --accent:      oklch(0.78 0.24 295);
+  --accent-dim:  oklch(0.78 0.24 295 / 0.20);
+  --accent-fg:   oklch(0.12 0.020 290);
+  --ok-dim:      oklch(0.76 0.17 150 / 0.18);
+  --warn-dim:    oklch(0.80 0.14 75  / 0.18);
+  --err-dim:     oklch(0.68 0.20 25  / 0.18);
+  --info-dim:    oklch(0.74 0.12 240 / 0.18);
+  --radius:      8px;
+  --radius-lg:   14px;
+  --sb-w:        60px;
+  --header-h:    52px;
+  --font-ui:     "Plus Jakarta Sans", ui-sans-serif, sans-serif;
+  --font-mono:   "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Nebula atmospheric background */
+html.theme-c body {
+  background:
+    radial-gradient(ellipse 90% 55% at 15% 0%,   oklch(0.18 0.05 300 / 0.7) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 85% 90%,   oklch(0.15 0.04 320 / 0.5) 0%, transparent 55%),
+    var(--bg);
+  min-height: 100vh;
+}
+
+/* Nebula glass panels */
+html.theme-c .sb,
+html.theme-c .hd,
+html.theme-c .card,
+html.theme-c .mini,
+html.theme-c .stat {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Theme C: active sidebar item glow */
+html.theme-c .sb-item.active {
+  box-shadow: 0 0 0 1px var(--accent-dim), 0 0 18px var(--accent-dim);
+}
+
+/* Theme A: mono stat values and titles for data-terminal feel */
+html.theme-a .stat-v { font-family: var(--font-mono); }
+html.theme-a .page-title { font-family: var(--font-mono); }
+html.theme-a .tbl td { font-family: var(--font-mono); font-size: 11.5px; }
+
+/* Theme B: elevated cards and softer table headers */
+html.theme-b .card  { box-shadow: 0 1px 3px oklch(0 0 0 / 0.07), 0 4px 16px oklch(0 0 0 / 0.04); }
+html.theme-b .stat  { box-shadow: 0 1px 3px oklch(0 0 0 / 0.07), 0 4px 16px oklch(0 0 0 / 0.04); }
+html.theme-b .mini  { box-shadow: 0 1px 3px oklch(0 0 0 / 0.07), 0 4px 16px oklch(0 0 0 / 0.04); }
+
+/* ── App layout overrides per theme ── */
+/* Theme A and C: icon-only sidebar */
+html.theme-a .app { grid-template-columns: var(--sb-w) 1fr; }
+html.theme-c .app { grid-template-columns: var(--sb-w) 1fr; }
+
+/* Sidebar icon-only mode for themes A and C */
+html.theme-a .sb-name,
+html.theme-c .sb-name { display: none; }
+
+html.theme-a .sb-item span,
+html.theme-c .sb-item span { display: none; }
+
+html.theme-a .sb-foot-text,
+html.theme-c .sb-foot-text { display: none; }
+
+html.theme-a .sb-sec-h,
+html.theme-c .sb-sec-h { display: none; }
+
+html.theme-a .sb-sec-body,
+html.theme-c .sb-sec-body { display: block; }
+
+html.theme-a .sb-brand,
+html.theme-c .sb-brand { padding: 0; justify-content: center; }
+
+html.theme-a .sb-item,
+html.theme-c .sb-item { justify-content: center; padding: 8px; }
+
+html.theme-a .sb-item .sb-badge,
+html.theme-c .sb-item .sb-badge {
+  position: absolute;
+  top: 2px; right: 2px;
+  margin: 0; padding: 0;
+  width: 6px; height: 6px;
+  background: var(--accent);
+  color: transparent;
+}
+
+html.theme-a .sb-foot,
+html.theme-c .sb-foot { justify-content: center; padding: 10px 0; }
+
+/* Logo mark: visible only in icon-only themes, hidden in theme-b */
+.sb-logo-mark {
+  width: 30px; height: 30px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: none;
+  place-items: center;
+  flex-shrink: 0;
+}
+html.theme-a .sb-logo-mark,
+html.theme-c .sb-logo-mark { display: grid; }
+
+/* Logo image: hidden in icon-only themes */
+html.theme-a .sb-logo-img,
+html.theme-c .sb-logo-img { display: none; }
+
+html.theme-a .sb-name,
+html.theme-c .sb-name { display: none; }
+
+/* Theme C: logo mark with glow */
+html.theme-c .sb-logo-mark {
+  box-shadow: 0 0 0 1px var(--accent-dim), 0 0 20px oklch(0.78 0.24 295 / 0.3);
+}
+
+/* Theme A: active sidebar accent bar */
+html.theme-a .sb-item.active::before { display: block; }
+
+/* Theme B: wide sidebar (already default) — re-enable the img/name */
+html.theme-b .sb-logo-img { display: block; }
+html.theme-b .sb-logo-mark { display: none; }
 
 /* Pulse keyframe used by some new_ui primitives */
 @keyframes pulse {

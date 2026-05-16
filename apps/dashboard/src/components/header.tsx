@@ -5,6 +5,7 @@ import { AutoRefresh } from "./auto-refresh";
 import { GatewayStatus } from "./gateway-status";
 import { Icons } from "./icons";
 import { RuntimeSelector } from "./runtime/runtime-selector";
+import { ThemeSwitcher } from "./theme-switcher";
 
 // Static health-strip items for Task 1 (real data wired in Task 2)
 type PillStatus = "ok" | "warn" | "err" | "checking";
@@ -72,8 +73,8 @@ export function Header({ title }: { title: string }) {
 
       {/* Breadcrumbs */}
       <div className="hd-crumb">
-        <img src="/ManageClaw-TB-DarkMode.png" alt="ManageClaw" className="hd-logo-img" />
-        <span>OpenClaw</span>
+        <img src="/ManageClaw-TB-DarkMode.png" alt="AgentManager" className="hd-logo-img" />
+        <span>AgentManager</span>
         {crumbs.map((crumb, i) => (
           <span key={i} style={{ display: "contents" }}>
             <span className="sep">/</span>
@@ -104,6 +105,9 @@ export function Header({ title }: { title: string }) {
 
       {/* AutoRefresh (existing, preserved) */}
       <AutoRefresh />
+
+      {/* Theme switcher */}
+      <ThemeSwitcher />
 
       {/* Logout */}
       <button className="hd-btn" onClick={handleLogout} title="Logout">
