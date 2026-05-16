@@ -157,8 +157,11 @@ export function Sidebar({
     <aside className="sb">
       {/* Brand */}
       <div className="sb-brand">
-        <img src="/ManageClaw-TB-DarkMode.png" alt="ManageClaw" className="sb-logo-img" />
-        <div className="sb-name">OpenClaw</div>
+        {/* Icon-only mark (themes A + C) */}
+        <div className="sb-logo-mark">AM</div>
+        {/* Full logo (theme B wide sidebar) */}
+        <img src="/ManageClaw-TB-DarkMode.png" alt="AgentManager" className="sb-logo-img" />
+        <div className="sb-name">AgentManager</div>
       </div>
 
       {/* Nav groups */}
@@ -255,9 +258,9 @@ export function Sidebar({
           <UserMenu username={currentUser.username} displayName={currentUser.displayName} />
         ) : (
           <>
-            <div className="sb-foot-avatar">OC</div>
+            <div className="sb-foot-avatar">AM</div>
             <div className="sb-foot-text">
-              <div className="n">OpenClaw</div>
+              <div className="n">AgentManager</div>
               <div className="s mono">local · :7321</div>
             </div>
           </>
